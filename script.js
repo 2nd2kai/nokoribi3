@@ -2962,9 +2962,12 @@ function BattleEncounterScreen(p){
           <div className="shadow-voice-box shadow-voice-full"><span>影の声</span><p>「{pv.voice}」</p></div>
           <div className="battle-self-answer-box">
             <label className="bsa-label">影の声に、あなたの言葉で返す（任意）</label>
-            <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className="bsa-quick" onClick={function(){setSelfAnswer(q);}}>{q}</button>;})}</div>
-            <textarea className="bsa-input" rows={2} placeholder="自由に書く、または上のボタンで選ぶ" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
-            {selfAnswer.trim()&&<div className="bsa-bonus">回収率 +3〜5% ボーナス / この言葉は残り火に記録されます</div>}
+            <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className={"bsa-quick"+(selfAnswer===q?" bsa-quick-on":"")} onClick={function(){setSelfAnswer(selfAnswer===q?"":q);}}>{q}</button>;})}</div>
+            {selfAnswer.trim()&&<>
+              <div className="bsa-selected-preview">「{selfAnswer.trim()}」</div>
+              <button className={"btn bsa-confirm-btn"+(disabled?" bsa-confirm-disabled":"")} disabled={disabled} onClick={function(){doAction("hold");}}>この言葉で前に進む →</button>
+            </>}
+            {!selfAnswer.trim()&&<textarea className="bsa-input" rows={2} placeholder="自由に書く…（または上のボタンで選ぶ）" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>}
           </div>
         </div>
         <div className="battle-advance-col">
@@ -4075,6 +4078,21 @@ function EmberView(p){
   var inProg=cards.filter(function(c){return c.status!=="ready"&&c.status!=="awaiting"&&!c.unitState;});
   var units=cards.filter(function(c){return c.unitState;});
   function deleteButton(card){return <button className="ev-del-btn" onClick={function(e){e.stopPropagation();onDelete&&onDelete(card.id);}}>削除</button>;}
+  function editButton(card){return <button className="ev-edit-btn" onClick={function(e){e.stopPropagation();openEdit(card);}}>編集</button>;}
+  function editForm(card){
+    if(editingId!==card.id)return null;
+    return <div className="ev-edit-form">
+      <div className="ev-edit-note">あとから情報を追加・変更できます。</div>
+      <label className="ec-field"><span>タイトル</span><input type="text" value={editTitle} placeholder="例：読まれなかった記事の残り火" onChange={function(e){setEditTitle(e.target.value);}}/></label>
+      <label className="ec-field"><span>補足情報</span><input type="text" value={editMemo} placeholder="例：公開したあと、何度も通知を見た" onChange={function(e){setEditMemo(e.target.value);}}/></label>
+      <label className="ec-field"><span>あなたの言葉</span><textarea value={editBody} placeholder="読まれなかったことより、何も返ってこなかったことが痛かった。" onChange={function(e){setEditBody(e.target.value);}}/></label>
+      <label className="ec-field"><span>反応・評価・スキの数など</span><textarea value={editReaction} placeholder="例：いいね3件、コメントなし" onChange={function(e){setEditReaction(e.target.value);}}/></label>
+      <div className="ev-edit-actions">
+        <button className="btn btn-g" onClick={function(){setEditingId(null);}}>やめる</button>
+        <button className="btn btn-p" onClick={function(){saveEdit(card.id);}}>保存する</button>
+      </div>
+    </div>;
+  }
   function unitCard(card){
     var flow=getUnitFlow(card)||EMBER_UNIT_FLOW.completed;
     var place=getEmberPlace(card);
@@ -4088,21 +4106,11 @@ function EmberView(p){
           <div className="ev-unit-meta">状態：{flow.label} / 担当：{NAMES[flow.who]||"—"} / 場所：{PNAME[place]}</div>
         </div>
         <div className="ev-head-btns">
-          <button className="ev-edit-btn" onClick={function(){openEdit(card);}}>編集</button>
+          {editButton(card)}
           {deleteButton(card)}
         </div>
       </div>
-      {editingId===card.id&&<div className="ev-edit-form">
-        <div className="ev-edit-note">あとから情報を増やせます。書いたもののタイトル・補足・あなたの言葉・反応を、いつでも追加してください。</div>
-        <label className="ec-field"><span>タイトル</span><input type="text" value={editTitle} placeholder="例：読まれなかった記事の残り火" onChange={function(e){setEditTitle(e.target.value);}}/></label>
-        <label className="ec-field"><span>補足情報</span><input type="text" value={editMemo} placeholder="例：公開したあと、何度も通知を見た" onChange={function(e){setEditMemo(e.target.value);}}/></label>
-        <label className="ec-field"><span>あなたの言葉</span><textarea value={editBody} placeholder="読まれなかったことより、何も返ってこなかったことが痛かった。" onChange={function(e){setEditBody(e.target.value);}}/></label>
-        <label className="ec-field"><span>反応・評価・スキの数など</span><textarea value={editReaction} placeholder="例：いいね3件、コメントなし" onChange={function(e){setEditReaction(e.target.value);}}/></label>
-        <div className="ev-edit-actions">
-          <button className="btn btn-g" onClick={function(){setEditingId(null);}}>やめる</button>
-          <button className="btn btn-p" onClick={function(){saveEdit(card.id);}}>保存する</button>
-        </div>
-      </div>}
+      {editForm(card)}
       {card.route==="judgment_conversion"&&<div className="ev-route-badge">判決火 → 問い火</div>}
       {card.soul&&<div className="ev-soul-badge">魂入り — この残り火は、あなたの言葉を持っています</div>}
       <DeliveredWordsBox card={card}/>
@@ -4189,7 +4197,8 @@ function EmberView(p){
     {awaiting.length>0&&<div className="ev-section">
       <div className="lh">出発待ち</div>
       {awaiting.map(function(card){return(<div key={card.id} className="ev-card ev-awaiting">
-        <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div>{deleteButton(card)}</div>
+        <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div><div className="ev-head-btns">{editButton(card)}{deleteButton(card)}</div></div>
+        {editForm(card)}
         <div className="ev-card-meta">{card.feeling&&<span className="ev-tag">{card.feeling}</span>}{card.wanted&&<span className="ev-tag">{card.wanted}</span>}</div>
         {card.soul&&<div className="ev-soul-badge">魂入り — この残り火は、あなたの言葉を持っています</div>}
         <DeliveredWordsBox card={card} compact={true}/>
@@ -4200,7 +4209,8 @@ function EmberView(p){
     {ready.length>0&&<div className="ev-section">
       <div className="lh">受領できる封筒</div>
       {ready.map(function(card){return(<div key={card.id} className="ev-card ev-ready">
-        <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div>{deleteButton(card)}</div>
+        <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div><div className="ev-head-btns">{editButton(card)}{deleteButton(card)}</div></div>
+        {editForm(card)}
         <div className="ev-card-meta">{card.feeling&&<span className="ev-tag">{card.feeling}</span>}{card.wanted&&<span className="ev-tag">{card.wanted}</span>}</div>
         {card.soul&&<div className="ev-soul-badge">魂入り — この残り火は、あなたの言葉を持っています</div>}
         <DeliveredWordsBox card={card} compact={true}/>
@@ -4211,7 +4221,8 @@ function EmberView(p){
     {inProg.length>0&&<div className="ev-section">
       <div className="lh">処理中</div>
       {inProg.map(function(card){var st=EMBER_STATUS[card.status]||{};return(<div key={card.id} className="ev-card">
-        <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div>{deleteButton(card)}</div>
+        <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div><div className="ev-head-btns">{editButton(card)}{deleteButton(card)}</div></div>
+        {editForm(card)}
         <div className="ev-card-status">{st.who?<span className={"nd cd-"+st.who}/>:null}<span className="ev-st-lbl">{st.label}</span></div>
         <Bar value={card.progress||0} color={st.col||"var(--dim)"} h={4}/>
         <div className="ev-progress-info"><span>現在 {Math.round(card.progress||0)}%</span><span>あと {Math.max(0,100-Math.round(card.progress||0))}% で {getEmberNextLabel(card.status)}</span></div>
