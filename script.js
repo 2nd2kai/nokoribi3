@@ -3497,9 +3497,9 @@ function IntroSceneOverlay(p){
           {lines.map(function(L,idx){
             if(L.s==="stage")return <p key={idx} className="isc-stage">{L.t}</p>;
             return(
-              <p key={idx} className="isc-line">
+              <p key={idx} className={"isc-line cd-"+L.s}>
                 <span className={"isc-dot cd-"+L.s}/>
-                <span className="isc-text">「{L.t}」</span>
+                <span className="isc-text"><span className="isc-speaker-inline">{NAMES[L.s]||L.s}：</span>「{L.t}」</span>
               </p>
             );
           })}
@@ -4169,7 +4169,7 @@ function ConvDetail(p){
     <div className="cvd-pair"><span className={"nd cd-"+conv.a}/> {NAMES[conv.a]} × <span className={"nd cd-"+conv.b}/> {NAMES[conv.b]}</div>
     <div className="cvd-title">「{conv.title}」</div>
     {conv.meaning&&<div className="cvd-meaning"><span className="cvd-mlbl">この場面は</span><p className="cvd-mtext">{conv.meaning}</p></div>}
-    <div className="cvd-lines">{conv.lines.map(function(line,i){var who=WHO[line[0]];return <div key={i} className={"cvd-line"+(who===conv.a?" cvd-a":" cvd-b")}><span className="cvd-who">{CNAME[line[0]]}</span><p className="cvd-text">{line[1]}</p></div>;})}</div>
+    <div className="cvd-lines">{conv.lines.map(function(line,i){var who=WHO[line[0]];var charId=who||line[0];return <div key={i} className={"cvd-line"+(who===conv.a?" cvd-a":" cvd-b")+" cd-"+charId}><p className="cvd-text"><span className="cvd-speaker-inline">{CNAME[line[0]]}：</span>「{line[1]}」</p></div>;})}</div>
     <div className="cvd-receive">
       <div className="cvd-fx-title">{received?"受領済み":"この場面を受領すると"}</div>
       <div className="cvd-fx-list">{fxLines.map(function(l,i){return <span key={i} className="cvd-fx-item">{l}</span>;})}</div>
