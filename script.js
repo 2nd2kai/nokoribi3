@@ -3548,7 +3548,7 @@ function App(){
   var departEmberCb=useCallback(function(id){if(!game)return;var card=(game.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;setDepartTargetId(id);},[game]);// eslint-disable-line
   var confirmDepartCb=useCallback(function(id){if(!game)return;var ns=cloneS(game);var card=(ns.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;card=normalizeEmberUnitCard(card);card.unitState="exploring";card.status="unreceived";card.currentQuestion=EMBER_UNIT_FLOW.exploring.question;card.progress=0;
     /* 出発時は探索0%スタート。問いは戦闘・放置で progress=100% に達してから自然発生する */
-    unlockPlace(ns,"unexplored_forest",false);ns.characters.toyman.location="unexplored_forest";ns.characters.toyman.lastAction="exploring";ns.lastSavedAt=nowISO();ns.logs=[{hours:0,events:[{text:"トイマンが「"+makeEmberTitle(card)+"」を探しに、未受領の森へ出発した。",kind:"ember",pri:5},{text:"「残っているなら、迎えに行く」「それだけ」",kind:"discover",pri:4}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);setDepartTargetId(null);showToast("トイマンが未受領の森へ出発した。");},[game,showToast]);// eslint-disable-line
+    unlockPlace(ns,"unexplored_forest",false);ns.characters.toyman.location="unexplored_forest";ns.characters.toyman.lastAction="exploring";ns.lastSavedAt=nowISO();ns.logs=[{hours:0,events:[{text:"トイマンが「"+makeEmberTitle(card)+"」を探しに、未受領の森へ出発した。",kind:"ember",pri:5},{text:"「残っているなら、迎えに行く」「それだけ」",kind:"discover",pri:4}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);setDepartTargetId(null);showToast("トイマンが未受領の森へ出発した。");setTimeout(function(){setScreen("peek");},300);},[game,showToast,setScreen]);// eslint-disable-line
   var burnReceiptCb=useCallback(function(id){if(!game)return;var r=(game.receipts||[]).find(function(x){return x.id===id;});if(!r)return;if(r.receiptStatus!=="graduated"){showToast("この受領証は、まだ心へ返せません。卒業（プラス変化30%以上）が必要です。");return;}setBurnTargetId(id);},[game,showToast]);// eslint-disable-line
   var confirmBurnCb=useCallback(function(id){if(!game)return;var r=burnReceipt(game,id);setBurnTargetId(null);if(!r.ok){showToast(r.msg);return;}setGame(r.state);persistSave(r.state);if(r.isEnding){showToast(r.msg);setTimeout(function(){setScreen("ending");},700);}else showToast(r.msg);},[game,showToast]);// eslint-disable-line
   var dismissIntroSceneCb=useCallback(function(id){if(!game)return;var ns=cloneS(game);ns.introQueue=(ns.introQueue||[]).filter(function(x){return x!==id;});if(!ns.seenIntroScenes)ns.seenIntroScenes=[];if(ns.seenIntroScenes.indexOf(id)===-1)ns.seenIntroScenes=ns.seenIntroScenes.concat([id]);ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);},[game]);// eslint-disable-line
@@ -3778,7 +3778,6 @@ function IntroScreen(p){
   var [pg,setPg]=useState(0);
   var pages=[
     {title:"ここは、あなたの中にある\n小さな箱庭です。",body:"この世界は、きみが見ていない間も\n少しずつ動き続けます。"},
-    {title:"5人が暮らしています。",chars:true},
     {title:"あなたは、この世界の外にいる。\nでも、ここはあなたのものだ。",body:"急がなくていい。\nただ、なかったことにはしない。"},
     {title:"最初にすること。",body:"「残り火」タブを開いて、\n書いたあとに残ったものを預けてみましょう。",final:true},
   ];
