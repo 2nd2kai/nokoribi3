@@ -3847,28 +3847,48 @@ function EndingView(p){
 }
 
 function IntroScreen(p){
-  var [pg,setPg]=useState(0);
-  var pages=[
-    {title:"ここは、あなたの中にある\n小さな箱庭です。",body:"この世界は、きみが見ていない間も\n少しずつ動き続けます。"},
-    {title:"あなたは、この世界の外にいる。\nでも、ここはあなたのものだ。",body:"急がなくていい。\nただ、なかったことにはしない。"},
-    {title:"最初にすること。",body:"「残り火」タブを開いて、\n書いたあとに残ったものを預けてみましょう。",final:true},
+  var STEPS=[
+    {type:"ember"},
+    {type:"line",speaker:"toyman",text:"探したよ"},
+    {type:"line",speaker:"toyman",text:"まだ、ここにある"},
+    {type:"line",speaker:"toyman",text:"置いていかない"},
+    {type:"divider"},
+    {type:"title",text:"残り火の箱庭"},
+    {type:"button"},
   ];
-  var page=pages[pg];
+  var [step,setStep]=useState(0);
+  var [skipped,setSkipped]=useState(false);
+  useEffect(function(){
+    if(skipped)return;
+    var delays=[0,1200,2600,3900,5200,6200,7400];
+    var timers=delays.map(function(d,i){return setTimeout(function(){setStep(function(s){return Math.max(s,i);});},d);});
+    return function(){timers.forEach(clearTimeout);};
+  },[skipped]);
+  function skip(){setSkipped(true);setStep(STEPS.length-1);}
+  var visibleSteps=STEPS.slice(0,step+1);
   return(
-    <div className="intro-wrap">
-      <div className="intro-dots">{pages.map(function(_,i){return <span key={i} className={"intro-dot"+(i===pg?" dot-on":"")}/>;})}</div>
-      <div className="intro-body">
-        <h2 className="intro-title">{page.title.split("\n").map(function(l,i){return <span key={i}>{l}<br/></span>;})}</h2>
-        {page.body&&<p className="intro-sub">{page.body.split("\n").map(function(l,i){return <span key={i}>{l}<br/></span>;})}</p>}
-        {page.chars&&<div className="intro-chars">{ALL_IDS.map(function(id){return(<div key={id} className="intro-char"><span className={"ic-dot cd-"+id}/><span className="ic-name">{NAMES[id]}</span><span className="ic-desc">{CHAR_DESCS[id]}</span></div>);})}</div>}
+    <div className="op-wrap" onClick={skip}>
+      <div className="op-inner" onClick={function(e){e.stopPropagation();}}>
+        {visibleSteps.map(function(s,i){
+          if(s.type==="ember")return <div key={i} className="op-ember-glow"/>;
+          if(s.type==="line")return(
+            <div key={i} className={"op-line op-fade-up"}>
+              <span className={"isc-dot cd-"+s.speaker+" op-dot"}/>
+              <span className="op-say">「{s.text}」</span>
+            </div>
+          );
+          if(s.type==="divider")return <div key={i} className="op-divider op-fade-up"/>;
+          if(s.type==="title")return <h1 key={i} className="op-title op-fade-up">{s.text}</h1>;
+          if(s.type==="button")return(
+            <div key={i} className="op-btn-wrap op-fade-up">
+              <button className="btn btn-p big touchable op-btn" onClick={p.onComplete}>ひらく</button>
+              <p className="op-note">誰も、あなたを責めていません。</p>
+            </div>
+          );
+          return null;
+        })}
       </div>
-      <div className="intro-btns">
-        {pg<pages.length-1
-          ?<button className="btn btn-p" onClick={function(){setPg(function(v){return v+1;});}}>次へ</button>
-          :<button className="btn btn-p" onClick={p.onComplete}>世界をひらく</button>}
-        <button className="btn btn-g" onClick={p.onComplete}>スキップ</button>
-      </div>
-      <div className="cf">誰も、あなたを責めていません。</div>
+      {step<STEPS.length-1&&<div className="op-skip" onClick={skip}>スキップ</div>}
     </div>
   );
 }

@@ -124,7 +124,24 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .now-delta{color:var(--calm);font-weight:700;font-family:var(--mono)}
 
 
-/* ── 初回導入 ── */
+/* ── 初回導入（オープニングシーケンス） ── */
+.op-wrap{position:fixed;inset:0;z-index:200;background:#050403;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.op-inner{display:flex;flex-direction:column;align-items:center;gap:20px;padding:48px 36px;max-width:340px;width:100%;cursor:default}
+.op-ember-glow{width:14px;height:14px;border-radius:50%;background:var(--ct);box-shadow:0 0 18px 6px rgba(219,140,80,.35),0 0 40px 14px rgba(219,140,80,.12);animation:op-pulse 2.4s ease-in-out infinite;margin-bottom:8px}
+@keyframes op-pulse{0%,100%{box-shadow:0 0 18px 6px rgba(219,140,80,.35),0 0 40px 14px rgba(219,140,80,.12);}50%{box-shadow:0 0 26px 10px rgba(219,140,80,.55),0 0 60px 22px rgba(219,140,80,.2);}}
+.op-line{display:flex;align-items:center;gap:10px;font-family:var(--serif);font-size:18px;color:var(--p);letter-spacing:.08em}
+.op-dot{flex-shrink:0}
+.op-say{letter-spacing:.06em}
+.op-divider{width:40px;height:1px;background:var(--line2);margin:6px 0}
+.op-title{font-family:var(--serif);font-size:15px;color:var(--faint);letter-spacing:.2em;font-weight:400;margin:0}
+.op-btn-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%}
+.op-btn{width:100%;font-size:15px;letter-spacing:.12em}
+.op-note{font-size:11px;color:var(--faint);margin:0;letter-spacing:.06em}
+.op-skip{position:fixed;bottom:28px;right:24px;font-size:11px;color:var(--faint);letter-spacing:.08em;cursor:pointer;padding:6px 10px}
+.op-fade-up{animation:op-fadeup .7s ease both}
+@keyframes op-fadeup{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── 初回導入（旧） ── */
 .intro-wrap{flex:1;display:flex;flex-direction:column;align-items:center;padding:40px 28px;text-align:center;gap:0}
 .intro-dots{display:flex;gap:8px;margin-bottom:28px}.intro-dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}.dot-on{background:var(--ember2)}
 .intro-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
