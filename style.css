@@ -3571,6 +3571,31 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .ev-custom-actions{display:flex;gap:10px}
 .ev-custom-actions .btn{flex:1}
 
+/* ── 次のアクション：光るボタン ── */
+@keyframes next-pulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(219,164,94,.0),0 0 0 2px rgba(219,164,94,.35);}
+  50%{box-shadow:0 0 0 6px rgba(219,164,94,.0),0 0 14px 2px rgba(219,164,94,.55);}
+}
+.btn-next-action{
+  position:relative;
+  animation:next-pulse 1.8s ease-in-out infinite;
+  outline:2px solid rgba(219,164,94,.6);
+  outline-offset:2px;
+}
+/* タブナビゲーションの次アクション通知 */
+.nbtn-next{
+  position:relative;
+  color:var(--ember2) !important;
+}
+.nbtn-dot{
+  position:absolute;
+  top:4px;right:6px;
+  width:6px;height:6px;
+  border-radius:50%;
+  background:var(--ember);
+  animation:next-pulse 1.8s ease-in-out infinite;
+}
+
 /* ── 話者名インライン表示 ── */
 .isc-speaker-inline,
 .cvd-speaker-inline{
@@ -3593,6 +3618,83 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .cvd-line.cd-kotae  .cvd-speaker-inline{color:var(--co)}
 .cvd-line.cd-auditor .cvd-speaker-inline{color:var(--ca)}
 
+/* ── 戦闘：自己回答入力 ── */
+.battle-self-answer-box{
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(232,192,128,.18);
+  border-radius:10px;
+  padding:12px 14px;
+  margin:10px 0;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.bsa-label{
+  font-size:11px;
+  color:var(--ember2);
+  font-family:var(--serif);
+  letter-spacing:.04em;
+}
+.bsa-input{
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:8px 10px;
+  color:var(--p);
+  font-family:var(--serif);
+  font-size:13px;
+  resize:none;
+  line-height:1.6;
+}
+.bsa-input::placeholder{color:var(--faint)}
+.bsa-bonus{
+  font-size:11px;
+  color:var(--ember);
+  font-family:var(--serif);
+}
+/* 向き合い記録ログ */
+.bsa-log{
+  margin-top:10px;
+  border-top:1px solid var(--line2);
+  padding-top:10px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.bsa-log-title{
+  font-size:11px;
+  color:var(--dim);
+  font-family:var(--sans);
+  letter-spacing:.05em;
+}
+.bsa-log-item{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.bsa-shadow{
+  font-size:11px;
+  color:rgba(192,56,56,.75);
+  font-family:var(--serif);
+}
+.bsa-ans{
+  font-size:12px;
+  color:var(--ember2);
+  font-family:var(--serif);
+  padding-left:12px;
+}
+/* 受領証内の向き合い記録 */
+.ev-shadow-answers{
+  background:rgba(255,255,255,.02);
+  border:1px solid var(--line2);
+  border-radius:8px;
+  padding:10px 12px;
+  margin:8px 0;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
 /* ── MAP：未解放の場所カード（薄表示・操作不可） ── */
 .world-place-locked{
   opacity:.42;
@@ -3607,3 +3709,129 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
   color:var(--faint);
   font-family:var(--serif);
 }
+
+/* ── いまのようす：押せる場所をわかりやすく ── */
+/* 手紙マークを大きく、明確にタップ可能に */
+.node-mail{
+  font-size:20px !important;
+  line-height:1 !important;
+  width:34px;
+  height:34px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:none;
+  border-radius:50%;
+  background:rgba(219,164,94,.16);
+  box-shadow:0 0 0 1px rgba(219,164,94,.5),0 0 12px -2px rgba(219,164,94,.7);
+  cursor:pointer;
+  padding:0;
+  animation:mailPulse 1.8s ease-in-out infinite;
+}
+@keyframes mailPulse{
+  0%,100%{box-shadow:0 0 0 1px rgba(219,164,94,.5),0 0 0 0 rgba(219,164,94,.0),0 0 12px -2px rgba(219,164,94,.7);}
+  50%{box-shadow:0 0 0 1px rgba(219,164,94,.6),0 0 0 5px rgba(219,164,94,.0),0 0 16px 0 rgba(219,164,94,.9);}
+}
+.node-mail:active{transform:scale(.86);}
+.node-mail-done{
+  opacity:.4;
+  filter:grayscale(.6);
+  box-shadow:0 0 0 1px rgba(232,227,212,.12);
+  background:rgba(255,255,255,.03);
+  animation:none;
+}
+.node-mail-overflow{
+  font-size:12px !important;
+  color:var(--ember2);
+  font-family:var(--mono);
+  align-self:center;
+  padding:0 4px;
+  font-weight:600;
+}
+.node-mail-row{gap:5px !important;margin-top:5px !important;}
+
+/* キャラに「押せる」リングを出す */
+.sc-room-char.sc-clickable .sc-dot{
+  animation:charTapRing 2s ease-in-out infinite;
+}
+@keyframes charTapRing{
+  0%,100%{box-shadow:0 0 0 0 rgba(232,192,128,.0),0 0 0 2px rgba(232,192,128,.35);}
+  50%{box-shadow:0 0 0 7px rgba(232,192,128,.0),0 0 0 2px rgba(232,192,128,.65);}
+}
+.sc-room-char .sc-nm{
+  position:relative;
+}
+.sc-room-char .sc-nm::after{
+  content:"押す";
+  display:inline-block;
+  margin-left:4px;
+  font-size:8px;
+  color:var(--ink);
+  background:var(--ember2);
+  border-radius:999px;
+  padding:1px 5px;
+  font-family:var(--sans);
+  vertical-align:middle;
+  opacity:.9;
+}
+/* 手紙クリックで残り火が進んだことの強調 */
+.lrp-fire{
+  color:var(--ember) !important;
+  font-family:var(--serif) !important;
+  font-size:12px !important;
+  font-weight:600;
+}
+
+/* ── v5.50: 提案③ 手紙×残り火 エモーション連動 ── */
+/* 残り火パネルを最上部に */
+.now-ember-panel.nep-top{margin:0;border-top:none;border-bottom:1px solid rgba(219,164,94,.22);order:-1}
+.nep-feeling{font-family:var(--serif);font-size:12px;color:var(--dim);line-height:1.6}
+.nep-question{font-family:var(--serif);font-size:12px;color:var(--ember2);line-height:1.65;margin-top:3px;padding:6px 10px;border-left:2px solid rgba(219,164,94,.5);background:rgba(219,164,94,.06);border-radius:0 6px 6px 0}
+
+/* リッチ手紙結果パネル */
+.lrp-rich{cursor:pointer;transition:opacity .2s}
+.lrp-rich:hover{opacity:.85}
+.lrp-close-hint{font-size:9px;color:var(--faint);text-align:right;font-family:var(--sans);letter-spacing:.08em;margin-bottom:2px}
+.lrp-label{font-family:var(--serif);font-size:12px;color:var(--ember2);letter-spacing:.06em;margin-bottom:4px;font-weight:500}
+/* 残り火フラグメント — 手紙の切れ端のような表示 */
+.lrp-ember-frag{background:rgba(219,164,94,.08);border:1px solid rgba(219,164,94,.22);border-left:3px solid var(--ember);border-radius:0 8px 8px 0;padding:10px 12px;margin:4px 0;display:flex;flex-direction:column;gap:5px;animation:fragIn .3s ease}
+@keyframes fragIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+.lrp-frag-anon{border-left-color:var(--dim);background:rgba(255,255,255,.04)}
+.lrp-frag-title{font-family:var(--serif);font-size:14px;color:var(--ember2);font-weight:500;line-height:1.5}
+.lrp-frag-line{font-family:var(--serif);font-size:12.5px;color:var(--p);line-height:1.65}
+.lrp-frag-question{font-family:var(--serif);font-size:12px;color:var(--co);line-height:1.7;padding:5px 8px;background:rgba(176,168,204,.08);border-radius:5px;margin-top:2px}
+.lrp-frag-progress{display:flex;align-items:center;gap:8px;margin-top:4px}
+.lrp-frag-pct{font-family:var(--mono);font-size:11px;color:var(--ember);font-weight:600}
+.lrp-frag-status{font-family:var(--serif);font-size:10.5px;color:var(--dim)}
+.lrp-route{font-family:var(--serif);font-size:10.5px;color:var(--faint);margin-top:4px}
+.lrp-ip{font-family:var(--mono);font-size:10.5px;color:var(--calm);margin-top:2px}
+
+/* ── v5.52: タブ追加・戦闘UX・いまのようす明確化 ── */
+
+/* 見守るボタン */
+.now-action-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-top:1px solid var(--line2);flex-shrink:0}
+.now-watch-btn{display:flex;flex-direction:column;align-items:flex-start;background:rgba(110,159,168,.10);border:1px solid rgba(110,159,168,.35);border-radius:8px;color:var(--calm);padding:7px 12px;font-family:var(--serif);font-size:12px;cursor:pointer;flex:1;text-align:left;gap:2px}
+.now-watch-btn:active{background:rgba(110,159,168,.18)}
+.now-watch-disabled{background:rgba(255,255,255,.02)!important;border-color:var(--line)!important;color:var(--faint)!important;cursor:default}
+.now-watch-sub{font-size:9.5px;color:var(--faint);font-family:var(--mono)}
+.now-char-hint{font-size:9.5px;color:var(--faint);white-space:nowrap;font-family:var(--sans)}
+
+/* キャラクタータップヒント */
+.sc-tap-hint{font-size:7.5px;color:var(--calm);margin-left:3px;opacity:.7;letter-spacing:0;font-family:var(--mono)}
+
+/* 手紙ボタン — 済み状態を明確に */
+.node-mail{position:relative;display:inline-flex;flex-direction:column;align-items:center;gap:1px;font-size:15px;width:30px;height:34px;border:1px solid rgba(219,164,94,.5);border-radius:6px;background:rgba(219,164,94,.14);cursor:pointer;animation:mailPulse 1.8s ease-in-out infinite;box-shadow:0 0 0 1px rgba(219,164,94,.2)}
+.node-mail-label{font-size:7px;color:var(--ember2);font-family:var(--sans);line-height:1}
+.node-mail-done{opacity:.3;filter:grayscale(.8);animation:none;border-color:var(--faint);background:rgba(255,255,255,.04);color:var(--faint);box-shadow:none;cursor:default}
+
+/* クイック返答ボタン */
+.bsa-quick-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
+.bsa-quick{background:rgba(176,168,204,.10);border:1px solid rgba(176,168,204,.28);border-radius:999px;color:var(--co);padding:5px 11px;font-size:11px;cursor:pointer;font-family:var(--serif);letter-spacing:.02em;transition:background .15s}
+.bsa-quick:active{background:rgba(176,168,204,.22)}
+
+/* 回収完了バナー */
+.battle-result-reached{border-color:rgba(219,164,94,.5)!important;background:rgba(219,164,94,.10)!important}
+.battle-reached-banner{font-family:var(--serif);font-size:15px;color:var(--ember2);text-align:center;padding:8px 0 4px;letter-spacing:.08em;animation:ti .4s ease}
+
+/* 戦闘ナビ「目指している残り火」ラベル */
+.battle-ember-box span,.battle-ember-full>span{color:var(--ember);font-size:9.5px;letter-spacing:.14em;font-weight:600}

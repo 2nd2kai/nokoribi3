@@ -553,7 +553,7 @@ function getUnlockedPlaceKeys(game){
 }
 function getVisibleTabs(game){
   if(!game)return[];
-  if(MVP_MODE)return[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"ログ"}];
+  if(MVP_MODE)return[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"peek",label:"箱庭"},{id:"log",label:"ログ"}];
   ensureProgressiveUnlockShell(game);
   var tabs=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"ログ"}];
   if(game.unlocks.tabs.garden)tabs.push({id:"peek",label:"箱庭"});
@@ -771,6 +771,7 @@ const EMBER_STATUS={
   stored:{label:"郵便局で保管中",who:"utsuro",col:"var(--cu)"},
   openable:{label:"涙の泉で休息中",who:"kana",col:"var(--ck)"},
   checking:{label:"記録塔で読解中",who:"kotae",col:"var(--co)"},
+  inspecting:{label:"検品庁で検品中",who:"auditor",col:"var(--ca)"},
   ready:{label:"はじまりの部屋で受領待ち",who:"",col:"var(--ember2)"},
 };
 const EMBER_NEXT={unreceived:"stored",stored:"openable",openable:"checking",checking:"ready"};
@@ -932,8 +933,9 @@ function grantBattleWatch(s,amount){
   return gain;
 }
 function randBetween(a,b){return a+Math.floor(rnd()*(b-a+1));}
-function runToymanBattleIntervention(game,actionId){
+function runToymanBattleIntervention(game,actionId,selfAnswer){
   actionId=actionId||"hold";
+  selfAnswer=(selfAnswer||"").trim();
   var action=BATTLE_CFG.actions[actionId]||BATTLE_CFG.actions.hold;
   var ns=cloneS(game);
   if(!ns.battle)ns.battle={watch:0,lastManualBattleAt:0,manualCount:0,lastLines:[],encounter:null};
@@ -955,6 +957,13 @@ function runToymanBattleIntervention(game,actionId){
   var watch=Math.max(1,Math.round(action.watch*mod.watch));
   var beforeFat=Math.round(t.stats.fatigue||0);
   var beforeProg=Math.round(card.progress||0);
+  /* 自己回答を蓄積 */
+  if(selfAnswer){
+    if(!card.shadowAnswers)card.shadowAnswers=[];
+    var voice0=getShadowVoice(enc.enemy,enc.voiceIndex||0);
+    card.shadowAnswers=card.shadowAnswers.concat([{shadow:voice0,answer:selfAnswer,at:nowISO(),action:actionId}]).slice(-20);
+    prog=prog+randBetween(3,5);
+  }
   if(prog>0){
     card.progress=Math.min(100,(card.progress||0)+prog);
     ns.world.map.unexplored_forest.progress_rate=Math.min(0.999,(ns.world.map.unexplored_forest.progress_rate||0)+prog/500);
@@ -972,32 +981,33 @@ function runToymanBattleIntervention(game,actionId){
   if(card.progress>=100){var pq=advanceUnitStateByProgress(ns,card,"影との遭遇");events.push({text:"残り火に問い札が発生した。問い：「"+((pq&&pq.question)||card.currentQuestion||"次の問い")+"」",kind:"discover",pri:5});}
   var afterProg=Math.min(100,Math.round(card.progress||0));
   var toymanLine=pick(TOYMAN_BATTLE_LINES[action.kind]||TOYMAN_BATTLE_LINES.hold);
-  var lines=["影との遭遇に介入した："+action.label,"黒い影「"+enemy+"」：「"+voice+"」"];
+  var reached100=card.progress>=100;
+  var lines=["影に遭遇 — "+action.label,"影「"+enemy+"」：「"+voice+"」"];
   if(action.kind==="hold"){
-    lines.push("あなたは、トイマンに問いを握らせた。");
+    lines.push("トイマンは前に進んだ。");
     lines.push("トイマン：「"+toymanLine+"」");
-    lines.push("影に "+action.damage+" ダメージ");
-    lines.push("影の反撃：疲労 "+(fat>=0?"+":"")+fat+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
     lines.push("回収率 +"+prog+"%（"+beforeProg+" → "+afterProg+"）");
+    lines.push("疲労 "+(fat>=0?"+":"")+fat+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
   }else if(action.kind==="read"){
-    lines.push("あなたは、影の声を判決ではなく記録として読んだ。");
+    lines.push("影の声を、判決ではなく声として聞いた。");
     lines.push("トイマン：「"+toymanLine+"」");
-    lines.push("影の声を記録した："+voice);
-    lines.push("疲労 +"+Math.max(0,fat)+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
     lines.push("回収率 +"+prog+"%（"+beforeProg+" → "+afterProg+"）");
+    lines.push("疲労 +"+Math.max(0,fat)+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
   }else{
-    lines.push("あなたは、トイマンを一度下がらせた。");
+    lines.push("トイマンは今日のところを引き返した。");
     lines.push("トイマン：「"+toymanLine+"」");
-    lines.push("回収率は進まなかった。でも残り火は落とさなかった。");
+    lines.push("回収率は動かなかった。でも、場所は覚えている。");
     lines.push("疲労 "+fat+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
   }
   lines.push("見守り +"+watch+"（"+Math.round(ns.battle.watch||0)+" / 100）");
   if(ipGain>0)lines.push("見守りが届いた：干渉ポイント +"+ipGain);
+  if(selfAnswer)lines.push("あなたの言葉：「"+selfAnswer+"」— 回収率 +3〜5% ボーナス");
   var ended=false;
+  if(reached100){lines.push("── 道が開いた ──");lines.push("問いが届いた。「残り火」タブで確認してください。");}
   if(events.length>0){ended=true;events.forEach(function(e){lines.push(e.text);});ns.battle.encounter=null;}
   else if(enc.turns>=BATTLE_CFG.encounterMaxTurns){
     ended=true;enc.done=true;
-    lines.push(action.kind==="retreat"?"トイマンは問いを抱えて退いた。今日はここまででいい。":"黒い影がほどけた。トイマンは問いを落とさなかった。");
+    lines.push(action.kind==="retreat"?"トイマンは今日の分を終えた。またいつでも来られる。":"影が薄くなった。道が少し開いた。");
     ns.ip.cur=Math.min(ns.ip.max,(ns.ip.cur||0)+1);
     lines.push("影との遭遇を越えた：干渉ポイント +1");
     ns.battle.encounter=null;
@@ -1006,7 +1016,7 @@ function runToymanBattleIntervention(game,actionId){
   ns.battle.lastLines=lines.slice();
   ns.logs=[{hours:0,events:[{text:lines.join("\n"),kind:"explore_detail",pri:5}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);
   ns.lastSavedAt=nowISO();
-  return{ok:true,state:ns,msg:ended?"影との遭遇が終わりました":"戦闘に介入しました",lines:lines,effects:[action.label,"疲労 "+(fat>=0?"+":"")+fat,"回収率 +"+prog+"%","見守り +"+watch].concat(ipGain>0?["IP +"+ipGain]:[]),ipGain:ipGain,watchGain:watch,action:actionId,ended:ended};
+  return{ok:true,state:ns,msg:ended?(reached100?"問いが届いた":"今日の遭遇が終わりました"):"前に進みました",lines:lines,effects:[action.label,"疲労 "+(fat>=0?"+":"")+fat,"回収率 +"+prog+"%","見守り +"+watch].concat(ipGain>0?["IP +"+ipGain]:[]),ipGain:ipGain,watchGain:watch,action:actionId,ended:ended,reached100:reached100};
 }
 
 function captureSnap(game){
@@ -1200,6 +1210,15 @@ function clickLetter(game,facility,letterId){
   var content=getLetterContent(s,L);
   L.step++;L.clicked=true;
   s.ip.cur=Math.min(s.ip.max,(s.ip.cur||0)+1);
+  /* 手紙を進めると、その手紙の元になった残り火も少しだけ前進する（効果を実感できるように） */
+  var fireGain=0,fireTitle="";
+  var srcCard=L.emberId?(s.emberCards||[]).find(function(c){return c.id===L.emberId;}):null;
+  if(srcCard&&!srcCard.questionPending&&srcCard.unitState!=="completed"&&srcCard.status!=="ready"){
+    var before=Math.round(srcCard.progress||0);
+    srcCard.progress=Math.min(100,(srcCard.progress||0)+2);
+    fireGain=Math.round(srcCard.progress||0)-before;
+    fireTitle=makeEmberTitle(srcCard);
+  }
   var stored=false;
   var afterNode=path[L.step]||path[path.length-1]||beforeNode;
   var afterLabel=(INTERNAL_PLACE_MAPS[facility]||[]).find(function(n){return n.id===afterNode;});
@@ -1218,8 +1237,23 @@ function clickLetter(game,facility,letterId){
     (beforeLabel?beforeLabel.label:beforeNode)+" → "+(afterLabel?afterLabel.label:afterNode),
     "干渉ポイント +1"
   ];
+  if(fireGain>0)lines.push("「"+fireTitle+"」の回収が進んだ（+"+fireGain+"%）");
   s.logs=[{hours:0,events:[{text:lines.join("\n"),kind:"store",pri:4}],ts:nowISO()}].concat(s.logs||[]).slice(0,30);
-  return{ok:true,state:s,gained:1,stored:stored,content:content,from:beforeLabel?beforeLabel.label:beforeNode,to:afterLabel?afterLabel.label:afterNode,lines:lines};
+  /* 残り火のコンテキストを手紙結果に含める（提案③：手紙と残り火を感情的に連動） */
+  var emberCtx=null;
+  if(srcCard){
+    emberCtx={
+      title:makeEmberTitle(srcCard),
+      feeling:srcCard.feeling||"",
+      wanted:srcCard.wanted||"",
+      bodyText:srcCard.bodyText||"",
+      question:(srcCard.pendingQuestion&&srcCard.pendingQuestion.question)||srcCard.question||"",
+      status:srcCard.status||"",
+      progress:Math.round(srcCard.progress||0),
+      answerCount:(srcCard.shadowAnswers||[]).length,
+    };
+  }
+  return{ok:true,state:s,gained:1,stored:stored,content:content,from:beforeLabel?beforeLabel.label:beforeNode,to:afterLabel?afterLabel.label:afterNode,lines:lines,fireGain:fireGain,fireTitle:fireTitle,emberCtx:emberCtx};
 }
 /* 表示用：あるノードに今いる手紙を集計し、物理表示4件＋overflowバッジに分ける */
 function getLettersAtNode(game,facility,nodeId){
@@ -1351,7 +1385,10 @@ function InternalPlaceMap(p){
             </span>}
             {(mail.visible.length>0||mail.overflow>0)&&<span className="node-mail-row" onClick={function(e){e.stopPropagation();}}>
               {mail.visible.map(function(L){return(
-                <span key={L.id} className={"node-mail"+(L.clicked?" node-mail-done":"")} onClick={function(e){e.stopPropagation();onClickLetter&&onClickLetter(loc,L.id);}}>✉</span>
+                <button key={L.id} type="button" className={"node-mail"+(L.clicked?" node-mail-done":"")} title={L.clicked?"処理済みの手紙":"手紙をタップして進める"} onClick={function(e){e.stopPropagation();if(!L.clicked&&onClickLetter)onClickLetter(loc,L.id);}}>
+                  {L.clicked?"✓":"✉"}
+                  {!L.clicked&&<span className="node-mail-label">タップ</span>}
+                </button>
               );})}
               {mail.overflow>0&&<span className="node-mail-overflow">+{mail.overflow}</span>}
             </span>}
@@ -1383,7 +1420,7 @@ function InternalPlaceMap(p){
             {hasBub&&<div className="sc-bub">{bubble.text}</div>}
             <ActionSprite action={va}/>
             <div className={"sc-dot cd-"+id}/>
-            <div className="sc-nm">{NAMES[id]}</div>
+            <div className="sc-nm">{NAMES[id]}<span className="sc-tap-hint">→声</span></div>
           </div>
         );
       })}
@@ -1396,9 +1433,10 @@ function InternalPlaceMap(p){
       {micro&&<div className="sc-micro room-micro">{micro}</div>}
       {clickPop&&<div className="stage-clickpop" style={{left:clickPop.x+"%",top:clickPop.y+"%"}}>{clickPop.lines.map(function(l,i){return <div key={i} className="scp-line">{l}</div>;})}</div>}
       <div className="room-map-foot">
-        <span>○ / ◎ はタップ可能</span>
+        <span>✉ 手紙：押して保管へ</span>
+        <span>キャラ：押して応援/休息</span>
         <span>△ 圧力に干渉</span>
-        <span>キャラを押す：応援 / 休息</span>
+        <span>画面：押して見守る</span>
       </div>
     </div>
   );
@@ -1473,6 +1511,26 @@ function checkGoalsAwardIP(prevGoals,newGoals,state){
 }
 
 function getActiveEmber(game){return (game.emberCards||[]).find(function(c){return c.status!=="ready"&&c.status!=="awaiting";})||null;}
+/* 今ユーザーが押すべき次の1アクションを返す。
+   返り値: {screen, action, cardId} または null
+   screen: "home"|"ember"
+   action: "create"|"depart"|"answer"|"receive"  */
+function getNextAction(game){
+  if(!game)return null;
+  var cards=game.emberCards||[];
+  /* 受け取れる残り火が最優先 */
+  var ready=cards.find(function(c){return c.unitState==="completed"||c.status==="ready";});
+  if(ready)return{screen:"ember",action:"receive",cardId:ready.id};
+  /* 問い札が出ているカード */
+  var pending=cards.find(function(c){return c.questionPending&&c.pendingQuestion;});
+  if(pending)return{screen:"ember",action:"answer",cardId:pending.id};
+  /* 出発待ち */
+  var waiting=cards.find(function(c){return c.unitState==="waiting"||c.status==="awaiting";});
+  if(waiting)return{screen:"ember",action:"depart",cardId:waiting.id};
+  /* カードが何もない */
+  if(cards.length===0)return{screen:"home",action:"create",cardId:null};
+  return null;
+}
 function getEmberNeed(card){return Math.max(0,100-Math.round(card.progress||0));}
 function getEmberActionForStatus(status){
   if(status==="unreceived")return{target:"toyman",tier:3,label:"一括探索",verb:"トイマンで進める"};
@@ -2159,6 +2217,7 @@ function receiveEmberCard(game,emberId,receiptInput){
     id:"r"+Date.now(),emberId:emberId,title:makeEmberTitle(card),
     feeling:card.feeling,wanted:card.wanted,writeState:card.writeState,memo:card.memo,bodyText:card.bodyText,reaction:card.reaction,soul:card.soul,
     questionTicket:card.questionTicket,receivedAt:nowISO(),text:generateReceiptText(card),
+    shadowAnswers:card.shadowAnswers||[],
     acceptanceText:card.acceptanceText||accForReceipt.text,
     nextQuestion:card.nextQuestion||accForReceipt.nextQuestion,
     initialMetrics:growth.initial,currentMetrics:growth.current,metricDeltas:growth.deltas,
@@ -2806,25 +2865,38 @@ function BattleEncounterModal(p){
   var pv=makeBattlePreview(game);
   var card=getToymanBattleEmber(game);
   var result=p.result;
+  var [selfAnswer,setSelfAnswer]=useState("");
   var cdSec=Math.ceil((pv.cooldownMs||0)/1000);
   var disabled=pv.mod.blocked||pv.cooldownMs>0||!card||game.characters.toyman.lastAction!=="exploring";
   var actions=[
-    {id:"hold",label:"問いを握らせる",sub:"落とさないように支える",hint:"回収率 +4〜7% / 疲労 +2〜4 / 見守り +12"},
-    {id:"read",label:"影の声を読む",sub:"判決ではなく声として記録する",hint:"回収率 +1〜3% / 疲労 +1〜2 / 見守り +8"},
-    {id:"retreat",label:"一度下がらせる",sub:"勝つより帰ることを優先する",hint:"疲労 -4〜6 / 見守り +4 / 回収率は進まない"}
+    {id:"hold",label:"前に進ませる",sub:"道を切り拓くよう力を貸す",hint:"回収率 +4〜7% / 疲労 +2〜4 / 見守り +12"},
+    {id:"read",label:"影の声を聞く",sub:"判決ではなく声として記録する",hint:"回収率 +1〜3% / 疲労 +1〜2 / 見守り +8"},
+    {id:"retreat",label:"今日は引き返す",sub:"無理に進まず、また来る",hint:"疲労 -4〜6 / 見守り +4 / 回収率は進まない"}
   ];
+  var QUICK_REPLIES=["今日は保留する","それは本当かもしれない","わからない、でも忘れない"];
+  function doAction(id){p.onManualBattle&&p.onManualBattle(id,selfAnswer);setSelfAnswer("");}
   return(
     <div className="ov battle-ov" onClick={p.onClose}>
       <div className="battle-modal" onClick={function(e){e.stopPropagation();}}>
         <div className="sh-handle"/>
         <div className="battle-title-row">
-          <div><div className="battle-k">影との遭遇</div><h2>問いを落とさないように介入する</h2></div>
+          <div><div className="battle-k">問いへの道</div><h2>トイマンが問いに近づいている途中、影に遭遇した</h2></div>
           <button className="care-x" onClick={p.onClose}>×</button>
         </div>
-        <div className="battle-meaning">これは黒い影を殴って稼ぐ画面ではありません。あなたが預けた残り火を、トイマンが落とさないように見守る画面です。</div>
-        <div className="battle-field"><div className="battle-shadow"><i/><span>{pv.enemy}</span></div><div className="battle-vs">VS</div><div className="battle-toyman"><span className="nd cd-toyman"/><b>トイマン</b><small>{pv.mod.label}</small></div></div>
+        <div className="battle-meaning">問いはまだ届いていない。トイマンが取りに向かっている途中です。影がその道をふさいでいる。一緒に、前へ進みます。</div>
+        <div className="battle-field">
+          <div className="battle-toyman"><span className="nd cd-toyman"/><b>トイマン</b><small>{pv.mod.label}</small></div>
+          <div className="battle-vs">VS</div>
+          <div className="battle-shadow"><i/><span>{pv.enemy}</span></div>
+        </div>
         <div className="shadow-voice-box"><span>影の声</span><p>「{pv.voice}」</p></div>
-        {card&&<div className="battle-ember-box"><span>回収中の残り火</span><b>「{makeEmberTitle(card)}」</b>{card.bodyText&&<small>{card.bodyText}</small>}</div>}
+        <div className="battle-self-answer-box">
+          <label className="bsa-label">影の声に、あなたの言葉で返す（任意）</label>
+          <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className="bsa-quick" onClick={function(){setSelfAnswer(q);}}>{q}</button>;})}</div>
+          <textarea className="bsa-input" rows={2} placeholder="自由に書く、または上のボタンで選ぶ" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
+          {selfAnswer.trim()&&<div className="bsa-bonus">回収率 +3〜5% ボーナス / この言葉は残り火に記録されます</div>}
+        </div>
+        {card&&<div className="battle-ember-box"><span>目指している残り火</span><b>「{makeEmberTitle(card)}」</b>{card.bodyText&&<small>{card.bodyText}</small>}</div>}
         <div className="battle-stats">
           <div><span>影の濃さ</span><b>{pv.hp} / {pv.hpMax}</b><Bar value={pv.hp/pv.hpMax*100} color="var(--ct)" h={5}/></div>
           <div><span>回収率</span><b>{pv.progress}%</b><Bar value={pv.progress} color="var(--ember)" h={5}/></div>
@@ -2833,9 +2905,12 @@ function BattleEncounterModal(p){
         </div>
         <div className="battle-turns"><span>この遭遇の介入 {pv.turns} / {pv.maxTurns}</span>{pv.cooldownMs>0&&<b>あと {cdSec} 秒</b>}</div>
         <div className="battle-note">{pv.mod.note}</div>
-        <div className="battle-actions">{actions.map(function(a){return <BattleActionButton key={a.id} action={a} disabled={disabled} onClick={function(id){p.onManualBattle&&p.onManualBattle(id);}}/>;})}</div>
+        <div className="battle-actions">{actions.map(function(a){return <BattleActionButton key={a.id} action={a} disabled={disabled} onClick={doAction}/>;})}</div>
         {pv.mod.blocked&&<button className="btn btn-g battle-care-btn" onClick={p.onCare}>かなに水を持ってきてもらう</button>}
-        {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")}><b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}</div>}
+        {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")+(result.reached100?" battle-result-reached":"")}>
+          {result.reached100&&<div className="battle-reached-banner">✨ 問いが届いた</div>}
+          <b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}
+        </div>}
       </div>
     </div>
   );
@@ -2844,23 +2919,25 @@ function BattleEncounterModal(p){
 function BattleEncounterScreen(p){
   var game=p.game;
   var [result,setResult]=useState(null);
+  var [selfAnswer,setSelfAnswer]=useState("");
   var pv=makeBattlePreview(game);
   var card=getToymanBattleEmber(game);
   var cdSec=Math.ceil((pv.cooldownMs||0)/1000);
   var disabled=pv.mod.blocked||pv.cooldownMs>0||!card||game.characters.toyman.lastAction!=="exploring";
   var actions=[
-    {id:"hold",label:"問いを握らせる",sub:"落とさないように支える",hint:"回収率 +4〜7% / 疲労 +2〜4 / 見守り +12"},
-    {id:"read",label:"影の声を読む",sub:"判決ではなく声として記録する",hint:"回収率 +1〜3% / 疲労 +1〜2 / 見守り +8"},
-    {id:"retreat",label:"一度下がらせる",sub:"勝つより帰ることを優先する",hint:"疲労 -4〜6 / 見守り +4 / 回収率は進まない"}
+    {id:"hold",label:"前に進ませる",sub:"道を切り拓くよう力を貸す",hint:"回収率 +4〜7% / 疲労 +2〜4 / 見守り +12"},
+    {id:"read",label:"影の声を聞く",sub:"判決ではなく声として記録する",hint:"回収率 +1〜3% / 疲労 +1〜2 / 見守り +8"},
+    {id:"retreat",label:"今日は引き返す",sub:"無理に進まず、また来る",hint:"疲労 -4〜6 / 見守り +4 / 回収率は進まない"}
   ];
-  function doAction(id){var r=p.onManualBattle&&p.onManualBattle(id);if(r)setResult(r);} 
+  var QUICK_REPLIES=["今日は保留する","それは本当かもしれない","わからない、でも忘れない"];
+  function doAction(id){var r=p.onManualBattle&&p.onManualBattle(id,selfAnswer);if(r)setResult(r);setSelfAnswer("");}
   return(
     <div className="battle-screen scroll">
       <button className="back" onClick={p.onBack}>← 未受領の森へ戻る</button>
       <div className="battle-full-hero">
-        <div className="battle-k">影との遭遇</div>
-        <h2>問いを落とさないように介入する</h2>
-        <p>戦闘は、黒い影を殴って稼ぐ場所ではありません。あなたが預けた残り火を、トイマンが落とさず持ち帰るための介入です。勝利より、帰還を優先します。</p>
+        <div className="battle-k">問いへの道</div>
+        <h2>トイマンが問いに近づいている途中、影に遭遇した</h2>
+        <p>問いはまだ届いていない。トイマンが取りに向かっている途中です。影がその道をふさいでいる。一緒に、前へ進みます。</p>
       </div>
       {card?<div className="battle-ember-full">
         <span>守っている残り火</span>
@@ -2871,9 +2948,23 @@ function BattleEncounterScreen(p){
           {card.wanted&&<small>本当は：{card.wanted}</small>}
           {card.bodyText&&<small>あなたの言葉：{card.bodyText}</small>}
         </div>
+        {(card.shadowAnswers||[]).length>0&&<div className="bsa-log">
+          <div className="bsa-log-title">これまでの向き合い（{card.shadowAnswers.length}回）</div>
+          {card.shadowAnswers.slice(-3).map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">影：「{a.shadow}」</span><span className="bsa-ans">あなた：「{a.answer}」</span></div>;})}
+        </div>}
       </div>:<div className="battle-ember-full"><b>今は回収中の残り火がありません。</b></div>}
-      <div className="battle-field battle-field-full"><div className="battle-shadow"><i/><span>{pv.enemy}</span></div><div className="battle-vs">VS</div><div className="battle-toyman"><span className="nd cd-toyman"/><b>トイマン</b><small>{pv.mod.label}</small></div></div>
+      <div className="battle-field battle-field-full">
+        <div className="battle-toyman"><span className="nd cd-toyman"/><b>トイマン</b><small>{pv.mod.label}</small></div>
+        <div className="battle-vs">VS</div>
+        <div className="battle-shadow"><i/><span>{pv.enemy}</span></div>
+      </div>
       <div className="shadow-voice-box shadow-voice-full"><span>影の声</span><p>「{pv.voice}」</p></div>
+      <div className="battle-self-answer-box">
+        <label className="bsa-label">影の声に、あなたの言葉で返す（任意）</label>
+        <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className="bsa-quick" onClick={function(){setSelfAnswer(q);}}>{q}</button>;})}</div>
+        <textarea className="bsa-input" rows={2} placeholder="自由に書く、または上のボタンで選ぶ" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
+        {selfAnswer.trim()&&<div className="bsa-bonus">回収率 +3〜5% ボーナス / この言葉は残り火に記録されます</div>}
+      </div>
       <div className="battle-stats battle-stats-full">
         <div><span>影の濃さ</span><b>{pv.hp} / {pv.hpMax}</b><Bar value={pv.hp/pv.hpMax*100} color="var(--ct)" h={5}/></div>
         <div><span>回収率</span><b>{pv.progress}%</b><Bar value={pv.progress} color="var(--ember)" h={5}/></div>
@@ -2884,7 +2975,10 @@ function BattleEncounterScreen(p){
       <div className="battle-note">{pv.mod.note}</div>
       <div className="battle-actions battle-actions-full">{actions.map(function(a){return <BattleActionButton key={a.id} action={a} disabled={disabled} onClick={doAction}/>;})}</div>
       {pv.mod.blocked&&<button className="btn btn-g battle-care-btn" onClick={p.onCare}>かなに水を持ってきてもらう</button>}
-      {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")}><b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}</div>}
+      {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")+(result.reached100?" battle-result-reached":"")}>
+        {result.reached100&&<div className="battle-reached-banner">✨ 問いが届いた</div>}
+        <b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}
+      </div>}
     </div>
   );
 }
@@ -2990,8 +3084,10 @@ function NowSceneView(p){
 
   /* クリック結果ポップ */
   function flashPop(lines,xPct,yPct){setClickPop({lines:lines,x:xPct,y:yPct,id:Date.now()});setTimeout(function(){setClickPop(null);},1500);}
-  /* 背景タップで見守る */
-  function handleStageClick(){var nowT=Date.now();if(nowT-watchCdRef.current<1200)return;watchCdRef.current=nowT;var ok=true;if(p.onWatch)ok=p.onWatch(loc);if(ok!==false)flashPop(["この場所を見守った","MAP操作 -1"],50,32);}
+  /* 明示ボタンから見守る — 背景タップはなくした */
+  function handleWatch(){var nowT=Date.now();if(nowT-watchCdRef.current<1200)return;watchCdRef.current=nowT;var ok=true;if(p.onWatch)ok=p.onWatch(loc);if(ok!==false)flashPop(["この場所を見守った","見守りゲージ +"+(p.watchGauge<100?10:0)],50,32);}
+  /* 背景タップは無効化（ノードも同様） */
+  function handleStageClick(){}
   function handleClickLetter(facility,letterId){var r=p.onClickLetter&&p.onClickLetter(facility,letterId);if(r){setLetterResult(r);setTimeout(function(){setLetterResult(null);},5200);}}
   /* キャラタップで声を聞く */
   var CHAR_LINES={toyman:"まだ見てない",kana:"水、飲む？",utsuro:"預かる",kotae:"記録しておく",auditor:"……保留だ"};
@@ -3035,6 +3131,22 @@ function NowSceneView(p){
 
   return(
     <div className="now-wrap">
+      {/* 現在進行中の残り火 — 最上部に移動（提案③：残り火ジャーニーを最優先表示） */}
+      {activeEmber&&<div className={"now-ember-panel nep-top"+(emberAtLoc?" nep-here":"")}>
+        <div className="nep-head">処理中の残り火</div>
+        <div className="nep-title">「{makeEmberTitle(activeEmber)}」</div>
+        {activeEmber.feeling&&<div className="nep-feeling">感情：{activeEmber.feeling}</div>}
+        {activeEmber.wanted&&<div className="nep-feeling">本当は：{activeEmber.wanted}</div>}
+        <div className="nep-status">
+          <span className={"nd cd-"+(EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].who||"kotae")}/>
+          <span className="nep-where">{EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].label}</span>
+          <span className="nep-pct">{Math.round(activeEmber.progress||0)}%</span>
+        </div>
+        <Bar value={activeEmber.progress||0} color="var(--ember)" h={4}/>
+        <div className="nep-next">あと{Math.max(0,100-Math.round(activeEmber.progress||0))}%で、{getEmberNextLabel(activeEmber.status)}</div>
+        {activeEmber.pendingQuestion&&activeEmber.pendingQuestion.question&&<div className="nep-question">問い：{activeEmber.pendingQuestion.question}</div>}
+      </div>}
+
       {/* ヘッダー */}
       <div className="now-hdr">
         <div>
@@ -3072,10 +3184,17 @@ function NowSceneView(p){
       </div>
 
       {/* タッチ説明（ステージ外） */}
-      <div className="touch-hints">
-        <span className="touch-chip">場所移動は世界地図から</span>
-        <span className="touch-chip">ここは選んだ場所の室内図</span>
-        <span className="touch-chip">キャラタップ：声を聞く</span>
+      {/* アクション行：見守る（明示ボタン）＋キャラ説明 */}
+      <div className="now-action-bar">
+        {(function(){
+          var mt=getMapTouchInfo(game);
+          var canWatch=mt.cur>0;
+          return <button className={"now-watch-btn"+(canWatch?"":" now-watch-disabled")} disabled={!canWatch} onClick={handleWatch}>
+            {canWatch?"この場所を見守る":"見守り回数なし（回復中）"}
+            <span className="now-watch-sub">{canWatch?"MAP操作 -1 → 見守りゲージ ＋":"あと"+mt.minToNext+"分で回復"}</span>
+          </button>;
+        })()}
+        <span className="now-char-hint">キャラ →タップで声を聞く</span>
       </div>
       <div className="now-locs now-locs-safe">
         {getUnlockedPlaceKeys(game).map(function(k){
@@ -3095,27 +3214,35 @@ function NowSceneView(p){
 
       {/* 気配 */}
       {(function(){var atm=getAtmosphere(game);return atm.length>0&&<div className="now-atm">{atm.map(function(h,i){return <span key={i} className="now-atm-h">・{h}</span>;})}</div>;})()}
-      {letterResult&&<div className={"letter-result-panel"+(letterResult.stored?" letter-result-stored":"")}>
-        <b>{letterResult.stored?"手紙が保管庫に届きました":"手紙が進みました"}</b>
-        {letterResult.content&&<p>中身（{letterResult.content.kind}）：「{letterResult.content.text}」</p>}
-        {!letterResult.stored&&<small>{letterResult.from} → {letterResult.to}</small>}
-        {letterResult.stored&&<small>この小さな火は、消えずに保管されました。</small>}
-        <em>干渉ポイント +{letterResult.gained||1}</em>
-      </div>}
+      {letterResult&&(function(){
+        var ec=letterResult.emberCtx;
+        var storedClass=letterResult.stored?" letter-result-stored":"";
+        return(
+          <div className={"letter-result-panel lrp-rich"+storedClass} onClick={function(){setLetterResult(null);}}>
+            <div className="lrp-close-hint">タップで閉じる</div>
+            <div className="lrp-label">{letterResult.stored?"手紙が保管庫に届きました":"手紙が届いた"}</div>
+            {ec&&<div className="lrp-ember-frag">
+              <div className="lrp-frag-title">「{ec.title}」</div>
+              {ec.feeling&&<div className="lrp-frag-line">感情：{ec.feeling}</div>}
+              {ec.wanted&&<div className="lrp-frag-line">本当は：{ec.wanted}</div>}
+              {ec.question&&<div className="lrp-frag-question">問い：{ec.question}</div>}
+              <div className="lrp-frag-progress">
+                <span className="lrp-frag-pct">{ec.progress}%</span>
+                <span className="lrp-frag-status">{EMBER_STATUS[ec.status]&&EMBER_STATUS[ec.status].label||""}</span>
+              </div>
+            </div>}
+            {!ec&&letterResult.content&&<div className="lrp-ember-frag lrp-frag-anon">
+              <div className="lrp-frag-line">「{letterResult.content.text}」</div>
+            </div>}
+            {letterResult.fireGain>0&&<div className="lrp-fire">🔥 回収進捗 +{letterResult.fireGain}%</div>}
+            <div className="lrp-route">{letterResult.from} → {letterResult.to}</div>
+            <div className="lrp-ip">干渉ポイント +{letterResult.gained||1}</div>
+          </div>
+        );
+      })()}
 
 
-      {/* 現在進行中の残り火 */}
-      {activeEmber&&<div className={"now-ember-panel"+(emberAtLoc?" nep-here":"")}>
-        <div className="nep-head">処理中の残り火</div>
-        <div className="nep-title">「{makeEmberTitle(activeEmber)}」</div>
-        <div className="nep-status">
-          <span className={"nd cd-"+(EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].who||"kotae")}/>
-          <span className="nep-where">{EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].label}</span>
-          <span className="nep-pct">{Math.round(activeEmber.progress||0)}%</span>
-        </div>
-        <Bar value={activeEmber.progress||0} color="var(--ember)" h={3}/>
-        <div className="nep-next">あと{Math.max(0,100-Math.round(activeEmber.progress||0))}%で、{getEmberNextLabel(activeEmber.status)}</div>
-      </div>}
+      {/* 現在進行中の残り火 — 上部に移動済み */}
 
       {canBattle&&<BattleEntryPanel game={game} onOpen={function(){p.onOpenBattle&&p.onOpenBattle();}}/>}
 
@@ -3303,6 +3430,7 @@ function HomeView(p){
   var active=cards.find(function(c){return c.status!=="ready"&&c.status!=="awaiting";})||cards[0]||null;
   var ready=cards.find(function(c){return c.status==="ready";});
   var openPlaces=getUnlockedPlaceKeys(game).filter(function(k){return game.unlocks&&game.unlocks.places&&game.unlocks.places[k];});
+  var next=getNextAction(game);
   var nextText=ready?"受け取れる残り火があります。":active?"「"+makeEmberTitle(active)+"」を見守っています。":"まずは、ひとつだけ置いてみてください。";
   return <div className="scroll home-screen">
     <section className="home-hero">
@@ -3311,12 +3439,12 @@ function HomeView(p){
       {!active&&!ready&&<p>ここは、書いたあとに残ってしまったものを、なかったことにしないための場所です。</p>}
       {active&&<p>箱庭は、この残り火を消さずに扱っています。急がなくていい。まず、届いていることを確認します。</p>}
       <div className="home-actions">
-        {!active&&!ready&&<button className="btn btn-p" onClick={p.onCreate}>残り火を置く</button>}
-        {(active||ready)&&<button className="btn btn-p" onClick={function(){p.onNav&&p.onNav("ember");}}>残り火を見る</button>}
+        {!active&&!ready&&<button className={"btn btn-p"+(next&&next.action==="create"?" btn-next-action":"")} onClick={p.onCreate}>残り火を置く</button>}
+        {(active||ready)&&<button className={"btn btn-p"+(next&&next.screen==="ember"?" btn-next-action":"")} onClick={function(){p.onNav&&p.onNav("ember");}}>残り火を見る</button>}
         {openPlaces.length>0&&<button className="btn btn-g" onClick={function(){p.onNav&&p.onNav("peek");}}>箱庭を見る</button>}
       </div>
     </section>
-    {active&&<section className="home-card"><div className="lh">いま動いている残り火</div><div className="home-fire-title">「{makeEmberTitle(active)}」</div><DeliveredWordsBox card={active} compact={true}/><div className="home-fire-foot">{getEmberUnitLabel(active)} / {Math.round(active.progress||0)}%</div>{(active.status==="awaiting"||active.unitState==="waiting")&&<div className="home-depart-box"><div className="hdb-title">出発待ち</div><p>出発させることで、トイマンがあなたの「{makeEmberTitle(active)}」を探しに行きます。見つけるのは答えではなく、問いの欠片です。</p><button className="btn btn-p touchable" onClick={function(){p.onDepart&&p.onDepart(active.id);}}>トイマンを未受領の森に出発させる</button></div>}</section>}
+    {active&&<section className="home-card"><div className="lh">いま動いている残り火</div><div className="home-fire-title">「{makeEmberTitle(active)}」</div><DeliveredWordsBox card={active} compact={true}/><div className="home-fire-foot">{getEmberUnitLabel(active)} / {Math.round(active.progress||0)}%</div>{(active.status==="awaiting"||active.unitState==="waiting")&&<div className="home-depart-box"><div className="hdb-title">出発待ち</div><p>出発させることで、トイマンがあなたの「{makeEmberTitle(active)}」を探しに行きます。見つけるのは答えではなく、問いの欠片です。</p><button className={"btn btn-p touchable"+(next&&next.action==="depart"?" btn-next-action":"")} onClick={function(){p.onDepart&&p.onDepart(active.id);}}>トイマンを未受領の森に出発させる</button></div>}</section>}
     <section className="home-card"><div className="lh">トイマンのひとこと</div><p className="home-line">「{active?"まだ落としてない。":"置かれたら、拾いに行く。"}」</p></section>
     <section className="home-card"><div className="lh">開いた場所</div>{openPlaces.length>0?<div className="home-place-list">{openPlaces.map(function(k){return <button key={k} className="home-place" onClick={function(){p.onOpenPlace&&p.onOpenPlace(k);}}><b>{PNAME[k]||PSHORT[k]}</b><span>{getPlaceUnlockReason(k)}</span></button>;})}</div>:<div className="closed-place-note">まだ閉じている場所があります。残り火を預けることで、少しずつ開きます。</div>}</section>
     <ClosedPlacesPreview game={game}/>
@@ -3341,6 +3469,7 @@ function App(){
   var [live,setLive]=useState([]);
   var [prog,setProg]=useState({toyman:0,kana:0,utsuro:0,kotae:0});
   
+  var nextAction=game?getNextAction(game):null;
   var [expanded,setExpanded]=useState(null);
   var [viewConv,setViewConv]=useState(null);
   var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
@@ -3408,7 +3537,7 @@ function App(){
   var charCareCb=useCallback(function(id,mode){if(!game)return{ok:false,msg:"まだ世界がありません。",sub:""};var r=applyCharacterCareAction(game,id,mode);if(!r.ok){showToast(r.msg);return r;}var ns=r.state;var uc=addUnitProgressForCharacter(ns,id,mode==="support"?10:6);setGame(ns);persistSave(ns);showToast(r.msg+" — "+r.sub+(uc?" / 問い炎 "+Math.round(uc.progress||0)+"%":""));addWatchGauge("care_"+id+"_"+mode,8);return r;},[game,showToast,addWatchGauge]);// eslint-disable-line
   var pressureActionCb=useCallback(function(mode){if(!game)return{ok:false,msg:"まだ世界がありません。",sub:""};var r=applyPressureAction(game,mode);if(!r.ok){showToast(r.msg);return r;}setGame(r.state);persistSave(r.state);showToast(r.msg+" — "+r.sub);addWatchGauge("pressure_"+mode,6);return r;},[game,showToast,addWatchGauge]);// eslint-disable-line
   var toymanMoveCb=useCallback(function(dest){if(!game)return{ok:false,msg:"まだ世界がありません。",sub:""};var r=applyToymanMove(game,dest);if(!r.ok){showToast(r.msg);return r;}setGame(r.state);persistSave(r.state);showToast(r.msg+" — "+r.sub);return r;},[game,showToast]);// eslint-disable-line
-  var manualBattleCb=useCallback(function(actionId){if(!game)return{ok:false,msg:"まだ世界がありません。",lines:["まだ世界がありません。"]};var r=runToymanBattleIntervention(game,actionId);if(!r.ok){showToast(r.msg);return r;}setGame(r.state);persistSave(r.state);setLive(function(prev){return [{text:(r.lines||[]).join("\n"),kind:"explore_detail",time:nowISO()}].concat(prev).slice(0,40);});showToast(r.ipGain>0?"見守りが届いた — 干渉ポイント +"+r.ipGain:(r.ended?"影との遭遇が終わりました。問いを落とさなかった。":"戦闘に介入しました。問いを落とさなかった。"));return r;},[game,showToast]);
+  var manualBattleCb=useCallback(function(actionId,selfAnswer){if(!game)return{ok:false,msg:"まだ世界がありません。",lines:["まだ世界がありません。"]};var r=runToymanBattleIntervention(game,actionId,selfAnswer);if(!r.ok){showToast(r.msg);return r;}setGame(r.state);persistSave(r.state);setLive(function(prev){return [{text:(r.lines||[]).join("\n"),kind:"explore_detail",time:nowISO()}].concat(prev).slice(0,40);});showToast(r.ipGain>0?"見守りが届いた — 干渉ポイント +"+r.ipGain:(r.ended?"影との遭遇が終わりました。問いを落とさなかった。":"戦闘に介入しました。問いを落とさなかった。"));return r;},[game,showToast]);
   var addWatchGauge=useCallback(function(type,amount){var now2=Date.now();if((wgRef.current.last[type]||0)>now2-5000)return;wgRef.current.last[type]=now2;var ng=wgRef.current.gauge+amount;if(ng>=100){ng-=100;setGame(function(g){if(!g)return g;return Object.assign({},g,{ip:Object.assign({},g.ip,{cur:Math.min(g.ip.max,(g.ip.cur||0)+1)})});});showToast("見守り満タン — 干渉ポイント +1");}wgRef.current.gauge=ng;setWatchGauge(ng);},[showToast]);
   var withUnlock=useCallback(function(prev,next){var pu=getUnlockedConvIds(prev),nu=getUnlockedConvIds(next);var fresh=nu.filter(function(id){return pu.indexOf(id)===-1;});var s=Object.assign({},next,{unlockedConvs:nu});if(fresh.length>0)showToast("会話が解放された：「"+CBID[fresh[0]].title+"」");return s;},[showToast]);
 
@@ -3474,7 +3603,7 @@ function App(){
         <InterventionTab game={game} onExecute={handleTieredIntv} config={intvConfig}/>
       </>}
       {screen!=="battle"&&<nav className="bnav">
-        {getVisibleTabs(game).map(function(t){return <button key={t.id} className={"nbtn"+(screen===t.id?" nbtn-on":"")} onClick={function(){if(t.id!=="conv")setViewConv(null);setScreen(t.id);}}>{t.label}</button>;})}
+        {getVisibleTabs(game).map(function(t){var isNext=nextAction&&nextAction.screen===t.id&&screen!==t.id;return <button key={t.id} className={"nbtn"+(screen===t.id?" nbtn-on":"")+(isNext?" nbtn-next":"")} onClick={function(){if(t.id!=="conv")setViewConv(null);setScreen(t.id);}}>{t.label}{isNext&&<span className="nbtn-dot"/>}</button>;})}
       </nav>}
     </>}
     
@@ -3868,6 +3997,7 @@ function ProcessingLine(p){
 }
 function EmberView(p){
   var game=p.game,onReceive=p.onReceive,onOpenCreate=p.onOpenCreate,onDepart=p.onDepart,onDelete=p.onDelete,onAdvance=p.onAdvance,onBurnReceipt=p.onBurnReceipt,onEditEmber=p.onEditEmber;
+  var next=getNextAction(game);
   var [editingId,setEditingId]=useState(null);
   var [editTitle,setEditTitle]=useState("");
   var [editMemo,setEditMemo]=useState("");
@@ -3886,7 +4016,7 @@ function EmberView(p){
   function unitCard(card){
     var flow=getUnitFlow(card)||EMBER_UNIT_FLOW.completed;
     var place=getEmberPlace(card);
-    var answeredToday=card.lastAdvancedDay===("day_"+(game.world&&game.world.day||1))&&card.unitState!=="completed";
+    var answeredToday=!MVP_MODE&&card.lastAdvancedDay===("day_"+(game.world&&game.world.day||1))&&card.unitState!=="completed";
     var pending=!!card.questionPending;
     var isCompleted=card.unitState==="completed"||card.status==="ready";
     return(<div key={card.id} className={"ev-card ev-unit ev-unit-"+card.unitState+(pending?" ev-question-pending":"")}>
@@ -3948,19 +4078,19 @@ function EmberView(p){
           <p className="etr-stage">はじまりの部屋の灯りが、一度だけ揺れた。<br/>トイマンは顔を上げた。</p>
           <p className="etr-say">「森に、残り火」<br/>「つよい」<br/>「未回収」<br/>「いま行く」</p>
         </div>
-        <button className="btn btn-p touchable" onClick={function(){onDepart&&onDepart(card.id);}}>トイマンを未受領の森へ出発させる</button>
+        <button className={"btn btn-p touchable"+(next&&next.action==="depart"&&next.cardId===card.id?" btn-next-action":"")} onClick={function(){onDepart&&onDepart(card.id);}}>トイマンを未受領の森へ出発させる</button>
       </div>}
       {isCompleted&&<div className="ev-receive-ready-box">
         <div className="err-k">受領待ち</div>
         <p>箱庭側の回収は終わっています。ここから先は、あなたが受け取る段階です。</p>
         <div className="err-q">問い：{flow.question}</div>
-        <button className="btn btn-p touchable" onClick={function(){onReceive&&onReceive(card.id);}}>自分で受け取る</button>
+        <button className={"btn btn-p touchable"+(next&&next.action==="receive"&&next.cardId===card.id?" btn-next-action":"")} onClick={function(){onReceive&&onReceive(card.id);}}>自分で受け取る</button>
       </div>}
       {card.answers&&card.answers.length>0&&<div className="ev-answer-log">
         {card.answers.slice(-3).map(function(a,i){return <span key={i}>「{a.answer}」</span>;})}
       </div>}
       {card.unitState!=="waiting"&&flow.choices&&flow.choices.length>0&&!isCompleted?<div className="ev-choice-grid">
-        {pending?flow.choices.map(function(ch){return <button key={ch} className="ev-choice-btn" disabled={answeredToday} onClick={function(){onAdvance&&onAdvance(card.id,ch,false);}}>{ch}</button>;}):<button className="ev-choice-btn ev-choice-wait" disabled>ゲージ100%で問い札が出ます</button>}
+        {pending?flow.choices.map(function(ch,ci){return <button key={ch} className={"ev-choice-btn"+(next&&next.action==="answer"&&next.cardId===card.id&&ci===0?" btn-next-action":"")} disabled={answeredToday} onClick={function(){onAdvance&&onAdvance(card.id,ch,false);}}>{ch}</button>;}):<button className="ev-choice-btn ev-choice-wait" disabled>ゲージ100%で問い札が出ます</button>}
         {pending&&customAnswerId!==card.id&&<button className="ev-choice-btn ev-choice-custom" disabled={answeredToday} onClick={function(){setCustomAnswerId(card.id);setCustomAnswerText("");}}>この他に、答えを入力する</button>}
         {pending&&customAnswerId===card.id&&<div className="ev-custom-answer">
           <textarea value={customAnswerText} placeholder="自分の言葉で答えてください。" onChange={function(e){setCustomAnswerText(e.target.value);}}/>
@@ -4035,6 +4165,10 @@ function EmberView(p){
           <span className={"ev-receipt-badge "+(grad?"erb-grad":"erb-prov")}>{grad?"卒業":"仮"}</span>
         </div>
         <ReceiptWordsBox receipt={r}/><ReceiptMetricBox receipt={r}/><pre className="ev-receipt-text">{r.text}</pre>
+        {(r.shadowAnswers||[]).length>0&&<div className="ev-shadow-answers">
+          <div className="bsa-log-title">影と向き合った記録（{r.shadowAnswers.length}回）</div>
+          {r.shadowAnswers.map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">「{a.shadow}」</span><span className="bsa-ans">→「{a.answer}」</span></div>;})}
+        </div>}
         {grad?<button className="btn btn-burn touchable" onClick={function(){onBurnReceipt&&onBurnReceipt(r.id);}}>心へ返す（燃やす）</button>
           :<div className="ev-receipt-locked">プラス変化が30%に届くと、心へ返せます（今 {r.positiveGrowthTotal||0}%）</div>}
       </div>);})}
