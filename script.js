@@ -2932,11 +2932,11 @@ function BattleEncounterScreen(p){
   function doAction(id){var r=p.onManualBattle&&p.onManualBattle(id,selfAnswer);if(r)setResult(r);setSelfAnswer("");}
   return(
     <div className="battle-screen scroll">
-      <button className="back" onClick={p.onBack}>← 未受領の森へ戻る</button>
+      <button className="battle-back-btn" onClick={p.onBack}>← 影との遭遇を中断して戻る</button>
       <div className="battle-full-hero">
         <div className="battle-k">問いへの道</div>
-        <h2>トイマンが問いに近づいている途中、影に遭遇した</h2>
-        <p>問いはまだ届いていない。トイマンが取りに向かっている途中です。影がその道をふさいでいる。一緒に、前へ進みます。</p>
+        <h2>影が道をふさいでいる。トイマンと一緒に前へ進みます。</h2>
+        <p>問いはまだ届いていない。トイマンが取りに向かっている途中です。</p>
       </div>
       {card?<div className="battle-ember-full">
         <span>守っている残り火</span>
@@ -2957,12 +2957,23 @@ function BattleEncounterScreen(p){
         <div className="battle-vs">VS</div>
         <div className="battle-shadow"><i/><span>{pv.enemy}</span></div>
       </div>
-      <div className="shadow-voice-box shadow-voice-full"><span>影の声</span><p>「{pv.voice}」</p></div>
-      <div className="battle-self-answer-box">
-        <label className="bsa-label">影の声に、あなたの言葉で返す（任意）</label>
-        <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className="bsa-quick" onClick={function(){setSelfAnswer(q);}}>{q}</button>;})}</div>
-        <textarea className="bsa-input" rows={2} placeholder="自由に書く、または上のボタンで選ぶ" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
-        {selfAnswer.trim()&&<div className="bsa-bonus">回収率 +3〜5% ボーナス / この言葉は残り火に記録されます</div>}
+      <div className="battle-voice-action-row">
+        <div className="battle-voice-col">
+          <div className="shadow-voice-box shadow-voice-full"><span>影の声</span><p>「{pv.voice}」</p></div>
+          <div className="battle-self-answer-box">
+            <label className="bsa-label">影の声に、あなたの言葉で返す（任意）</label>
+            <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className="bsa-quick" onClick={function(){setSelfAnswer(q);}}>{q}</button>;})}</div>
+            <textarea className="bsa-input" rows={2} placeholder="自由に書く、または上のボタンで選ぶ" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
+            {selfAnswer.trim()&&<div className="bsa-bonus">回収率 +3〜5% ボーナス / この言葉は残り火に記録されます</div>}
+          </div>
+        </div>
+        <div className="battle-advance-col">
+          <button className={"battle-advance-btn"+(disabled?" battle-advance-disabled":"")} disabled={disabled} onClick={function(){doAction("hold");}}>
+            <span className="bab-main">前に進ませる</span>
+            <span className="bab-sub">道を切り拓く</span>
+            <span className="bab-hint">+4〜7%</span>
+          </button>
+        </div>
       </div>
       <div className="battle-stats battle-stats-full">
         <div><span>影の濃さ</span><b>{pv.hp} / {pv.hpMax}</b><Bar value={pv.hp/pv.hpMax*100} color="var(--ct)" h={5}/></div>
@@ -3423,8 +3434,35 @@ function NowSceneView(p){
 }
 
 
+var GLOSSARY=[
+  {term:"残り火",read:"のこりび",desc:"書いたあとに、まだ何かが残っている感覚のこと。読まれなかった記事、反応のなかった投稿、消せない下書き——形は違っても、火はまだそこにある。"},
+  {term:"火",read:"ひ",desc:"感情の核にあるもの。「何かになりたかった」「届いてほしかった」という、まだ消えていない願いや痛みのこと。"},
+  {term:"影",read:"かげ",desc:"「どうせ意味がない」「なかったことにすればいい」という内側の声。影は敵ではなく、まだ諦めていない証でもある。"},
+  {term:"トイマン",read:"とよまん",desc:"あなたの代わりに残り火を探しに行くキャラクター。答えは持ち帰らない。問いの欠片だけを拾って戻ってくる。"},
+  {term:"未受領の森",read:"みじゅりょうのもり",desc:"まだ受け取られていない感情が漂う場所。トイマンはここを歩き回り、影と向き合いながら道を切り拓く。"},
+  {term:"問い",read:"とい",desc:"探索の末に見つかる言葉。答えではなく、次に自分に向ける問いかけ。「本当は何になってほしかった？」のような形をしている。"},
+  {term:"受領証",read:"じゅりょうしょう",desc:"残り火を受け取ったことの記録。「あった」という証明。消したり、なかったことにするためではなく、ただ受け取るために作られる。"},
+  {term:"見守り",read:"みまもり",desc:"あなたがトイマンに関わることで生まれるポイント。放っておいてもいいし、一緒に進んでもいい。"},
+];
+function GlossaryModal(p){
+  return <div className="ov" onClick={p.onClose}><div className="bsh glossary-modal" onClick={function(e){e.stopPropagation();}}>
+    <div className="sh-handle"/>
+    <div className="glossary-title">用語について</div>
+    <p className="glossary-sub">このゲームで使われる言葉の意味です。</p>
+    <div className="glossary-list">
+      {GLOSSARY.map(function(g){return(
+        <div key={g.term} className="glossary-item">
+          <div className="glossary-term">{g.term}<span className="glossary-read">（{g.read}）</span></div>
+          <p className="glossary-desc">{g.desc}</p>
+        </div>
+      );})}
+    </div>
+    <button className="btn btn-g" style={{width:"100%",marginTop:16}} onClick={p.onClose}>閉じる</button>
+  </div></div>;
+}
 function HomeView(p){
   var game=p.game;
+  var [showGlossary,setShowGlossary]=useState(false);
   var cards=game.emberCards||[];
   var active=cards.find(function(c){return c.status!=="ready"&&c.status!=="awaiting";})||cards[0]||null;
   var ready=cards.find(function(c){return c.status==="ready";});
@@ -3432,8 +3470,12 @@ function HomeView(p){
   var next=getNextAction(game);
   var nextText=ready?"受け取れる残り火があります。":active?"「"+makeEmberTitle(active)+"」を見守っています。":"まずは、ひとつだけ置いてみてください。";
   return <div className="scroll home-screen">
+    {showGlossary&&<GlossaryModal onClose={function(){setShowGlossary(false);}}/>}
     <section className="home-hero">
-      <div className="home-kicker">今日のひとつ</div>
+      <div className="home-hero-top">
+        <div className="home-kicker">今日のひとつ</div>
+        <button className="glossary-btn" onClick={function(){setShowGlossary(true);}}>？ 用語</button>
+      </div>
       <h2>{nextText}</h2>
       {!active&&!ready&&<p>ここは、書いたあとに残ってしまったものを、なかったことにしないための場所です。</p>}
       {active&&<p>箱庭は、この残り火を消さずに扱っています。急がなくていい。まず、届いていることを確認します。</p>}
