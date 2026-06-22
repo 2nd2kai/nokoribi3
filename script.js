@@ -2016,10 +2016,7 @@ function advanceUnitStateAfterQuestion(s,card,reason){
     grantItem(s,"small_light",1);
   }
   if(s.world&&s.world.map&&s.world.map[place])s.world.map[place].progress_rate=Math.min(0.999,(s.world.map[place].progress_rate||0)+0.02);
-  /* MVP_MODE: 次のステージに遷移した直後、completed でなければすぐに問いを表示する */
-  if(MVP_MODE&&card.unitState&&card.unitState!=="completed"){
-    setQuestionPending(card,"MVP即時進行");
-  }
+  /* 各ステージは progress=0 から開始。問いは100%到達で自然発生する */
   return card;
 }
 
@@ -3504,7 +3501,7 @@ function App(){
   var receiveEmberCb=useCallback(function(id){if(!game)return;if(MVP_MODE){var ns=receiveEmberCard(game,id,{});ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);var latest=(ns.receipts||[])[0];if(latest){setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？"});}return;}setReceiveTargetId(id);},[game]);// eslint-disable-line
   var departEmberCb=useCallback(function(id){if(!game)return;var card=(game.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;setDepartTargetId(id);},[game]);// eslint-disable-line
   var confirmDepartCb=useCallback(function(id){if(!game)return;var ns=cloneS(game);var card=(ns.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;card=normalizeEmberUnitCard(card);card.unitState="exploring";card.status="unreceived";card.currentQuestion=EMBER_UNIT_FLOW.exploring.question;card.progress=0;
-    if(MVP_MODE){setQuestionPending(card,"MVP即時進行");}
+    /* 出発時は探索0%スタート。問いは戦闘・放置で progress=100% に達してから自然発生する */
     unlockPlace(ns,"unexplored_forest",false);ns.characters.toyman.location="unexplored_forest";ns.characters.toyman.lastAction="exploring";ns.lastSavedAt=nowISO();ns.logs=[{hours:0,events:[{text:"トイマンが「"+makeEmberTitle(card)+"」を探しに、未受領の森へ出発した。",kind:"ember",pri:5},{text:"「残っているなら、迎えに行く」「それだけ」",kind:"discover",pri:4}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);setDepartTargetId(null);showToast("トイマンが未受領の森へ出発した。");},[game,showToast]);// eslint-disable-line
   var burnReceiptCb=useCallback(function(id){if(!game)return;var r=(game.receipts||[]).find(function(x){return x.id===id;});if(!r)return;if(r.receiptStatus!=="graduated"){showToast("この受領証は、まだ心へ返せません。卒業（プラス変化30%以上）が必要です。");return;}setBurnTargetId(id);},[game,showToast]);// eslint-disable-line
   var confirmBurnCb=useCallback(function(id){if(!game)return;var r=burnReceipt(game,id);setBurnTargetId(null);if(!r.ok){showToast(r.msg);return;}setGame(r.state);persistSave(r.state);if(r.isEnding){showToast(r.msg);setTimeout(function(){setScreen("ending");},700);}else showToast(r.msg);},[game,showToast]);// eslint-disable-line
