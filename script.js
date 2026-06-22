@@ -4210,7 +4210,7 @@ function MetricInput(p){
   </label>;
 }
 
-function buildGeminiPrompt(data,answer){
+function function buildGeminiPrompt(data,answer){
   var lines=["以下の残り火データをもとに、この人の火の中にあったものを100〜150字で言語化してください。","アドバイスや評価はしないでください。","「この火の中には〇〇があった」という形式で、断定せず寄り添う文体で書いてください。",""];
   if(data.writeState)lines.push("状態："+data.writeState);
   if(data.feeling)lines.push("感情："+data.feeling);
