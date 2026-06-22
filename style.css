@@ -3836,3 +3836,23 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 
 /* 戦闘ナビ「目指している残り火」ラベル */
 .battle-ember-box span,.battle-ember-full>span{color:var(--ember);font-size:9.5px;letter-spacing:.14em;font-weight:600}
+
+/* ── 即時受領フロー（何にもならない気がした） ── */
+.ec-fast{display:flex;flex-direction:column;gap:0;padding:0 4px}
+.ec-selected{font-family:var(--serif);font-size:13px;color:var(--ember2);margin:0 0 12px;padding:8px 12px;border-left:2px solid var(--ember);background:rgba(219,164,94,.07);border-radius:0 6px 6px 0}
+.ec-acceptance-preview{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px;display:flex;flex-direction:column;gap:10px;margin-bottom:4px}
+.ec-acc-text{font-family:var(--serif);font-size:14px;line-height:1.85;color:var(--p);margin:0}
+.ec-acc-hold{font-family:var(--serif);font-size:13px;line-height:1.75;color:var(--ember2);margin:0;padding:10px 12px;border-left:2px solid rgba(219,164,94,.5);background:rgba(219,164,94,.06);border-radius:0 6px 6px 0}
+.ec-acc-question{padding:10px 12px;background:rgba(176,168,204,.08);border-radius:8px;display:flex;flex-direction:column;gap:4px}
+.ec-acc-qlabel{font-size:9.5px;color:var(--co);letter-spacing:.12em;font-weight:600;font-family:var(--sans)}
+.ec-acc-question p{font-family:var(--serif);font-size:13.5px;color:var(--p);margin:0;line-height:1.7}
+.ec-q-sub{font-family:var(--serif);font-size:13px;color:var(--dim);margin:8px 0}
+
+/* AcceptanceModal */
+.acc-modal{max-height:80dvh;overflow-y:auto}
+.acc-inner{padding:1.8rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:14px}
+.acc-text{font-family:var(--serif);font-size:15px;line-height:1.9;color:var(--p);margin:0;text-align:center}
+.acc-hold{font-family:var(--serif);font-size:13.5px;line-height:1.75;color:var(--ember2);margin:0;padding:12px 16px;border-left:3px solid var(--ember);background:rgba(219,164,94,.08);border-radius:0 8px 8px 0;text-align:left}
+.acc-question-box{background:rgba(176,168,204,.08);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:5px}
+.acc-question-label{font-size:9.5px;color:var(--co);letter-spacing:.14em;font-weight:600;font-family:var(--sans)}
+.acc-question{font-family:var(--serif);font-size:14px;color:var(--p);margin:0;line-height:1.7}

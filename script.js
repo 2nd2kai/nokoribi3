@@ -10,7 +10,8 @@ const MVP_MODE=true;
    画面の中心に表示する本文として使う。 */
 const ACCEPTANCE_TEXTS={
   "何にもならない気がした":{
-    text:"「何にもならない」と感じた火の奥には、「何かになってほしかった」が残っているのかもしれません。今日は、その判決を保留します。",
+    text:"「"何にもならない"と感じた火の奥には、"何かになってほしかった"が残っているのかもしれません。",
+    holdText:"「何にもならなかった」という判決は、今日は保留します。",
     nextQuestion:"本当は、何になってほしかった？"
   },
   "書いたけど届いていない":{
@@ -2216,6 +2217,7 @@ function receiveEmberCard(game,emberId,receiptInput){
     questionTicket:card.questionTicket,receivedAt:nowISO(),text:generateReceiptText(card),
     shadowAnswers:card.shadowAnswers||[],
     acceptanceText:card.acceptanceText||accForReceipt.text,
+    holdText:(ACCEPTANCE_TEXTS[card.writeState]||{}).holdText||null,
     nextQuestion:card.nextQuestion||accForReceipt.nextQuestion,
     initialMetrics:growth.initial,currentMetrics:growth.current,metricDeltas:growth.deltas,
     positiveGrowthTotal:growth.positiveGrowthTotal,netGrowthTotal:growth.netGrowthTotal,canGraduate:growth.canGraduate,
@@ -3498,7 +3500,27 @@ function App(){
     });
     return function(){setSaveFailHandler(null);setSaveOkHandler(null);};
   },[showToast]);
-  var receiveEmberCb=useCallback(function(id){if(!game)return;if(MVP_MODE){var ns=receiveEmberCard(game,id,{});ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);var latest=(ns.receipts||[])[0];if(latest){setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？"});}return;}setReceiveTargetId(id);},[game]);// eslint-disable-line
+  var receiveEmberCb=useCallback(function(id){if(!game)return;if(MVP_MODE){var ns=receiveEmberCard(game,id,{});ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);var latest=(ns.receipts||[])[0];if(latest){setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",holdText:latest.holdText||null,nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？"});}return;}setReceiveTargetId(id);},[game]);// eslint-disable-line
+  /* 「何にもならない気がした」専用：預けた瞬間に受領まで完了させる */
+  var addAndReceiveEmber=useCallback(function(card){
+    if(!game)return;
+    var res=addNewEmberToState(game,card);
+    var ns=res.state;
+    /* 即時受領 */
+    var emberCard=(ns.emberCards||[]).find(function(c){return c.id===card.id;});
+    if(emberCard){
+      var ns2=receiveEmberCard(ns,emberCard.id,{});
+      ns2.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns2)};
+      ns2.lastSavedAt=nowISO();
+      setGame(ns2);persistSave(ns2);
+      var acc=ACCEPTANCE_TEXTS[card.writeState]||{};
+      setReceiptAcceptance({text:acc.text||"あなたが書いたものは、なかったことにはなりません。",holdText:acc.holdText||null,nextQuestion:acc.nextQuestion||"次は、どんな問いを持ち帰る？"});
+    }else{
+      ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};
+      setGame(ns);persistSave(ns);
+    }
+    setShowCreate(false);
+  },[game]);
   var departEmberCb=useCallback(function(id){if(!game)return;var card=(game.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;setDepartTargetId(id);},[game]);// eslint-disable-line
   var confirmDepartCb=useCallback(function(id){if(!game)return;var ns=cloneS(game);var card=(ns.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;card=normalizeEmberUnitCard(card);card.unitState="exploring";card.status="unreceived";card.currentQuestion=EMBER_UNIT_FLOW.exploring.question;card.progress=0;
     /* 出発時は探索0%スタート。問いは戦闘・放置で progress=100% に達してから自然発生する */
@@ -3605,7 +3627,7 @@ function App(){
       </nav>}
     </>}
     
-    {showCreate&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber}/>}
+    {showCreate&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber} onSubmitFast={addAndReceiveEmber}/>}
     {departTargetId&&<DepartureOverlay card={(game.emberCards||[]).find(function(c){return c.id===departTargetId;})} onCancel={function(){setDepartTargetId(null);}} onConfirm={function(){confirmDepartCb(departTargetId);}}/>}
     {burnTargetId&&<BurnConfirmModal receipt={(game.receipts||[]).find(function(r){return r.id===burnTargetId;})} onCancel={function(){setBurnTargetId(null);}} onConfirm={function(){confirmBurnCb(burnTargetId);}}/>}
     {(game.introQueue||[]).length>0&&<IntroSceneOverlay scene={INTRO_SCENES[(game.introQueue||[])[0]]} onClose={function(){dismissIntroSceneCb((game.introQueue||[])[0]);}}/>}
@@ -4189,12 +4211,16 @@ function MetricInput(p){
 }
 
 function AcceptanceModal(p){
-  return <div className="ov" onClick={p.onClose}><div className="bsh" onClick={function(e){e.stopPropagation();}}>
+  return <div className="ov" onClick={p.onClose}><div className="bsh acc-modal" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
-    <div style={{padding:"2rem 1.5rem 1.5rem",textAlign:"center"}}>
-      <p style={{fontSize:"1.05rem",lineHeight:"1.8",color:"var(--fg)",marginBottom:"1.5rem",whiteSpace:"pre-wrap"}}>{p.text}</p>
-      {p.nextQuestion&&<p style={{fontSize:"0.8rem",color:"var(--muted)",borderTop:"1px solid var(--border)",paddingTop:"1rem",marginTop:"0"}}>次の問い：{p.nextQuestion}</p>}
-      <button className="btn-primary" style={{marginTop:"1.5rem"}} onClick={p.onClose}>受け取る</button>
+    <div className="acc-inner">
+      <p className="acc-text">{p.text}</p>
+      {p.holdText&&<p className="acc-hold">{p.holdText}</p>}
+      {p.nextQuestion&&<div className="acc-question-box">
+        <span className="acc-question-label">次の問い</span>
+        <p className="acc-question">{p.nextQuestion}</p>
+      </div>}
+      <button className="btn btn-p" style={{marginTop:"1.5rem",width:"100%"}} onClick={p.onClose}>受け取る</button>
     </div>
   </div></div>;
 }
@@ -4238,72 +4264,54 @@ function ReceiptReceiveModal(p){
 }
 
 function EmberCreate(p){
-  var [step,setStep]=useState(0);
   var [ws,setWs]=useState("");
-  var [fe,setFe]=useState("");
-  var [wa,setWa]=useState("");
-  var [title,setTitle]=useState("");
-  var [memo,setMemo]=useState("");
-  var [body,setBody]=useState("");
-  var [reaction,setReaction]=useState("");
-  var [imS,setImS]=useState(50);
-  var [imM,setImM]=useState(50);
-  var [imV,setImV]=useState(50);
-  var steps=[
-    {q:"最近書いたあとに残っているものの状態は？",opts:WRITE_STATES,val:ws,set:setWs},
-    {q:"何が残っていますか？",opts:FEELINGS,val:fe,set:setFe},
-    {q:"本当は何を受け取ってほしかったですか？",opts:WANTED,val:wa,set:setWa}
-  ];
-  var isInfo=step>=steps.length;
-  var cur=steps[step];
-  var hasSoul=!!(title.trim()||memo.trim()||body.trim()||reaction.trim());
-  function submit(){
-    p.onSubmit({
-      id:"e"+Date.now(),
-      writeState:ws,
-      feeling:fe,
-      wanted:wa,
-      title:title.trim()||null,
-      memo:memo.trim(),
-      bodyText:body.trim(),
-      reaction:reaction.trim(),
-      soul:hasSoul,
-      initialMetrics:normalizeMetrics({satisfaction:imS,meaning:imM,value:imV}),
-      status:"awaiting",
-      progress:0,
-      createdAt:nowISO()
+  /* 「何にもならない気がした」を選んだら即時フローへ */
+  var acc=ws?ACCEPTANCE_TEXTS[ws]:null;
+  var isFastPath=!!acc;
+  function submitFast(){
+    var id="e"+Date.now();
+    p.onSubmitFast&&p.onSubmitFast({
+      id:id,writeState:ws,feeling:"",wanted:"",title:null,memo:"",bodyText:"",reaction:"",soul:false,
+      initialMetrics:normalizeMetrics({satisfaction:50,meaning:50,value:50}),
+      status:"awaiting",progress:0,createdAt:nowISO()
     });
   }
   return(<div className="ov" onClick={p.onClose}><div className="bsh ec-bsh" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
     <p className="sh-title">残り火を預ける</p>
-    <p className="ec-step">{Math.min(step+1,steps.length+1)} / {steps.length+1}</p>
-    {!isInfo&&<>
-      <p className="ec-q">{cur.q}</p>
-      <div className="ec-opts">{cur.opts.map(function(opt){return(<button key={opt} className={"ec-opt"+(cur.val===opt?" ec-on":"")} onClick={function(){cur.set(opt);}}>{opt}</button>);})}</div>
-    </>}
-    {isInfo&&<div className="ec-extra">
-      <p className="ec-q">追加情報</p>
-      <div className="ec-note soul-note">ここは空欄でも預けられます。<br/>ただ、情報を入れることで、この残り火はあなたの魂になります。</div>
-      <div className="ec-metric-box">
-        <div className="ec-metric-title">最初の残り火</div>
-        <p>この残り火を預ける時点の、書いたものとの距離を記録します。数字は判決ではなく、あとで変化を見るための目印です。</p>
-        <MetricInput label="書いた納得" value={imS} onChange={setImS}/>
-        <MetricInput label="書いた意味" value={imM} onChange={setImM}/>
-        <MetricInput label="書いた価値" value={imV} onChange={setImV}/>
+    {!ws&&<>
+      <p className="ec-q">最近書いたあとに残っているものは？</p>
+      <div className="ec-opts">
+        {WRITE_STATES.map(function(opt){return(
+          <button key={opt} className={"ec-opt"+(ws===opt?" ec-on":"")} onClick={function(){setWs(opt);}}>
+            {opt}
+          </button>
+        );})}
       </div>
-      <label className="ec-field"><span>タイトル 任意</span><input type="text" value={title} placeholder="例：読まれなかった記事の残り火" onChange={function(e){setTitle(e.target.value);}}/></label>
-      <label className="ec-field"><span>メモ 任意</span><input type="text" value={memo} placeholder="例：公開したあと、何度も通知を見た" onChange={function(e){setMemo(e.target.value);}}/></label>
-      <label className="ec-field"><span>あなたの言葉 任意</span><textarea value={body} placeholder="読まれなかったことより、何も返ってこなかったことが痛かった。" onChange={function(e){setBody(e.target.value);}}/></label>
-      <label className="ec-field"><span>反応・評価・スキの数など 任意</span><textarea value={reaction} placeholder="例：いいね3件、コメントなし／スキ0だった／読了率は良かったらしい" onChange={function(e){setReaction(e.target.value);}}/></label>
-      <div className={"soul-preview"+(hasSoul?" soul-on":"")}>{hasSoul?"この残り火は、あなたの魂になっています。":"通常の残り火として預けられます。"}</div>
+    </>}
+    {ws&&isFastPath&&<div className="ec-fast">
+      <p className="ec-selected">「{ws}」</p>
+      <div className="ec-acceptance-preview">
+        <p className="ec-acc-text">{acc.text}</p>
+        {acc.holdText&&<p className="ec-acc-hold">{acc.holdText}</p>}
+        {acc.nextQuestion&&<div className="ec-acc-question">
+          <span className="ec-acc-qlabel">次の問い</span>
+          <p>{acc.nextQuestion}</p>
+        </div>}
+      </div>
+      <button className="btn btn-p" style={{width:"100%",marginTop:"1rem"}} onClick={submitFast}>受け取る</button>
+      <button className="btn btn-g" style={{width:"100%",marginTop:"6px"}} onClick={function(){setWs("");}}>選び直す</button>
     </div>}
-    <div className="ec-nav">
-      {step>0&&<button className="btn btn-g" onClick={function(){setStep(function(s){return s-1;});}}>戻る</button>}
-      {!isInfo&&<button className="btn btn-p" onClick={function(){if(cur.val)setStep(function(s){return s+1;});}} style={{opacity:cur.val?1:.45}}>次へ</button>}
-      {isInfo&&<button className="btn btn-p" onClick={submit}>預ける</button>}
-    </div>
-    <button className="btn btn-g" style={{marginTop:4}} onClick={p.onClose}>閉じる</button>
+    {ws&&!isFastPath&&<>
+      <p className="ec-selected">「{ws}」を選択中</p>
+      <p className="ec-q-sub">詳しく教えてください（任意）</p>
+      <button className="btn btn-p" style={{width:"100%",marginTop:"1rem"}} onClick={function(){
+        var id="e"+Date.now();
+        p.onSubmit&&p.onSubmit({id:id,writeState:ws,feeling:"",wanted:"",title:null,memo:"",bodyText:"",reaction:"",soul:false,initialMetrics:normalizeMetrics({satisfaction:50,meaning:50,value:50}),status:"awaiting",progress:0,createdAt:nowISO()});
+      }}>預ける</button>
+      <button className="btn btn-g" style={{width:"100%",marginTop:"6px"}} onClick={function(){setWs("");}}>選び直す</button>
+    </>}
+    <button className="btn btn-g" style={{marginTop:8}} onClick={p.onClose}>閉じる</button>
   </div></div>);
 }
 function ConvView(p){var game=p.game,onRead=p.onRead;var unlocked=getUnlockedConvIds(game);var hints=getNextUnlockInfo(game);var pairs={};CONVS.forEach(function(c){var k=c.a+"-"+c.b;if(!pairs[k])pairs[k]={a:c.a,b:c.b,convs:[]};pairs[k].convs.push(c);});return <div className="scroll"><div className="cv-wrap">{hints.length>0&&<div className="cv-hints"><div className="lh">もうすぐ発生する場面</div>{hints.map(function(h){return <div key={h.id} className="cv-hint-row"><span className={"nd cd-"+h.a}/><span className={"nd cd-"+h.b}/><span className="cv-hn">「{h.title}」</span><span className="cv-need">連携度あと {h.need}</span></div>;})}</div>}{Object.keys(pairs).map(function(key){var pair=pairs[key];var bondV=game.characters[pair.a].bonds[pair.b]||0;return <div key={key} className="cv-pair"><div className="cv-pair-head"><span className={"nd cd-"+pair.a}/><span className="cv-pn">{NAMES[pair.a]}</span><span className="cv-x">×</span><span className={"nd cd-"+pair.b}/><span className="cv-pn">{NAMES[pair.b]}</span><span className="cv-bond">連携 {bondV}</span></div>{pair.convs.map(function(c){var isU=unlocked.indexOf(c.id)>=0,isR=game.readConvs&&game.readConvs.indexOf(c.id)>=0,isRcv=game.receivedScenes&&game.receivedScenes.indexOf(c.id)>=0;return <div key={c.id} className={"cv-item"+(isU?" cv-open":"")+(isR?" cv-read":"")} onClick={isU?function(){onRead(c.id);}:undefined}>{isU?<><span className="cv-title">「{c.title}」</span>{isRcv&&<span className="cv-rcvd">受領済</span>}{!isR&&!isRcv&&<span className="cv-new">NEW</span>}{isR&&!isRcv&&<span className="cv-unrcvd">受領できます</span>}</>:<><span className="cv-locked">🔒 「{c.title}」</span><span className="cv-th">連携度 {c.th} で解放</span></>}</div>;})}</div>;})} </div></div>;}
