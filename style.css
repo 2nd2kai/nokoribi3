@@ -3592,3 +3592,18 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .cvd-line.cd-utsuro .cvd-speaker-inline{color:var(--cu)}
 .cvd-line.cd-kotae  .cvd-speaker-inline{color:var(--co)}
 .cvd-line.cd-auditor .cvd-speaker-inline{color:var(--ca)}
+
+/* ── MAP：未解放の場所カード（薄表示・操作不可） ── */
+.world-place-locked{
+  opacity:.42;
+  cursor:default;
+  pointer-events:none;
+  filter:grayscale(.5);
+}
+.world-place-locked .wpc-icon{opacity:.7}
+.wpc-locked-note{
+  margin-top:8px;
+  font-size:11px;
+  color:var(--faint);
+  font-family:var(--serif);
+}
