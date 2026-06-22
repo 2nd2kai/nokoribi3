@@ -3500,7 +3500,7 @@ function App(){
     });
     return function(){setSaveFailHandler(null);setSaveOkHandler(null);};
   },[showToast]);
-  var receiveEmberCb=useCallback(function(id){if(!game)return;if(MVP_MODE){var ns=receiveEmberCard(game,id,{});ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);var latest=(ns.receipts||[])[0];if(latest){setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",holdText:latest.holdText||null,nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？"});}return;}setReceiveTargetId(id);},[game]);// eslint-disable-line
+  var receiveEmberCb=useCallback(function(id){if(!game)return;if(MVP_MODE){var ns=receiveEmberCard(game,id,{});ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);var latest=(ns.receipts||[])[0];if(latest){setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",holdText:latest.holdText||null,nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？",writeState:latest.writeState||"",feeling:latest.feeling||"",wanted:latest.wanted||"",bodyText:latest.bodyText||""});}return;}setReceiveTargetId(id);},[game]);// eslint-disable-line
   /* 「何にもならない気がした」専用：預けた瞬間に受領まで完了させる */
   var addAndReceiveEmber=useCallback(function(card){
     if(!game)return;
@@ -3514,7 +3514,7 @@ function App(){
       ns2.lastSavedAt=nowISO();
       setGame(ns2);persistSave(ns2);
       var acc=ACCEPTANCE_TEXTS[card.writeState]||{};
-      setReceiptAcceptance({text:acc.text||"あなたが書いたものは、なかったことにはなりません。",holdText:acc.holdText||null,nextQuestion:acc.nextQuestion||"次は、どんな問いを持ち帰る？"});
+      setReceiptAcceptance({text:acc.text||"あなたが書いたものは、なかったことにはなりません。",holdText:acc.holdText||null,nextQuestion:acc.nextQuestion||"次は、どんな問いを持ち帰る？",writeState:card.writeState||"",feeling:card.feeling||"",wanted:card.wanted||"",bodyText:card.bodyText||""});
     }else{
       ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};
       setGame(ns);persistSave(ns);
@@ -3631,7 +3631,7 @@ function App(){
     {departTargetId&&<DepartureOverlay card={(game.emberCards||[]).find(function(c){return c.id===departTargetId;})} onCancel={function(){setDepartTargetId(null);}} onConfirm={function(){confirmDepartCb(departTargetId);}}/>}
     {burnTargetId&&<BurnConfirmModal receipt={(game.receipts||[]).find(function(r){return r.id===burnTargetId;})} onCancel={function(){setBurnTargetId(null);}} onConfirm={function(){confirmBurnCb(burnTargetId);}}/>}
     {(game.introQueue||[]).length>0&&<IntroSceneOverlay scene={INTRO_SCENES[(game.introQueue||[])[0]]} onClose={function(){dismissIntroSceneCb((game.introQueue||[])[0]);}}/>}
-    {receiptAcceptance&&<AcceptanceModal text={receiptAcceptance.text} nextQuestion={receiptAcceptance.nextQuestion} onClose={function(){setReceiptAcceptance(null);}}/>}
+    {receiptAcceptance&&<AcceptanceModal text={receiptAcceptance.text} holdText={receiptAcceptance.holdText} nextQuestion={receiptAcceptance.nextQuestion} writeState={receiptAcceptance.writeState} feeling={receiptAcceptance.feeling} wanted={receiptAcceptance.wanted} bodyText={receiptAcceptance.bodyText} onClose={function(){setReceiptAcceptance(null);}}/>}
     {receiveTarget&&<ReceiptReceiveModal card={receiveTarget} onClose={function(){setReceiveTargetId(null);}} onSubmit={function(input){
       var ns=receiveEmberCard(game,receiveTarget.id,input);
       ns.lastSavedAt=nowISO();
@@ -4210,7 +4210,29 @@ function MetricInput(p){
   </label>;
 }
 
+function buildGeminiPrompt(data,answer){
+  var lines=["以下の残り火データをもとに、この人の火の中にあったものを100〜150字で言語化してください。","アドバイスや評価はしないでください。","「この火の中には〇〇があった」という形式で、断定せず寄り添う文体で書いてください。",""];
+  if(data.writeState)lines.push("状態："+data.writeState);
+  if(data.feeling)lines.push("感情："+data.feeling);
+  if(data.wanted)lines.push("本当は："+data.wanted);
+  if(data.bodyText)lines.push("あなたの言葉："+data.bodyText);
+  if(answer&&answer.trim())lines.push("次の問いへの答え："+answer.trim());
+  return lines.join("\n");
+}
+
 function AcceptanceModal(p){
+  var [answer,setAnswer]=useState("");
+  var [copied,setCopied]=useState(false);
+  var hasPromptData=!!(p.writeState||p.feeling||p.wanted||p.bodyText||p.nextQuestion);
+  function copyPrompt(){
+    var prompt=buildGeminiPrompt({writeState:p.writeState,feeling:p.feeling,wanted:p.wanted,bodyText:p.bodyText},answer);
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(prompt).then(function(){setCopied(true);setTimeout(function(){setCopied(false);},2500);});
+    }else{
+      /* フォールバック */
+      var ta=document.createElement("textarea");ta.value=prompt;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);setCopied(true);setTimeout(function(){setCopied(false);},2500);
+    }
+  }
   return <div className="ov" onClick={p.onClose}><div className="bsh acc-modal" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
     <div className="acc-inner">
@@ -4219,8 +4241,16 @@ function AcceptanceModal(p){
       {p.nextQuestion&&<div className="acc-question-box">
         <span className="acc-question-label">次の問い</span>
         <p className="acc-question">{p.nextQuestion}</p>
+        <textarea className="acc-answer-input" rows={3} placeholder="答えなくてもいい。書けたら書く。" value={answer} onChange={function(e){setAnswer(e.target.value);}}/>
       </div>}
-      <button className="btn btn-p" style={{marginTop:"1.5rem",width:"100%"}} onClick={p.onClose}>受け取る</button>
+      {hasPromptData&&<div className="acc-ai-section">
+        <p className="acc-ai-label">AIで深く読む</p>
+        <p className="acc-ai-desc">このデータを元にしたプロンプトを生成します。<a className="acc-ai-link" href="https://gemini.google.com" target="_blank" rel="noopener noreferrer">gemini.google.com</a> に貼り付けると、あなたの火の中にあったものを言語化してくれます。</p>
+        <button className={"btn acc-copy-btn"+(copied?" acc-copy-done":"")} onClick={copyPrompt}>
+          {copied?"コピーしました ✓":"プロンプトをコピー"}
+        </button>
+      </div>}
+      <button className="btn btn-p" style={{width:"100%"}} onClick={p.onClose}>受け取る</button>
     </div>
   </div></div>;
 }

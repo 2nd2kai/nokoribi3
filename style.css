@@ -3856,3 +3856,13 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .acc-question-box{background:rgba(176,168,204,.08);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:5px}
 .acc-question-label{font-size:9.5px;color:var(--co);letter-spacing:.14em;font-weight:600;font-family:var(--sans)}
 .acc-question{font-family:var(--serif);font-size:14px;color:var(--p);margin:0;line-height:1.7}
+.acc-answer-input{width:100%;margin-top:8px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;color:var(--p);font-family:var(--serif);font-size:13px;line-height:1.7;padding:10px 12px;resize:none;outline:none}
+.acc-answer-input:focus{border-color:rgba(176,168,204,.5)}
+.acc-answer-input::placeholder{color:var(--faint)}
+.acc-ai-section{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.acc-ai-label{font-size:10px;color:var(--ember);letter-spacing:.14em;font-weight:600;font-family:var(--sans);margin:0}
+.acc-ai-desc{font-family:var(--serif);font-size:12px;color:var(--dim);line-height:1.7;margin:0}
+.acc-ai-link{color:var(--ember2);text-underline-offset:3px}
+.acc-copy-btn{width:100%;background:rgba(219,164,94,.12);border:1px solid rgba(219,164,94,.4);border-radius:8px;color:var(--ember2);padding:10px;font-family:var(--serif);font-size:13px;cursor:pointer;transition:background .15s}
+.acc-copy-btn:active{background:rgba(219,164,94,.22)}
+.acc-copy-done{background:rgba(110,159,168,.12)!important;border-color:rgba(110,159,168,.4)!important;color:var(--calm)!important}
