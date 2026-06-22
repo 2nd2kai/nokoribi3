@@ -3548,7 +3548,7 @@ function App(){
     });
     return function(){setSaveFailHandler(null);setSaveOkHandler(null);};
   },[showToast]);
-  var receiveEmberCb=useCallback(function(id){if(!game)return;if(MVP_MODE){var ns=receiveEmberCard(game,id,{});ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);var latest=(ns.receipts||[])[0];if(latest){setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",holdText:latest.holdText||null,nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？",writeState:latest.writeState||"",feeling:latest.feeling||"",wanted:latest.wanted||"",bodyText:latest.bodyText||""});}return;}setReceiveTargetId(id);},[game]);// eslint-disable-line
+  var receiveEmberCb=useCallback(function(id){if(!game)return;setReceiveTargetId(id);},[game]);
   /* 「何にもならない気がした」専用：預けた瞬間に受領まで完了させる */
   var addAndReceiveEmber=useCallback(function(card){
     if(!game)return;
@@ -3598,7 +3598,6 @@ function App(){
     var r=clickLetter(game,facility,letterId);
     if(!r.ok){showToast(r.msg);return r;}
     setGame(r.state);persistSave(r.state);
-    showToast(r.stored?"手紙が保管庫に届いた。干渉ポイント +"+r.gained:"手紙が一歩進んだ。干渉ポイント +"+r.gained);
     return r;
   },[game,showToast]);
   var stageWatchCb=useCallback(function(loc,isChar){if(!game)return false;var ns=ensureMapTouchCharges(game);if((ns.mapTouch.cur||0)<=0){showToast("MAPに触れる力がまだ戻っていません。1時間に1回くらい回復します。");return false;}ns.mapTouch.cur=Math.max(0,(ns.mapTouch.cur||0)-1);if(ns.world.map[loc])ns.world.map[loc].progress_rate=Math.min(0.999,(ns.world.map[loc].progress_rate||0)+(isChar?0.005:0.01));var uc=addUnitProgressForPlace(ns,loc,isChar?8:12);ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);addWatchGauge(isChar?"watch_char":"watch_stage",6);if(uc)showToast("問い炎が進みました。"+Math.round(uc.progress||0)+"%");return true;},[game,addWatchGauge,showToast]);// eslint-disable-line
@@ -3684,11 +3683,11 @@ function App(){
       var ns=receiveEmberCard(game,receiveTarget.id,input);
       ns.lastSavedAt=nowISO();
       setGame(ns);persistSave(ns);setReceiveTargetId(null);
-      var achNew=(ns.recentRewards||[]).filter(function(r){return r.type==="achievement";});
-      var latest=(ns.receipts||[])[0];
-      if(achNew.length>0)showToast("称号獲得：「"+achNew[0].name+"」");
-      else showToast((latest&&latest.canGraduate)?"受領しました。卒業可能です。":"仮受領証を作りました。まだ預けておけます。");
       addWatchGauge("receive_ember",25);
+      var latest=(ns.receipts||[])[0];
+      if(latest){
+        setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",holdText:latest.holdText||null,nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？",writeState:latest.writeState||"",feeling:latest.feeling||"",wanted:latest.wanted||"",bodyText:latest.bodyText||""});
+      }
     }}/>}
     {toast&&<div className="toast">{toast}</div>}
   </div></div>);
@@ -4476,26 +4475,37 @@ function EmberCreate(p){
       <p className="ec-q">{cur.q}</p>
       <div className="ec-opts">{cur.opts.map(function(opt){return(<button key={opt} className={"ec-opt"+(cur.val===opt?" ec-on":"")} onClick={function(){cur.set(opt);}}>{opt}</button>);})}</div>
     </>}
-    {isInfo&&<div className="ec-extra">
-      <p className="ec-q">追加情報</p>
-      <div className="ec-note soul-note">ここは空欄でも預けられます。<br/>ただ、情報を入れることで、この残り火はあなたの魂になります。</div>
-      <div className="ec-metric-box">
-        <div className="ec-metric-title">最初の残り火</div>
-        <p>この残り火を預ける時点の、書いたものとの距離を記録します。数字は判決ではなく、あとで変化を見るための目印です。</p>
-        <MetricInput label="書いた納得" value={imS} onChange={setImS}/>
-        <MetricInput label="書いた意味" value={imM} onChange={setImM}/>
-        <MetricInput label="書いた価値" value={imV} onChange={setImV}/>
-      </div>
-      <label className="ec-field"><span>タイトル 任意</span><input type="text" value={title} placeholder="例：読まれなかった記事の残り火" onChange={function(e){setTitle(e.target.value);}}/></label>
-      <label className="ec-field"><span>メモ 任意</span><input type="text" value={memo} placeholder="例：公開したあと、何度も通知を見た" onChange={function(e){setMemo(e.target.value);}}/></label>
-      <label className="ec-field"><span>あなたの言葉 任意</span><textarea value={body} placeholder="読まれなかったことより、何も返ってこなかったことが痛かった。" onChange={function(e){setBody(e.target.value);}}/></label>
-      <label className="ec-field"><span>反応・評価・スキの数など 任意</span><textarea value={reaction} placeholder="例：いいね3件、コメントなし／スキ0だった／読了率は良かったらしい" onChange={function(e){setReaction(e.target.value);}}/></label>
-      <div className={"soul-preview"+(hasSoul?" soul-on":"")}>{hasSoul?"この残り火は、あなたの魂になっています。":"通常の残り火として預けられます。"}</div>
-    </div>}
+    {isInfo&&(function(){
+      var total=imS+imM+imV;
+      var isFulfilled=total>=240;
+      return <div className="ec-extra">
+        <p className="ec-q">追加情報</p>
+        <div className="ec-note soul-note">ここは空欄でも預けられます。<br/>ただ、情報を入れることで、この残り火はあなたの魂になります。</div>
+        <div className="ec-metric-box">
+          <div className="ec-metric-title">最初の残り火</div>
+          <p>この残り火を預ける時点の、書いたものとの距離を記録します。数字は判決ではなく、あとで変化を見るための目印です。</p>
+          <MetricInput label="書いた納得" value={imS} onChange={setImS}/>
+          <MetricInput label="書いた意味" value={imM} onChange={setImM}/>
+          <MetricInput label="書いた価値" value={imV} onChange={setImV}/>
+          {isFulfilled&&<div className="ec-fulfilled-msg">
+            <p>あなたは、今すでに満たされているのかもしれません。</p>
+            <p>書いた後に残った痛みや苦しみ——そういうものができたら、またここへ来てください。</p>
+            <button className="btn btn-g" style={{width:"100%",marginTop:8}} onClick={p.onClose}>閉じる</button>
+          </div>}
+        </div>
+        {!isFulfilled&&<>
+          <label className="ec-field"><span>タイトル 任意</span><input type="text" value={title} placeholder="例：読まれなかった記事の残り火" onChange={function(e){setTitle(e.target.value);}}/></label>
+          <label className="ec-field"><span>メモ 任意</span><input type="text" value={memo} placeholder="例：公開したあと、何度も通知を見た" onChange={function(e){setMemo(e.target.value);}}/></label>
+          <label className="ec-field"><span>あなたの言葉 任意</span><textarea value={body} placeholder="読まれなかったことより、何も返ってこなかったことが痛かった。" onChange={function(e){setBody(e.target.value);}}/></label>
+          <label className="ec-field"><span>反応・評価・スキの数など 任意</span><textarea value={reaction} placeholder="例：いいね3件、コメントなし／スキ0だった／読了率は良かったらしい" onChange={function(e){setReaction(e.target.value);}}/></label>
+          <div className={"soul-preview"+(hasSoul?" soul-on":"")}>{hasSoul?"この残り火は、あなたの魂になっています。":"通常の残り火として預けられます。"}</div>
+        </>}
+      </div>;
+    })()}
     <div className="ec-nav">
       {step>0&&<button className="btn btn-g" onClick={function(){setStep(function(s){return s-1;});}}>戻る</button>}
       {!isInfo&&<button className="btn btn-p" onClick={function(){if(cur.val)setStep(function(s){return s+1;});}} style={{opacity:cur.val?1:.45}}>次へ</button>}
-      {isInfo&&<button className="btn btn-p" onClick={submit}>預ける</button>}
+      {isInfo&&(imS+imM+imV<240)&&<button className="btn btn-p" onClick={submit}>預ける</button>}
     </div>
     <button className="btn btn-g" style={{marginTop:4}} onClick={p.onClose}>閉じる</button>
   </div></div>);
