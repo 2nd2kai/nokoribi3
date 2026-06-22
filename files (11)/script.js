@@ -1,5 +1,84 @@
 const {useState,useEffect,useRef,useCallback}=React;
 
+/* ── MVP設定 ──
+   MVP_MODE=true の間は、タブ制限・即時問い表示・受け取り文モーダルが有効になる。
+   第2版以降では false に切り替える。 */
+const MVP_MODE=true;
+
+/* ── 受け取り文（acceptanceText）定義 ──
+   writeState をキーに、共感的な一言と「次の問い」を返す。
+   画面の中心に表示する本文として使う。 */
+const ACCEPTANCE_TEXTS={
+  "何にもならない気がした":{
+    text:"「何にもならない」と感じた火の奥には、「何かになってほしかった」が残っているのかもしれません。今日は、その判決を保留します。",
+    nextQuestion:"本当は、何になってほしかった？"
+  },
+  "書いたけど届いていない":{
+    text:"届いていないことと、届かなかったことは、違います。あなたは確かに、誰かに届けようとした。その火は、まだここにあります。",
+    nextQuestion:"本当は、誰に届いてほしかった？"
+  },
+  "投稿したけど反応がない":{
+    text:"反応がないことは、存在しないことではありません。あなたは書いた。投稿した。それは事実として、ここに残っています。",
+    nextQuestion:"反応のかわりに、本当は何が返ってきてほしかった？"
+  },
+  "終わったのに虚しい":{
+    text:"虚しさは、燃え尽きたあとに残る灰のようなものです。そこに何もなかったからではなく、そこに火があったから、灰が残っています。",
+    nextQuestion:"燃えていた間、本当は何を作ろうとしていた？"
+  },
+  "誰にも見せていない":{
+    text:"見せていないことは、存在しないことではありません。あなたが書いたという事実は、誰かに見せなくても、ここにあります。",
+    nextQuestion:"見せるとしたら、まず誰に渡したかった？"
+  },
+  "消したいけど消せない":{
+    text:"消せないのは、それがまだあなたにとって本物だからかもしれません。判決はまだ出さなくていい。今日は、保留にします。",
+    nextQuestion:"消したい理由と、消せない理由、どちらが大きい？"
+  },
+  "まだ分からない":{
+    text:"分からないまま残っているものにも、ここは居場所を用意しています。何かを証明しなくていい。今日は、ただここに置いておきます。",
+    nextQuestion:"この火のそばに、今どんな感情がある？"
+  }
+};
+
+/* ── feeling を補助的に使った受け取り文フォールバック ── */
+const ACCEPTANCE_TEXTS_FEELING={
+  "空っぽ":{
+    text:"空っぽになるのは、そこに何もなかったからではなく、そこに火があったからです。今日は、その空っぽに居場所を用意します。",
+    nextQuestion:"空っぽになる前、何を燃やしていた？"
+  },
+  "悔しさ":{
+    text:"悔しさは、まだ諦めていない証拠かもしれません。判決ではなく、保留にします。今日はそのままで大丈夫です。",
+    nextQuestion:"本当は、どう終わってほしかった？"
+  },
+  "悲しさ":{
+    text:"悲しさも、ここに置いておけます。消さなくていい。今日は、ただそのそばにいます。",
+    nextQuestion:"悲しかった部分を、誰かに分かってほしかった？"
+  },
+  "恥ずかしさ":{
+    text:"恥ずかしかったとしても、書いたことは本物です。判決はまだ出さなくていい。今日は保留にします。",
+    nextQuestion:"恥ずかしいと感じた部分は、本当は大切なものだったかもしれない？"
+  },
+  "怒り":{
+    text:"怒りも、ここに置いておけます。何かが間違っていると感じたから、その火が生まれたのかもしれません。",
+    nextQuestion:"怒りの奥に、何が守りたかったものとしてある？"
+  },
+  "寂しさ":{
+    text:"寂しさは、つながりたかった証拠かもしれません。ここには、その火を消さない場所があります。",
+    nextQuestion:"本当は、誰かに隣にいてほしかった？"
+  },
+  "まだ分からない":{
+    text:"分からないままの火にも、ここは居場所を用意しています。急がなくていい。今日は置いておきます。",
+    nextQuestion:"この火のそばに、今どんな感情がある？"
+  }
+};
+
+function generateAcceptanceText(card){
+  if(!card)return{text:"あなたが書いたものは、なかったことにはなりません。今日は、ここに置いておきます。",nextQuestion:"次は、どんな問いを持ち帰る？"};
+  var ws=card.writeState;
+  var fe=card.feeling;
+  if(ws&&ACCEPTANCE_TEXTS[ws])return ACCEPTANCE_TEXTS[ws];
+  if(fe&&ACCEPTANCE_TEXTS_FEELING[fe])return ACCEPTANCE_TEXTS_FEELING[fe];
+  return{text:"あなたが書いたものは、なかったことにはなりません。今日は、ここに保留として置いておきます。",nextQuestion:"次は、どんな問いを持ち帰る？"};
+}
 
 /* ══ 残り火の箱庭 v5 ══
    追加: いまのようす（場所内観察・吹き出し・自動カメラ・小イベント） */
@@ -474,6 +553,7 @@ function getUnlockedPlaceKeys(game){
 }
 function getVisibleTabs(game){
   if(!game)return[];
+  if(MVP_MODE)return[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"ログ"}];
   ensureProgressiveUnlockShell(game);
   var tabs=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"ログ"}];
   if(game.unlocks.tabs.garden)tabs.push({id:"peek",label:"箱庭"});
@@ -1609,6 +1689,7 @@ function addNewEmberToState(game,card){
   if(isJudgmentConversionInput(card)){
     return applyJudgmentConversionRoute(game,card);
   }
+  var acc=generateAcceptanceText(card);
   var unit=Object.assign({},card,{
     id:card.id||("ember_"+Date.now()+"_"+Math.floor(Math.random()*100000)),
     unitState:"waiting",
@@ -1619,7 +1700,9 @@ function addNewEmberToState(game,card){
     questionPending:false,
     pendingQuestion:null,
     changeLog:[],
-    answers:[]
+    answers:[],
+    acceptanceText:acc.text,
+    nextQuestion:acc.nextQuestion
   });
   var s=Object.assign({},game,{emberCards:[unit].concat(game.emberCards||[]),lastSavedAt:nowISO(),recentPlaceUnlocks:[]});
   unlockPlacesFromCard(s,unit,false);
@@ -1830,6 +1913,10 @@ function completeToymanExploration(s,card,reason){
     {text:"トイマンが焦げた問い札を持ち帰りました。問い：「"+q+"」",kind:"ember",pri:5},
     {text:"かなが、その火のそばに寄った。",kind:"store",pri:4}
   ],ts:nowISO()}].concat(s.logs||[]).slice(0,30);
+  /* MVP_MODE: 次のステージ（resting）に遷移した直後、すぐに問いを表示する */
+  if(MVP_MODE&&card.unitState&&card.unitState!=="completed"){
+    setQuestionPending(card,"MVP即時進行");
+  }
   return ev;
 }
 
@@ -1871,6 +1958,10 @@ function advanceUnitStateAfterQuestion(s,card,reason){
     grantItem(s,"small_light",1);
   }
   if(s.world&&s.world.map&&s.world.map[place])s.world.map[place].progress_rate=Math.min(0.999,(s.world.map[place].progress_rate||0)+0.02);
+  /* MVP_MODE: 次のステージに遷移した直後、completed でなければすぐに問いを表示する */
+  if(MVP_MODE&&card.unitState&&card.unitState!=="completed"){
+    setQuestionPending(card,"MVP即時進行");
+  }
   return card;
 }
 
@@ -1901,7 +1992,7 @@ function advanceEmberUnit(game,emberId,choice,isCustom){
     return{ok:false,state:game,msg:"まだ問い札は出ていません。",sub:"ゲージが100%になると、次へ進むための問いが発生します。"};
   }
   var today="day_"+(s.world&&s.world.day||1);
-  if(card.lastAdvancedDay===today&&card.unitState!=="waiting"){
+  if(!MVP_MODE&&card.lastAdvancedDay===today&&card.unitState!=="waiting"){
     return{ok:false,state:game,msg:"今日はこの残り火をこれ以上進めません。",sub:"時間を進めると、また触れます。"};
   }
   if(!card.answers)card.answers=[];
@@ -2063,10 +2154,13 @@ function receiveEmberCard(game,emberId,receiptInput){
   var growth=calcReceiptGrowth(initialMetrics,currentMetrics);
   var receivedFeeling=(receiptInput&&receiptInput.receivedFeeling!==undefined)?String(receiptInput.receivedFeeling):"十分によくやったよ。読まれなかったけど、よくやったよ";
   var receiptMemo=(receiptInput&&receiptInput.receiptMemo!==undefined)?String(receiptInput.receiptMemo):"よくやった";
+  var accForReceipt=generateAcceptanceText(card);
   var receipt={
     id:"r"+Date.now(),emberId:emberId,title:makeEmberTitle(card),
     feeling:card.feeling,wanted:card.wanted,writeState:card.writeState,memo:card.memo,bodyText:card.bodyText,reaction:card.reaction,soul:card.soul,
     questionTicket:card.questionTicket,receivedAt:nowISO(),text:generateReceiptText(card),
+    acceptanceText:card.acceptanceText||accForReceipt.text,
+    nextQuestion:card.nextQuestion||accForReceipt.nextQuestion,
     initialMetrics:growth.initial,currentMetrics:growth.current,metricDeltas:growth.deltas,
     positiveGrowthTotal:growth.positiveGrowthTotal,netGrowthTotal:growth.netGrowthTotal,canGraduate:growth.canGraduate,
     receivedFeeling:receivedFeeling.trim(),receiptMemo:receiptMemo.trim(),receiptStatus:growth.canGraduate?"graduated":"provisional"
@@ -3233,7 +3327,7 @@ function App(){
   
   var [expanded,setExpanded]=useState(null);
   var [viewConv,setViewConv]=useState(null);
-  var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);
+  var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
   var gameRef=useRef(null),toastRef=useRef(null);
   var [watchGauge,setWatchGauge]=useState(0);var wgRef=useRef({gauge:0,last:{}});
   var [saveError,setSaveError]=useState(false);
@@ -3261,9 +3355,11 @@ function App(){
     });
     return function(){setSaveFailHandler(null);setSaveOkHandler(null);};
   },[showToast]);
-  var receiveEmberCb=useCallback(function(id){if(!game)return;setReceiveTargetId(id);},[game]);// eslint-disable-line
+  var receiveEmberCb=useCallback(function(id){if(!game)return;if(MVP_MODE){var ns=receiveEmberCard(game,id,{});ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);var latest=(ns.receipts||[])[0];if(latest){setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？"});}return;}setReceiveTargetId(id);},[game]);// eslint-disable-line
   var departEmberCb=useCallback(function(id){if(!game)return;var card=(game.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;setDepartTargetId(id);},[game]);// eslint-disable-line
-  var confirmDepartCb=useCallback(function(id){if(!game)return;var ns=cloneS(game);var card=(ns.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;card=normalizeEmberUnitCard(card);card.unitState="exploring";card.status="unreceived";card.currentQuestion=EMBER_UNIT_FLOW.exploring.question;card.progress=0;unlockPlace(ns,"unexplored_forest",false);ns.characters.toyman.location="unexplored_forest";ns.characters.toyman.lastAction="exploring";ns.lastSavedAt=nowISO();ns.logs=[{hours:0,events:[{text:"トイマンが「"+makeEmberTitle(card)+"」を探しに、未受領の森へ出発した。",kind:"ember",pri:5},{text:"「残っているなら、迎えに行く」「それだけ」",kind:"discover",pri:4}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);setDepartTargetId(null);showToast("トイマンが未受領の森へ出発した。");},[game,showToast]);// eslint-disable-line
+  var confirmDepartCb=useCallback(function(id){if(!game)return;var ns=cloneS(game);var card=(ns.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;card=normalizeEmberUnitCard(card);card.unitState="exploring";card.status="unreceived";card.currentQuestion=EMBER_UNIT_FLOW.exploring.question;card.progress=0;
+    if(MVP_MODE){setQuestionPending(card,"MVP即時進行");}
+    unlockPlace(ns,"unexplored_forest",false);ns.characters.toyman.location="unexplored_forest";ns.characters.toyman.lastAction="exploring";ns.lastSavedAt=nowISO();ns.logs=[{hours:0,events:[{text:"トイマンが「"+makeEmberTitle(card)+"」を探しに、未受領の森へ出発した。",kind:"ember",pri:5},{text:"「残っているなら、迎えに行く」「それだけ」",kind:"discover",pri:4}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);setDepartTargetId(null);showToast("トイマンが未受領の森へ出発した。");},[game,showToast]);// eslint-disable-line
   var burnReceiptCb=useCallback(function(id){if(!game)return;var r=(game.receipts||[]).find(function(x){return x.id===id;});if(!r)return;if(r.receiptStatus!=="graduated"){showToast("この受領証は、まだ心へ返せません。卒業（プラス変化30%以上）が必要です。");return;}setBurnTargetId(id);},[game,showToast]);// eslint-disable-line
   var confirmBurnCb=useCallback(function(id){if(!game)return;var r=burnReceipt(game,id);setBurnTargetId(null);if(!r.ok){showToast(r.msg);return;}setGame(r.state);persistSave(r.state);if(r.isEnding){showToast(r.msg);setTimeout(function(){setScreen("ending");},700);}else showToast(r.msg);},[game,showToast]);// eslint-disable-line
   var dismissIntroSceneCb=useCallback(function(id){if(!game)return;var ns=cloneS(game);ns.introQueue=(ns.introQueue||[]).filter(function(x){return x!==id;});if(!ns.seenIntroScenes)ns.seenIntroScenes=[];if(ns.seenIntroScenes.indexOf(id)===-1)ns.seenIntroScenes=ns.seenIntroScenes.concat([id]);ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);},[game]);// eslint-disable-line
@@ -3370,6 +3466,7 @@ function App(){
     {departTargetId&&<DepartureOverlay card={(game.emberCards||[]).find(function(c){return c.id===departTargetId;})} onCancel={function(){setDepartTargetId(null);}} onConfirm={function(){confirmDepartCb(departTargetId);}}/>}
     {burnTargetId&&<BurnConfirmModal receipt={(game.receipts||[]).find(function(r){return r.id===burnTargetId;})} onCancel={function(){setBurnTargetId(null);}} onConfirm={function(){confirmBurnCb(burnTargetId);}}/>}
     {(game.introQueue||[]).length>0&&<IntroSceneOverlay scene={INTRO_SCENES[(game.introQueue||[])[0]]} onClose={function(){dismissIntroSceneCb((game.introQueue||[])[0]);}}/>}
+    {receiptAcceptance&&<AcceptanceModal text={receiptAcceptance.text} nextQuestion={receiptAcceptance.nextQuestion} onClose={function(){setReceiptAcceptance(null);}}/>}
     {receiveTarget&&<ReceiptReceiveModal card={receiveTarget} onClose={function(){setReceiveTargetId(null);}} onSubmit={function(input){
       var ns=receiveEmberCard(game,receiveTarget.id,input);
       ns.lastSavedAt=nowISO();
@@ -3941,6 +4038,17 @@ function MetricInput(p){
     <input type="range" min="0" max="100" step="5" value={value} onChange={function(e){onChange&&onChange(pctNum(e.target.value));}}/>
     <b>{pctNum(value)}%</b>
   </label>;
+}
+
+function AcceptanceModal(p){
+  return <div className="ov" onClick={p.onClose}><div className="bsh" onClick={function(e){e.stopPropagation();}}>
+    <div className="sh-handle"/>
+    <div style={{padding:"2rem 1.5rem 1.5rem",textAlign:"center"}}>
+      <p style={{fontSize:"1.05rem",lineHeight:"1.8",color:"var(--fg)",marginBottom:"1.5rem",whiteSpace:"pre-wrap"}}>{p.text}</p>
+      {p.nextQuestion&&<p style={{fontSize:"0.8rem",color:"var(--muted)",borderTop:"1px solid var(--border)",paddingTop:"1rem",marginTop:"0"}}>次の問い：{p.nextQuestion}</p>}
+      <button className="btn-primary" style={{marginTop:"1.5rem"}} onClick={p.onClose}>受け取る</button>
+    </div>
+  </div></div>;
 }
 
 function ReceiptReceiveModal(p){
