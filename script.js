@@ -771,6 +771,7 @@ const EMBER_STATUS={
   stored:{label:"郵便局で保管中",who:"utsuro",col:"var(--cu)"},
   openable:{label:"涙の泉で休息中",who:"kana",col:"var(--ck)"},
   checking:{label:"記録塔で読解中",who:"kotae",col:"var(--co)"},
+  inspecting:{label:"検品庁で検品中",who:"auditor",col:"var(--ca)"},
   ready:{label:"はじまりの部屋で受領待ち",who:"",col:"var(--ember2)"},
 };
 const EMBER_NEXT={unreceived:"stored",stored:"openable",openable:"checking",checking:"ready"};
@@ -1209,6 +1210,15 @@ function clickLetter(game,facility,letterId){
   var content=getLetterContent(s,L);
   L.step++;L.clicked=true;
   s.ip.cur=Math.min(s.ip.max,(s.ip.cur||0)+1);
+  /* 手紙を進めると、その手紙の元になった残り火も少しだけ前進する（効果を実感できるように） */
+  var fireGain=0,fireTitle="";
+  var srcCard=L.emberId?(s.emberCards||[]).find(function(c){return c.id===L.emberId;}):null;
+  if(srcCard&&!srcCard.questionPending&&srcCard.unitState!=="completed"&&srcCard.status!=="ready"){
+    var before=Math.round(srcCard.progress||0);
+    srcCard.progress=Math.min(100,(srcCard.progress||0)+2);
+    fireGain=Math.round(srcCard.progress||0)-before;
+    fireTitle=makeEmberTitle(srcCard);
+  }
   var stored=false;
   var afterNode=path[L.step]||path[path.length-1]||beforeNode;
   var afterLabel=(INTERNAL_PLACE_MAPS[facility]||[]).find(function(n){return n.id===afterNode;});
@@ -1227,8 +1237,9 @@ function clickLetter(game,facility,letterId){
     (beforeLabel?beforeLabel.label:beforeNode)+" → "+(afterLabel?afterLabel.label:afterNode),
     "干渉ポイント +1"
   ];
+  if(fireGain>0)lines.push("「"+fireTitle+"」の回収が進んだ（+"+fireGain+"%）");
   s.logs=[{hours:0,events:[{text:lines.join("\n"),kind:"store",pri:4}],ts:nowISO()}].concat(s.logs||[]).slice(0,30);
-  return{ok:true,state:s,gained:1,stored:stored,content:content,from:beforeLabel?beforeLabel.label:beforeNode,to:afterLabel?afterLabel.label:afterNode,lines:lines};
+  return{ok:true,state:s,gained:1,stored:stored,content:content,from:beforeLabel?beforeLabel.label:beforeNode,to:afterLabel?afterLabel.label:afterNode,lines:lines,fireGain:fireGain,fireTitle:fireTitle};
 }
 /* 表示用：あるノードに今いる手紙を集計し、物理表示4件＋overflowバッジに分ける */
 function getLettersAtNode(game,facility,nodeId){
@@ -1360,7 +1371,7 @@ function InternalPlaceMap(p){
             </span>}
             {(mail.visible.length>0||mail.overflow>0)&&<span className="node-mail-row" onClick={function(e){e.stopPropagation();}}>
               {mail.visible.map(function(L){return(
-                <span key={L.id} className={"node-mail"+(L.clicked?" node-mail-done":"")} onClick={function(e){e.stopPropagation();onClickLetter&&onClickLetter(loc,L.id);}}>✉</span>
+                <button key={L.id} type="button" className={"node-mail"+(L.clicked?" node-mail-done":"")} title={L.clicked?"この手紙は進めました":"手紙を進める（タップ）"} onClick={function(e){e.stopPropagation();onClickLetter&&onClickLetter(loc,L.id);}}>✉</button>
               );})}
               {mail.overflow>0&&<span className="node-mail-overflow">+{mail.overflow}</span>}
             </span>}
@@ -1405,9 +1416,10 @@ function InternalPlaceMap(p){
       {micro&&<div className="sc-micro room-micro">{micro}</div>}
       {clickPop&&<div className="stage-clickpop" style={{left:clickPop.x+"%",top:clickPop.y+"%"}}>{clickPop.lines.map(function(l,i){return <div key={i} className="scp-line">{l}</div>;})}</div>}
       <div className="room-map-foot">
-        <span>○ / ◎ はタップ可能</span>
+        <span>✉ 手紙：押して保管へ</span>
+        <span>キャラ：押して応援/休息</span>
         <span>△ 圧力に干渉</span>
-        <span>キャラを押す：応援 / 休息</span>
+        <span>画面：押して見守る</span>
       </div>
     </div>
   );
@@ -3155,6 +3167,7 @@ function NowSceneView(p){
         {letterResult.content&&<p>中身（{letterResult.content.kind}）：「{letterResult.content.text}」</p>}
         {!letterResult.stored&&<small>{letterResult.from} → {letterResult.to}</small>}
         {letterResult.stored&&<small>この小さな火は、消えずに保管されました。</small>}
+        {letterResult.fireGain>0&&<em className="lrp-fire">🔥「{letterResult.fireTitle}」の回収 +{letterResult.fireGain}%</em>}
         <em>干渉ポイント +{letterResult.gained||1}</em>
       </div>}
 
@@ -3944,7 +3957,7 @@ function EmberView(p){
   function unitCard(card){
     var flow=getUnitFlow(card)||EMBER_UNIT_FLOW.completed;
     var place=getEmberPlace(card);
-    var answeredToday=card.lastAdvancedDay===("day_"+(game.world&&game.world.day||1))&&card.unitState!=="completed";
+    var answeredToday=!MVP_MODE&&card.lastAdvancedDay===("day_"+(game.world&&game.world.day||1))&&card.unitState!=="completed";
     var pending=!!card.questionPending;
     var isCompleted=card.unitState==="completed"||card.status==="ready";
     return(<div key={card.id} className={"ev-card ev-unit ev-unit-"+card.unitState+(pending?" ev-question-pending":"")}>

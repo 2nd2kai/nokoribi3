@@ -3709,3 +3709,75 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
   color:var(--faint);
   font-family:var(--serif);
 }
+
+/* ── いまのようす：押せる場所をわかりやすく ── */
+/* 手紙マークを大きく、明確にタップ可能に */
+.node-mail{
+  font-size:20px !important;
+  line-height:1 !important;
+  width:34px;
+  height:34px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:none;
+  border-radius:50%;
+  background:rgba(219,164,94,.16);
+  box-shadow:0 0 0 1px rgba(219,164,94,.5),0 0 12px -2px rgba(219,164,94,.7);
+  cursor:pointer;
+  padding:0;
+  animation:mailPulse 1.8s ease-in-out infinite;
+}
+@keyframes mailPulse{
+  0%,100%{box-shadow:0 0 0 1px rgba(219,164,94,.5),0 0 0 0 rgba(219,164,94,.0),0 0 12px -2px rgba(219,164,94,.7);}
+  50%{box-shadow:0 0 0 1px rgba(219,164,94,.6),0 0 0 5px rgba(219,164,94,.0),0 0 16px 0 rgba(219,164,94,.9);}
+}
+.node-mail:active{transform:scale(.86);}
+.node-mail-done{
+  opacity:.4;
+  filter:grayscale(.6);
+  box-shadow:0 0 0 1px rgba(232,227,212,.12);
+  background:rgba(255,255,255,.03);
+  animation:none;
+}
+.node-mail-overflow{
+  font-size:12px !important;
+  color:var(--ember2);
+  font-family:var(--mono);
+  align-self:center;
+  padding:0 4px;
+  font-weight:600;
+}
+.node-mail-row{gap:5px !important;margin-top:5px !important;}
+
+/* キャラに「押せる」リングを出す */
+.sc-room-char.sc-clickable .sc-dot{
+  animation:charTapRing 2s ease-in-out infinite;
+}
+@keyframes charTapRing{
+  0%,100%{box-shadow:0 0 0 0 rgba(232,192,128,.0),0 0 0 2px rgba(232,192,128,.35);}
+  50%{box-shadow:0 0 0 7px rgba(232,192,128,.0),0 0 0 2px rgba(232,192,128,.65);}
+}
+.sc-room-char .sc-nm{
+  position:relative;
+}
+.sc-room-char .sc-nm::after{
+  content:"押す";
+  display:inline-block;
+  margin-left:4px;
+  font-size:8px;
+  color:var(--ink);
+  background:var(--ember2);
+  border-radius:999px;
+  padding:1px 5px;
+  font-family:var(--sans);
+  vertical-align:middle;
+  opacity:.9;
+}
+/* 手紙クリックで残り火が進んだことの強調 */
+.lrp-fire{
+  color:var(--ember) !important;
+  font-family:var(--serif) !important;
+  font-size:12px !important;
+  font-weight:600;
+}
