@@ -3636,16 +3636,15 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 }
 
 /* ── 話者名インライン表示 ── */
-.isc-speaker-inline,
+.isc-speaker,.isc-speaker-inline,
 .cvd-speaker-inline{
   font-family:var(--sans);
   font-size:.82em;
   letter-spacing:.05em;
   margin-right:2px;
   font-weight:600;
+  color:var(--dim);
 }
-
-.isc-speaker-inline{color:var(--dim)}
 
 .cvd-line.cd-toyman .cvd-speaker-inline{color:var(--ct)}
 .cvd-line.cd-kana   .cvd-speaker-inline{color:var(--ck)}
@@ -3826,6 +3825,13 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 /* リッチ手紙結果パネル */
 .lrp-rich{cursor:pointer;transition:opacity .2s}
 .lrp-rich:hover{opacity:.85}
+.lrp-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:flex-start;justify-content:center;padding-top:12px;z-index:60;cursor:pointer}
+.lrp-overlay-inner{background:rgba(22,20,30,.94);border:1px solid rgba(219,164,94,.38);border-radius:14px;padding:16px 16px 13px;max-width:320px;width:calc(100% - 32px);display:flex;flex-direction:column;gap:7px;animation:ti .2s ease;cursor:default}
+.lrp-overlay-title{font-family:var(--serif);font-size:14.5px;font-weight:600;color:var(--ember2);line-height:1.5}
+.lrp-overlay-route{font-family:var(--serif);font-size:12.5px;color:var(--p);line-height:1.6}
+.lrp-overlay-change{font-family:var(--serif);font-size:12.5px;color:var(--co);line-height:1.6;padding:5px 9px;background:rgba(176,168,204,.07);border-radius:7px}
+.lrp-overlay-gain{font-family:var(--mono);font-size:11px;color:var(--calm)}
+.lrp-overlay-hint{font-size:10px;color:var(--faint);text-align:right;margin-top:2px}
 .lrp-close-hint{font-size:9px;color:var(--faint);text-align:right;font-family:var(--sans);letter-spacing:.08em;margin-bottom:2px}
 .lrp-label{font-family:var(--serif);font-size:12px;color:var(--ember2);letter-spacing:.06em;margin-bottom:4px;font-weight:500}
 /* 残り火フラグメント — 手紙の切れ端のような表示 */

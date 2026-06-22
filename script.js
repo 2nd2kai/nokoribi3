@@ -1380,7 +1380,7 @@ function InternalPlaceMap(p){
             <span className="node-touch-mark">{n.locked?"×":n.active?"◎":"○"}</span>
             <span className="room-node-label">{n.label}</span>
             {n.locked&&<span className="room-node-sub">まだ入れない</span>}
-            {n.active&&!n.locked&&<span className="room-node-sub">{chars.length?"ここにいる":"反応あり"}</span>}
+            {n.active&&!n.locked&&chars.length>0&&<span className="room-node-sub">ここにいる</span>}
             {chars.length>0&&<span className="room-node-chips">
               {chars.map(function(id){return <i key={id} className={"node-char-chip cd-"+id}>{NAMES[id][0]}</i>;})}
             </span>}
@@ -2958,26 +2958,15 @@ function BattleEncounterScreen(p){
         <div className="battle-vs">VS</div>
         <div className="battle-shadow"><i/><span>{pv.enemy}</span></div>
       </div>
-      <div className="battle-voice-action-row">
-        <div className="battle-voice-col">
-          <div className="shadow-voice-box shadow-voice-full"><span>影の声</span><p>「{pv.voice}」</p></div>
-          <div className="battle-self-answer-box">
-            <label className="bsa-label">影の声に、あなたの言葉で返す（任意）</label>
-            <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className={"bsa-quick"+(selfAnswer===q?" bsa-quick-on":"")} onClick={function(){setSelfAnswer(selfAnswer===q?"":q);}}>{q}</button>;})}</div>
-            {selfAnswer.trim()&&<>
-              <div className="bsa-selected-preview">「{selfAnswer.trim()}」</div>
-              <button className={"btn bsa-confirm-btn"+(disabled?" bsa-confirm-disabled":"")} disabled={disabled} onClick={function(){doAction("hold");}}>この言葉で前に進む →</button>
-            </>}
-            {!selfAnswer.trim()&&<textarea className="bsa-input" rows={2} placeholder="自由に書く…（または上のボタンで選ぶ）" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>}
-          </div>
-        </div>
-        <div className="battle-advance-col">
-          <button className={"battle-advance-btn"+(disabled?" battle-advance-disabled":"")} disabled={disabled} onClick={function(){doAction("hold");}}>
-            <span className="bab-main">前に進ませる</span>
-            <span className="bab-sub">道を切り拓く</span>
-            <span className="bab-hint">+4〜7%</span>
-          </button>
-        </div>
+      <div className="shadow-voice-box shadow-voice-full"><span>影の声</span><p>「{pv.voice}」</p></div>
+      <div className="battle-self-answer-box">
+        <label className="bsa-label">影の声に、あなたの言葉で返す（任意）</label>
+        <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className={"bsa-quick"+(selfAnswer===q?" bsa-quick-on":"")} onClick={function(){setSelfAnswer(selfAnswer===q?"":q);}}>{q}</button>;})}</div>
+        {selfAnswer.trim()&&<>
+          <div className="bsa-selected-preview">「{selfAnswer.trim()}」</div>
+          <button className={"btn bsa-confirm-btn"+(disabled?" bsa-confirm-disabled":"")} disabled={disabled} onClick={function(){doAction("hold");}}>この言葉で前に進む →</button>
+        </>}
+        {!selfAnswer.trim()&&<textarea className="bsa-input" rows={2} placeholder="自由に書く…（または上のボタンで選ぶ）" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>}
       </div>
       <div className="battle-stats battle-stats-full">
         <div><span>影の濃さ</span><b>{pv.hp} / {pv.hpMax}</b><Bar value={pv.hp/pv.hpMax*100} color="var(--ct)" h={5}/></div>
@@ -3230,29 +3219,16 @@ function NowSceneView(p){
       {(function(){var atm=getAtmosphere(game);return atm.length>0&&<div className="now-atm">{atm.map(function(h,i){return <span key={i} className="now-atm-h">・{h}</span>;})}</div>;})()}
       {letterResult&&(function(){
         var ec=letterResult.emberCtx;
-        var storedClass=letterResult.stored?" letter-result-stored":"";
         return(
-          <div className={"letter-result-panel lrp-rich"+storedClass} onClick={function(){setLetterResult(null);}}>
-            <div className="lrp-close-hint">タップで閉じる</div>
-            <div className="lrp-label">{letterResult.stored?"手紙が保管庫に届きました":"手紙が届いた"}</div>
-            {(letterResult.lines||[]).length>0&&<div className="lrp-lines">
-              {letterResult.lines.map(function(l,i){return <div key={i} className="lrp-change-line">{l}</div>;})}
-            </div>}
-            {ec&&<div className="lrp-ember-frag">
-              <div className="lrp-frag-title">「{ec.title}」</div>
-              {ec.feeling&&<div className="lrp-frag-line">感情：{ec.feeling}</div>}
-              {ec.wanted&&<div className="lrp-frag-line">本当は：{ec.wanted}</div>}
-              {ec.question&&<div className="lrp-frag-question">問い：{ec.question}</div>}
-              <div className="lrp-frag-progress">
-                <span className="lrp-frag-pct">{ec.progress}%</span>
-                <span className="lrp-frag-status">（残り火の回収率 — 100%で問いが届く）</span>
-              </div>
-            </div>}
-            {!ec&&letterResult.content&&<div className="lrp-ember-frag lrp-frag-anon">
-              <div className="lrp-frag-line">「{letterResult.content.text}」</div>
-            </div>}
-            {letterResult.fireGain>0&&<div className="lrp-fire">回収率 +{letterResult.fireGain}%</div>}
-            <div className="lrp-ip">見守り +{letterResult.gained||1}</div>
+          <div className="lrp-overlay" onClick={function(){setLetterResult(null);}}>
+            <div className="lrp-overlay-inner" onClick={function(e){e.stopPropagation();}}>
+              <div className="lrp-overlay-title">{letterResult.stored?"手紙が保管庫に届きました":"手紙が次の場所へ進みました"}</div>
+              <div className="lrp-overlay-route">{letterResult.from} → {letterResult.to}</div>
+              {letterResult.fireGain>0&&<div className="lrp-overlay-change">📬 残り火の回収率 +{letterResult.fireGain}%</div>}
+              {ec&&ec.progress>0&&<div className="lrp-overlay-change">「{ec.title}」の回収率：{ec.progress}%（100%で問いが届く）</div>}
+              <div className="lrp-overlay-gain">見守り +{letterResult.gained||1}</div>
+              <div className="lrp-overlay-hint">タップで閉じる</div>
+            </div>
           </div>
         );
       })()}
@@ -3709,9 +3685,9 @@ function IntroSceneOverlay(p){
           {lines.map(function(L,idx){
             if(L.s==="stage")return <p key={idx} className="isc-stage">{L.t}</p>;
             return(
-              <p key={idx} className={"isc-line cd-"+L.s}>
+              <p key={idx} className="isc-line">
                 <span className={"isc-dot cd-"+L.s}/>
-                <span className="isc-text"><span className="isc-speaker-inline">{NAMES[L.s]||L.s}：</span>「{L.t}」</span>
+                <span className="isc-text"><span className="isc-speaker">{NAMES[L.s]||L.s}：</span>「{L.t}」</span>
               </p>
             );
           })}
