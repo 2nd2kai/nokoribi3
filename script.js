@@ -2215,14 +2215,14 @@ function receiveEmberCard(game,emberId,receiptInput){
   var receipt={
     id:"r"+Date.now(),emberId:emberId,title:makeEmberTitle(card),
     feeling:card.feeling,wanted:card.wanted,writeState:card.writeState,memo:card.memo,bodyText:card.bodyText,reaction:card.reaction,soul:card.soul,
-    questionTicket:card.questionTicket,receivedAt:nowISO(),text:generateReceiptText(card),
+    questionTicket:card.questionTicket,depositedAt:card.createdAt||null,receivedAt:nowISO(),text:generateReceiptText(card),
     shadowAnswers:card.shadowAnswers||[],
     acceptanceText:card.acceptanceText||accForReceipt.text,
     holdText:(ACCEPTANCE_TEXTS[card.writeState]||{}).holdText||null,
     nextQuestion:card.nextQuestion||accForReceipt.nextQuestion,
     initialMetrics:growth.initial,currentMetrics:growth.current,metricDeltas:growth.deltas,
     positiveGrowthTotal:growth.positiveGrowthTotal,netGrowthTotal:growth.netGrowthTotal,canGraduate:growth.canGraduate,
-    receivedFeeling:receivedFeeling.trim(),receiptMemo:receiptMemo.trim(),receiptStatus:growth.canGraduate?"graduated":"provisional"
+    receivedFeeling:receivedFeeling.trim(),receiptMemo:receiptMemo.trim(),receiptStatus:growth.canGraduate?"graduated":"provisional",changeNote:(receiptInput&&receiptInput.changeNote)||""
   };
   if(!s.receipts)s.receipts=[];
   s.receipts=[receipt].concat(s.receipts);
@@ -3471,6 +3471,11 @@ function HomeView(p){
     <section className="home-card"><div className="lh">トイマンのひとこと</div><p className="home-line">「{active?"まだ落としてない。":"置かれたら、拾いに行く。"}」</p></section>
     <section className="home-card"><div className="lh">開いた場所</div>{openPlaces.length>0?<div className="home-place-list">{openPlaces.map(function(k){return <button key={k} className="home-place" onClick={function(){p.onOpenPlace&&p.onOpenPlace(k);}}><b>{PNAME[k]||PSHORT[k]}</b><span>{getPlaceUnlockReason(k)}</span></button>;})}</div>:<div className="closed-place-note">まだ閉じている場所があります。残り火を預けることで、少しずつ開きます。</div>}</section>
     <ClosedPlacesPreview game={game}/>
+    <section className="home-card home-today-end-section">
+      <div className="lh">今日はここまで</div>
+      <p>無理に続けなくていい。今日見た分は、ちゃんと残ります。</p>
+      <button className="btn btn-g home-today-btn" onClick={function(){p.onTodayEnd&&p.onTodayEnd();}}>今日はここで閉じる</button>
+    </section>
     <div className="home-version">MVP確認版 v0.2</div>
   </div>;
 }
@@ -3606,7 +3611,7 @@ function App(){
     {screen!=="closed"&&screen!=="ending"&&<>
       {screen==="home"&&<>
         <Header title="ホーム" day={game.world.day}/>
-        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}}/>
+        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています。」");setTimeout(function(){closeWorld();},800);}}/>
       </>}
       {screen==="log"&&<>
         <Header title="記録" day={game.world.day}/>
@@ -4101,6 +4106,7 @@ function EmberView(p){
       {card.unitState==="exploring"&&<div className="ev-exploring-box">
         <div className="eeb-head">現在：未受領の森</div>
         <div className="eeb-rate">回収率：{Math.round(card.progress||0)}%</div>
+        <div className="eeb-depth">{(card.progress||0)<20?"まだ入口付近にある":(card.progress||0)<50?"森の中ほどまで進んでいる":(card.progress||0)<80?"かなり深くに沈んでいる":"もうすぐ届く"}</div>
         <div className="eeb-next">あと{Math.max(0,100-Math.round(card.progress||0))}%で問いの欠片を持ち帰ります。</div>
         <div className="eeb-toyman">トイマン：<br/>「まだ回収中」<br/>「見失っていない」</div>
       </div>}
@@ -4211,6 +4217,23 @@ function EmberView(p){
       <p className="ev-receipt-guide">卒業した受領証は「心へ返す」ことができます。心へ返すと、その分だけ箱庭が静かになっていきます。卒業したものを全部返しきると、ひとつの区切りが訪れます。</p>
       {receipts.map(function(r){var grad=r.receiptStatus==="graduated";return(<ReceiptCard key={r.id} r={r} grad={grad} onBurnReceipt={onBurnReceipt}/>);})}
     </div>}
+    {receipts.length>0&&<div className="ev-section">
+      <div className="lh">問いの記録</div>
+      <p className="ev-q-history-note">受領証から生まれた問いの軌跡です。</p>
+      <div className="ev-q-history">
+        {receipts.filter(function(r){return r.nextQuestion;}).map(function(r,i){return(
+          <div key={i} className="evqh-item">
+            <div className="evqh-title">「{r.title}」</div>
+            <div className="evqh-q">「{r.nextQuestion}」</div>
+          </div>
+        );})}
+      </div>
+      {receipts.filter(function(r){return r.holdText;}).length>0&&<div className="ev-hold-log">
+        <span className="isc-dot cd-utsuro ev-hold-dot"/>
+        <span className="ev-hold-utsuro">うつろ：</span>
+        <span>「保留にしたものが、{receipts.filter(function(r){return r.holdText;}).length}つある。捨てていない。」</span>
+      </div>}
+    </div>}
     {(game.returnedToHeart||[]).length>0&&<div className="ev-section">
       <div className="lh">心へ返したもの</div>
       <div className="ev-returned-list">
@@ -4242,6 +4265,8 @@ var NEXT_QUESTION_CHOICES={
 function ReceiptCard(p){
   var r=p.r,grad=p.grad;
   var [copied,setCopied]=useState(false);
+  var daysSince=null;
+  if(r.depositedAt&&r.receivedAt){var ms=new Date(r.receivedAt)-new Date(r.depositedAt);daysSince=Math.max(0,Math.round(ms/86400000));};
   function copyPrompt(){
     var prompt=buildGeminiPrompt(r);
     if(navigator.clipboard){
@@ -4255,7 +4280,9 @@ function ReceiptCard(p){
       <div className="ev-card-title">{r.title}</div>
       <span className={"ev-receipt-badge "+(grad?"erb-grad":"erb-prov")}>{grad?"卒業":"仮"}</span>
     </div>
+    {daysSince!==null&&<div className="ev-receipt-days">{daysSince===0?"預けた日に届いた":daysSince+"日後に届いた"}</div>}
     <ReceiptWordsBox receipt={r}/><ReceiptMetricBox receipt={r}/><pre className="ev-receipt-text">{r.text}</pre>
+    {r.changeNote&&r.changeNote.trim()&&<div className="ev-change-note"><span className="ev-change-label">変化の記録</span><p>{r.changeNote}</p></div>}
     {(r.shadowAnswers||[]).length>0&&<div className="ev-shadow-answers">
       <div className="bsa-log-title">影と向き合った記録（{r.shadowAnswers.length}回）</div>
       {r.shadowAnswers.map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">「{a.shadow}」</span><span className="bsa-ans">→「{a.answer}」</span></div>;})}
@@ -4355,6 +4382,10 @@ function AcceptanceModal(p){
     <div className="sh-handle"/>
     <div className="acc-inner">
       <p className="acc-text">{p.text}</p>
+      {(p.feeling||p.wanted)&&<div className="acc-char-voices">
+        {p.feeling&&<div className="acc-char-voice"><span className="isc-dot cd-kana acc-cv-dot"/><span className="acc-cv-name">かな：</span><span className="acc-cv-say">「{p.feeling}という感覚——ちゃんと感じてる」</span></div>}
+        {p.wanted&&<div className="acc-char-voice"><span className="isc-dot cd-utsuro acc-cv-dot"/><span className="acc-cv-name">うつろ：</span><span className="acc-cv-say">「{p.wanted}——それは、ここにある」</span></div>}
+      </div>}
       {p.holdText&&<p className="acc-hold">{p.holdText}</p>}
       {p.nextQuestion&&<div className="acc-question-box">
         <span className="acc-question-label">次の問い</span>
@@ -4382,6 +4413,7 @@ function ReceiptReceiveModal(p){
   var [cmV,setCmV]=useState(initial.value);
   var [feeling,setFeeling]=useState("十分によくやったよ。読まれなかったけど、よくやったよ");
   var [memo,setMemo]=useState("よくやった");
+  var [changeNote,setChangeNote]=useState("");
   var current=normalizeMetrics({satisfaction:cmS,meaning:cmM,value:cmV},initial);
   var growth=calcReceiptGrowth(initial,current);
   return <div className="ov" onClick={p.onClose}><div className="bsh receive-bsh" onClick={function(e){e.stopPropagation();}}>
@@ -4404,10 +4436,11 @@ function ReceiptReceiveModal(p){
       <div className={growth.canGraduate?"rm-judge rm-ok":"rm-judge rm-wait"}>{growth.canGraduate?"卒業可能です。受け取れた部分があります。":"まだ卒業ではありません。仮受領証として残せます。"}</div>
     </div>
     <label className="ec-field"><span>受領した今の気持ち</span><textarea value={feeling} onChange={function(e){setFeeling(e.target.value);}}/></label>
+    <label className="ec-field"><span>書く前と後で、何か変わりましたか？（任意）</span><textarea value={changeNote} placeholder="例：書いてみたら、怒りじゃなくて寂しさだったとわかった" onChange={function(e){setChangeNote(e.target.value);}}/></label>
     <label className="ec-field"><span>受領メモ</span><input type="text" value={memo} onChange={function(e){setMemo(e.target.value);}}/></label>
     <div className="receive-actions">
       <button className="btn btn-g" onClick={p.onClose}>戻る</button>
-      <button className="btn btn-p" onClick={function(){p.onSubmit&&p.onSubmit({currentMetrics:current,receivedFeeling:feeling,receiptMemo:memo});}}>{growth.canGraduate?"受領証を作る":"仮受領証を作る"}</button>
+      <button className="btn btn-p" onClick={function(){p.onSubmit&&p.onSubmit({currentMetrics:current,receivedFeeling:feeling,receiptMemo:memo,changeNote:changeNote});}}>{growth.canGraduate?"受領証を作る":"仮受領証を作る"}</button>
     </div>
   </div></div>;
 }
