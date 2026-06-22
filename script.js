@@ -553,7 +553,7 @@ function getUnlockedPlaceKeys(game){
 }
 function getVisibleTabs(game){
   if(!game)return[];
-  if(MVP_MODE)return[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"ログ"}];
+  if(MVP_MODE)return[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"peek",label:"箱庭"},{id:"log",label:"ログ"}];
   ensureProgressiveUnlockShell(game);
   var tabs=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"ログ"}];
   if(game.unlocks.tabs.garden)tabs.push({id:"peek",label:"箱庭"});
@@ -981,33 +981,33 @@ function runToymanBattleIntervention(game,actionId,selfAnswer){
   if(card.progress>=100){var pq=advanceUnitStateByProgress(ns,card,"影との遭遇");events.push({text:"残り火に問い札が発生した。問い：「"+((pq&&pq.question)||card.currentQuestion||"次の問い")+"」",kind:"discover",pri:5});}
   var afterProg=Math.min(100,Math.round(card.progress||0));
   var toymanLine=pick(TOYMAN_BATTLE_LINES[action.kind]||TOYMAN_BATTLE_LINES.hold);
-  var lines=["影との遭遇に介入した："+action.label,"黒い影「"+enemy+"」：「"+voice+"」"];
+  var reached100=card.progress>=100;
+  var lines=["影に遭遇 — "+action.label,"影「"+enemy+"」：「"+voice+"」"];
   if(action.kind==="hold"){
-    lines.push("あなたは、トイマンに問いを握らせた。");
+    lines.push("トイマンは前に進んだ。");
     lines.push("トイマン：「"+toymanLine+"」");
-    lines.push("影に "+action.damage+" ダメージ");
-    lines.push("影の反撃：疲労 "+(fat>=0?"+":"")+fat+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
     lines.push("回収率 +"+prog+"%（"+beforeProg+" → "+afterProg+"）");
+    lines.push("疲労 "+(fat>=0?"+":"")+fat+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
   }else if(action.kind==="read"){
-    lines.push("あなたは、影の声を判決ではなく記録として読んだ。");
+    lines.push("影の声を、判決ではなく声として聞いた。");
     lines.push("トイマン：「"+toymanLine+"」");
-    lines.push("影の声を記録した："+voice);
-    lines.push("疲労 +"+Math.max(0,fat)+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
     lines.push("回収率 +"+prog+"%（"+beforeProg+" → "+afterProg+"）");
+    lines.push("疲労 +"+Math.max(0,fat)+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
   }else{
-    lines.push("あなたは、トイマンを一度下がらせた。");
+    lines.push("トイマンは今日のところを引き返した。");
     lines.push("トイマン：「"+toymanLine+"」");
-    lines.push("回収率は進まなかった。でも残り火は落とさなかった。");
+    lines.push("回収率は動かなかった。でも、場所は覚えている。");
     lines.push("疲労 "+fat+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
   }
   lines.push("見守り +"+watch+"（"+Math.round(ns.battle.watch||0)+" / 100）");
   if(ipGain>0)lines.push("見守りが届いた：干渉ポイント +"+ipGain);
   if(selfAnswer)lines.push("あなたの言葉：「"+selfAnswer+"」— 回収率 +3〜5% ボーナス");
   var ended=false;
+  if(reached100){lines.push("── 道が開いた ──");lines.push("問いが届いた。「残り火」タブで確認してください。");}
   if(events.length>0){ended=true;events.forEach(function(e){lines.push(e.text);});ns.battle.encounter=null;}
   else if(enc.turns>=BATTLE_CFG.encounterMaxTurns){
     ended=true;enc.done=true;
-    lines.push(action.kind==="retreat"?"トイマンは問いを抱えて退いた。今日はここまででいい。":"黒い影がほどけた。トイマンは問いを落とさなかった。");
+    lines.push(action.kind==="retreat"?"トイマンは今日の分を終えた。またいつでも来られる。":"影が薄くなった。道が少し開いた。");
     ns.ip.cur=Math.min(ns.ip.max,(ns.ip.cur||0)+1);
     lines.push("影との遭遇を越えた：干渉ポイント +1");
     ns.battle.encounter=null;
@@ -1016,7 +1016,7 @@ function runToymanBattleIntervention(game,actionId,selfAnswer){
   ns.battle.lastLines=lines.slice();
   ns.logs=[{hours:0,events:[{text:lines.join("\n"),kind:"explore_detail",pri:5}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);
   ns.lastSavedAt=nowISO();
-  return{ok:true,state:ns,msg:ended?"影との遭遇が終わりました":"戦闘に介入しました",lines:lines,effects:[action.label,"疲労 "+(fat>=0?"+":"")+fat,"回収率 +"+prog+"%","見守り +"+watch].concat(ipGain>0?["IP +"+ipGain]:[]),ipGain:ipGain,watchGain:watch,action:actionId,ended:ended};
+  return{ok:true,state:ns,msg:ended?(reached100?"問いが届いた":"今日の遭遇が終わりました"):"前に進みました",lines:lines,effects:[action.label,"疲労 "+(fat>=0?"+":"")+fat,"回収率 +"+prog+"%","見守り +"+watch].concat(ipGain>0?["IP +"+ipGain]:[]),ipGain:ipGain,watchGain:watch,action:actionId,ended:ended,reached100:reached100};
 }
 
 function captureSnap(game){
@@ -1385,7 +1385,10 @@ function InternalPlaceMap(p){
             </span>}
             {(mail.visible.length>0||mail.overflow>0)&&<span className="node-mail-row" onClick={function(e){e.stopPropagation();}}>
               {mail.visible.map(function(L){return(
-                <button key={L.id} type="button" className={"node-mail"+(L.clicked?" node-mail-done":"")} title={L.clicked?"この手紙は進めました":"手紙を進める（タップ）"} onClick={function(e){e.stopPropagation();onClickLetter&&onClickLetter(loc,L.id);}}>✉</button>
+                <button key={L.id} type="button" className={"node-mail"+(L.clicked?" node-mail-done":"")} title={L.clicked?"処理済みの手紙":"手紙をタップして進める"} onClick={function(e){e.stopPropagation();if(!L.clicked&&onClickLetter)onClickLetter(loc,L.id);}}>
+                  {L.clicked?"✓":"✉"}
+                  {!L.clicked&&<span className="node-mail-label">タップ</span>}
+                </button>
               );})}
               {mail.overflow>0&&<span className="node-mail-overflow">+{mail.overflow}</span>}
             </span>}
@@ -1417,7 +1420,7 @@ function InternalPlaceMap(p){
             {hasBub&&<div className="sc-bub">{bubble.text}</div>}
             <ActionSprite action={va}/>
             <div className={"sc-dot cd-"+id}/>
-            <div className="sc-nm">{NAMES[id]}</div>
+            <div className="sc-nm">{NAMES[id]}<span className="sc-tap-hint">→声</span></div>
           </div>
         );
       })}
@@ -2866,20 +2869,21 @@ function BattleEncounterModal(p){
   var cdSec=Math.ceil((pv.cooldownMs||0)/1000);
   var disabled=pv.mod.blocked||pv.cooldownMs>0||!card||game.characters.toyman.lastAction!=="exploring";
   var actions=[
-    {id:"hold",label:"問いを握らせる",sub:"落とさないように支える",hint:"回収率 +4〜7% / 疲労 +2〜4 / 見守り +12"},
-    {id:"read",label:"影の声を読む",sub:"判決ではなく声として記録する",hint:"回収率 +1〜3% / 疲労 +1〜2 / 見守り +8"},
-    {id:"retreat",label:"一度下がらせる",sub:"勝つより帰ることを優先する",hint:"疲労 -4〜6 / 見守り +4 / 回収率は進まない"}
+    {id:"hold",label:"前に進ませる",sub:"道を切り拓くよう力を貸す",hint:"回収率 +4〜7% / 疲労 +2〜4 / 見守り +12"},
+    {id:"read",label:"影の声を聞く",sub:"判決ではなく声として記録する",hint:"回収率 +1〜3% / 疲労 +1〜2 / 見守り +8"},
+    {id:"retreat",label:"今日は引き返す",sub:"無理に進まず、また来る",hint:"疲労 -4〜6 / 見守り +4 / 回収率は進まない"}
   ];
+  var QUICK_REPLIES=["今日は保留する","それは本当かもしれない","わからない、でも忘れない"];
   function doAction(id){p.onManualBattle&&p.onManualBattle(id,selfAnswer);setSelfAnswer("");}
   return(
     <div className="ov battle-ov" onClick={p.onClose}>
       <div className="battle-modal" onClick={function(e){e.stopPropagation();}}>
         <div className="sh-handle"/>
         <div className="battle-title-row">
-          <div><div className="battle-k">影との遭遇</div><h2>問いを落とさないように介入する</h2></div>
+          <div><div className="battle-k">問いへの道</div><h2>トイマンが問いに近づいている途中、影に遭遇した</h2></div>
           <button className="care-x" onClick={p.onClose}>×</button>
         </div>
-        <div className="battle-meaning">これは黒い影を殴って稼ぐ画面ではありません。あなたが預けた残り火を、トイマンが落とさないように見守る画面です。</div>
+        <div className="battle-meaning">問いはまだ届いていない。トイマンが取りに向かっている途中です。影がその道をふさいでいる。一緒に、前へ進みます。</div>
         <div className="battle-field">
           <div className="battle-toyman"><span className="nd cd-toyman"/><b>トイマン</b><small>{pv.mod.label}</small></div>
           <div className="battle-vs">VS</div>
@@ -2888,10 +2892,11 @@ function BattleEncounterModal(p){
         <div className="shadow-voice-box"><span>影の声</span><p>「{pv.voice}」</p></div>
         <div className="battle-self-answer-box">
           <label className="bsa-label">影の声に、あなたの言葉で返す（任意）</label>
-          <textarea className="bsa-input" rows={2} placeholder="例：「それは本当かもしれない。でも今日は保留する」" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
-          {selfAnswer.trim()&&<div className="bsa-bonus">回収率 +3〜5% ボーナス / 残り火データに記録されます</div>}
+          <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className="bsa-quick" onClick={function(){setSelfAnswer(q);}}>{q}</button>;})}</div>
+          <textarea className="bsa-input" rows={2} placeholder="自由に書く、または上のボタンで選ぶ" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
+          {selfAnswer.trim()&&<div className="bsa-bonus">回収率 +3〜5% ボーナス / この言葉は残り火に記録されます</div>}
         </div>
-        {card&&<div className="battle-ember-box"><span>回収中の残り火</span><b>「{makeEmberTitle(card)}」</b>{card.bodyText&&<small>{card.bodyText}</small>}</div>}
+        {card&&<div className="battle-ember-box"><span>目指している残り火</span><b>「{makeEmberTitle(card)}」</b>{card.bodyText&&<small>{card.bodyText}</small>}</div>}
         <div className="battle-stats">
           <div><span>影の濃さ</span><b>{pv.hp} / {pv.hpMax}</b><Bar value={pv.hp/pv.hpMax*100} color="var(--ct)" h={5}/></div>
           <div><span>回収率</span><b>{pv.progress}%</b><Bar value={pv.progress} color="var(--ember)" h={5}/></div>
@@ -2902,7 +2907,10 @@ function BattleEncounterModal(p){
         <div className="battle-note">{pv.mod.note}</div>
         <div className="battle-actions">{actions.map(function(a){return <BattleActionButton key={a.id} action={a} disabled={disabled} onClick={doAction}/>;})}</div>
         {pv.mod.blocked&&<button className="btn btn-g battle-care-btn" onClick={p.onCare}>かなに水を持ってきてもらう</button>}
-        {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")}><b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}</div>}
+        {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")+(result.reached100?" battle-result-reached":"")}>
+          {result.reached100&&<div className="battle-reached-banner">✨ 問いが届いた</div>}
+          <b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}
+        </div>}
       </div>
     </div>
   );
@@ -2917,18 +2925,19 @@ function BattleEncounterScreen(p){
   var cdSec=Math.ceil((pv.cooldownMs||0)/1000);
   var disabled=pv.mod.blocked||pv.cooldownMs>0||!card||game.characters.toyman.lastAction!=="exploring";
   var actions=[
-    {id:"hold",label:"問いを握らせる",sub:"落とさないように支える",hint:"回収率 +4〜7% / 疲労 +2〜4 / 見守り +12"},
-    {id:"read",label:"影の声を読む",sub:"判決ではなく声として記録する",hint:"回収率 +1〜3% / 疲労 +1〜2 / 見守り +8"},
-    {id:"retreat",label:"一度下がらせる",sub:"勝つより帰ることを優先する",hint:"疲労 -4〜6 / 見守り +4 / 回収率は進まない"}
+    {id:"hold",label:"前に進ませる",sub:"道を切り拓くよう力を貸す",hint:"回収率 +4〜7% / 疲労 +2〜4 / 見守り +12"},
+    {id:"read",label:"影の声を聞く",sub:"判決ではなく声として記録する",hint:"回収率 +1〜3% / 疲労 +1〜2 / 見守り +8"},
+    {id:"retreat",label:"今日は引き返す",sub:"無理に進まず、また来る",hint:"疲労 -4〜6 / 見守り +4 / 回収率は進まない"}
   ];
+  var QUICK_REPLIES=["今日は保留する","それは本当かもしれない","わからない、でも忘れない"];
   function doAction(id){var r=p.onManualBattle&&p.onManualBattle(id,selfAnswer);if(r)setResult(r);setSelfAnswer("");}
   return(
     <div className="battle-screen scroll">
       <button className="back" onClick={p.onBack}>← 未受領の森へ戻る</button>
       <div className="battle-full-hero">
-        <div className="battle-k">影との遭遇</div>
-        <h2>問いを落とさないように介入する</h2>
-        <p>戦闘は、黒い影を殴って稼ぐ場所ではありません。あなたが預けた残り火を、トイマンが落とさず持ち帰るための介入です。勝利より、帰還を優先します。</p>
+        <div className="battle-k">問いへの道</div>
+        <h2>トイマンが問いに近づいている途中、影に遭遇した</h2>
+        <p>問いはまだ届いていない。トイマンが取りに向かっている途中です。影がその道をふさいでいる。一緒に、前へ進みます。</p>
       </div>
       {card?<div className="battle-ember-full">
         <span>守っている残り火</span>
@@ -2952,8 +2961,9 @@ function BattleEncounterScreen(p){
       <div className="shadow-voice-box shadow-voice-full"><span>影の声</span><p>「{pv.voice}」</p></div>
       <div className="battle-self-answer-box">
         <label className="bsa-label">影の声に、あなたの言葉で返す（任意）</label>
-        <textarea className="bsa-input" rows={2} placeholder="例：「それは本当かもしれない。でも今日は保留する」" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
-        {selfAnswer.trim()&&<div className="bsa-bonus">回収率 +3〜5% ボーナス / 残り火データに記録されます</div>}
+        <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className="bsa-quick" onClick={function(){setSelfAnswer(q);}}>{q}</button>;})}</div>
+        <textarea className="bsa-input" rows={2} placeholder="自由に書く、または上のボタンで選ぶ" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
+        {selfAnswer.trim()&&<div className="bsa-bonus">回収率 +3〜5% ボーナス / この言葉は残り火に記録されます</div>}
       </div>
       <div className="battle-stats battle-stats-full">
         <div><span>影の濃さ</span><b>{pv.hp} / {pv.hpMax}</b><Bar value={pv.hp/pv.hpMax*100} color="var(--ct)" h={5}/></div>
@@ -2965,7 +2975,10 @@ function BattleEncounterScreen(p){
       <div className="battle-note">{pv.mod.note}</div>
       <div className="battle-actions battle-actions-full">{actions.map(function(a){return <BattleActionButton key={a.id} action={a} disabled={disabled} onClick={doAction}/>;})}</div>
       {pv.mod.blocked&&<button className="btn btn-g battle-care-btn" onClick={p.onCare}>かなに水を持ってきてもらう</button>}
-      {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")}><b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}</div>}
+      {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")+(result.reached100?" battle-result-reached":"")}>
+        {result.reached100&&<div className="battle-reached-banner">✨ 問いが届いた</div>}
+        <b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}
+      </div>}
     </div>
   );
 }
@@ -3071,8 +3084,10 @@ function NowSceneView(p){
 
   /* クリック結果ポップ */
   function flashPop(lines,xPct,yPct){setClickPop({lines:lines,x:xPct,y:yPct,id:Date.now()});setTimeout(function(){setClickPop(null);},1500);}
-  /* 背景タップで見守る */
-  function handleStageClick(){var nowT=Date.now();if(nowT-watchCdRef.current<1200)return;watchCdRef.current=nowT;var ok=true;if(p.onWatch)ok=p.onWatch(loc);if(ok!==false)flashPop(["この場所を見守った","MAP操作 -1"],50,32);}
+  /* 明示ボタンから見守る — 背景タップはなくした */
+  function handleWatch(){var nowT=Date.now();if(nowT-watchCdRef.current<1200)return;watchCdRef.current=nowT;var ok=true;if(p.onWatch)ok=p.onWatch(loc);if(ok!==false)flashPop(["この場所を見守った","見守りゲージ +"+(p.watchGauge<100?10:0)],50,32);}
+  /* 背景タップは無効化（ノードも同様） */
+  function handleStageClick(){}
   function handleClickLetter(facility,letterId){var r=p.onClickLetter&&p.onClickLetter(facility,letterId);if(r){setLetterResult(r);setTimeout(function(){setLetterResult(null);},5200);}}
   /* キャラタップで声を聞く */
   var CHAR_LINES={toyman:"まだ見てない",kana:"水、飲む？",utsuro:"預かる",kotae:"記録しておく",auditor:"……保留だ"};
@@ -3169,10 +3184,17 @@ function NowSceneView(p){
       </div>
 
       {/* タッチ説明（ステージ外） */}
-      <div className="touch-hints">
-        <span className="touch-chip">場所移動は世界地図から</span>
-        <span className="touch-chip">ここは選んだ場所の室内図</span>
-        <span className="touch-chip">キャラタップ：声を聞く</span>
+      {/* アクション行：見守る（明示ボタン）＋キャラ説明 */}
+      <div className="now-action-bar">
+        {(function(){
+          var mt=getMapTouchInfo(game);
+          var canWatch=mt.cur>0;
+          return <button className={"now-watch-btn"+(canWatch?"":" now-watch-disabled")} disabled={!canWatch} onClick={handleWatch}>
+            {canWatch?"この場所を見守る":"見守り回数なし（回復中）"}
+            <span className="now-watch-sub">{canWatch?"MAP操作 -1 → 見守りゲージ ＋":"あと"+mt.minToNext+"分で回復"}</span>
+          </button>;
+        })()}
+        <span className="now-char-hint">キャラ →タップで声を聞く</span>
       </div>
       <div className="now-locs now-locs-safe">
         {getUnlockedPlaceKeys(game).map(function(k){

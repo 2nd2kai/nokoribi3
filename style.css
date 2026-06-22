@@ -3805,3 +3805,33 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .lrp-frag-status{font-family:var(--serif);font-size:10.5px;color:var(--dim)}
 .lrp-route{font-family:var(--serif);font-size:10.5px;color:var(--faint);margin-top:4px}
 .lrp-ip{font-family:var(--mono);font-size:10.5px;color:var(--calm);margin-top:2px}
+
+/* ── v5.52: タブ追加・戦闘UX・いまのようす明確化 ── */
+
+/* 見守るボタン */
+.now-action-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-top:1px solid var(--line2);flex-shrink:0}
+.now-watch-btn{display:flex;flex-direction:column;align-items:flex-start;background:rgba(110,159,168,.10);border:1px solid rgba(110,159,168,.35);border-radius:8px;color:var(--calm);padding:7px 12px;font-family:var(--serif);font-size:12px;cursor:pointer;flex:1;text-align:left;gap:2px}
+.now-watch-btn:active{background:rgba(110,159,168,.18)}
+.now-watch-disabled{background:rgba(255,255,255,.02)!important;border-color:var(--line)!important;color:var(--faint)!important;cursor:default}
+.now-watch-sub{font-size:9.5px;color:var(--faint);font-family:var(--mono)}
+.now-char-hint{font-size:9.5px;color:var(--faint);white-space:nowrap;font-family:var(--sans)}
+
+/* キャラクタータップヒント */
+.sc-tap-hint{font-size:7.5px;color:var(--calm);margin-left:3px;opacity:.7;letter-spacing:0;font-family:var(--mono)}
+
+/* 手紙ボタン — 済み状態を明確に */
+.node-mail{position:relative;display:inline-flex;flex-direction:column;align-items:center;gap:1px;font-size:15px;width:30px;height:34px;border:1px solid rgba(219,164,94,.5);border-radius:6px;background:rgba(219,164,94,.14);cursor:pointer;animation:mailPulse 1.8s ease-in-out infinite;box-shadow:0 0 0 1px rgba(219,164,94,.2)}
+.node-mail-label{font-size:7px;color:var(--ember2);font-family:var(--sans);line-height:1}
+.node-mail-done{opacity:.3;filter:grayscale(.8);animation:none;border-color:var(--faint);background:rgba(255,255,255,.04);color:var(--faint);box-shadow:none;cursor:default}
+
+/* クイック返答ボタン */
+.bsa-quick-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
+.bsa-quick{background:rgba(176,168,204,.10);border:1px solid rgba(176,168,204,.28);border-radius:999px;color:var(--co);padding:5px 11px;font-size:11px;cursor:pointer;font-family:var(--serif);letter-spacing:.02em;transition:background .15s}
+.bsa-quick:active{background:rgba(176,168,204,.22)}
+
+/* 回収完了バナー */
+.battle-result-reached{border-color:rgba(219,164,94,.5)!important;background:rgba(219,164,94,.10)!important}
+.battle-reached-banner{font-family:var(--serif);font-size:15px;color:var(--ember2);text-align:center;padding:8px 0 4px;letter-spacing:.08em;animation:ti .4s ease}
+
+/* 戦闘ナビ「目指している残り火」ラベル */
+.battle-ember-box span,.battle-ember-full>span{color:var(--ember);font-size:9.5px;letter-spacing:.14em;font-weight:600}
