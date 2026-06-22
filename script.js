@@ -4198,6 +4198,17 @@ function MetricInput(p){
   </label>;
 }
 
+var NEXT_QUESTION_CHOICES={
+  "本当は、誰に届いてほしかった？":["特定の誰かひとり","好きな人や大切な人","読んでくれると思っていた人","誰でもいいから、誰か","自分自身","まだわからない"],
+  "本当は、何になってほしかった？":["誰かの役に立つものに","認められるものに","消えずに残るものに","自分の証明に","誰かに届くものに","ただ、完成したものに"],
+  "反応のかわりに、本当は何が返ってきてほしかった？":["「読んだよ」の一言","感想や共感","驚きや感動","批評や意見","ただの存在承認","自分でもわからない"],
+  "燃えていた間、本当は何を作ろうとしていた？":["誰かに届く言葉","自分の記録","価値あるもの","美しいもの","自分だけのもの","わからない"],
+  "見せるとしたら、まず誰に渡したかった？":["特定の誰か","親や家族","友人や知人","まったく知らない誰か","自分の未来の自分","誰にも渡さなくていい"],
+  "消したい理由と、消せない理由、どちらが大きい？":["消したい理由のほうが大きい","消せない理由のほうが大きい","どちらも同じくらい","消したいが消せない","消せるけど消したくない","まだわからない"],
+  "この火のそばに、今どんな感情がある？":["悲しさ","怒り","疲労","虚しさ","あきらめ","何も感じない"],
+  "空っぽになる前、何を燃やしていた？":["時間と体力","期待と希望","承認されたい気持ち","誰かへの思い","自分への証明","わからない"],
+  "本当は、どう終わってほしかった？":["認められて終わりたかった","誰かに届いて終わりたかった","自分が納得して終わりたかった","もっと続けたかった","形に残したかった","わからない"],
+};
 function ReceiptCard(p){
   var r=p.r,grad=p.grad;
   var [copied,setCopied]=useState(false);
@@ -4306,6 +4317,10 @@ function buildGeminiPrompt(receipt){
 
 function AcceptanceModal(p){
   var [answer,setAnswer]=useState("");
+  var [chosen,setChosen]=useState("");
+  var choices=p.nextQuestion?(NEXT_QUESTION_CHOICES[p.nextQuestion]||[]):[];
+  var hasChosen=chosen==="未回答"||chosen!==""||answer.trim()!=="";
+  function selectChoice(c){setChosen(c);if(c!=="自由に書く")setAnswer("");}
   return <div className="ov" onClick={p.onClose}><div className="bsh acc-modal" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
     <div className="acc-inner">
@@ -4314,7 +4329,15 @@ function AcceptanceModal(p){
       {p.nextQuestion&&<div className="acc-question-box">
         <span className="acc-question-label">次の問い</span>
         <p className="acc-question">{p.nextQuestion}</p>
-        <textarea className="acc-answer-input" rows={3} placeholder="答えなくてもいい。書けたら書く。" value={answer} onChange={function(e){setAnswer(e.target.value);}}/>
+        {choices.length>0&&<div className="acc-choices">
+          {choices.map(function(c){return(
+            <button key={c} className={"acc-choice"+(chosen===c?" acc-choice-on":"")} onClick={function(){selectChoice(c);}}>{c}</button>
+          );})
+          }
+          <button className={"acc-choice acc-choice-free"+(chosen==="自由に書く"?" acc-choice-on":"")} onClick={function(){selectChoice("自由に書く");}}>自由に書く</button>
+          <button className={"acc-choice acc-choice-skip"+(chosen==="未回答"?" acc-choice-on":"")} onClick={function(){selectChoice("未回答");}}>未回答</button>
+        </div>}
+        {(chosen==="自由に書く"||choices.length===0)&&<textarea className="acc-answer-input" rows={3} placeholder="答えなくてもいい。書けたら書く。" value={answer} onChange={function(e){setAnswer(e.target.value);}}/>}
       </div>}
       <button className="btn btn-p" style={{width:"100%"}} onClick={p.onClose}>受け取る</button>
     </div>
@@ -4360,54 +4383,65 @@ function ReceiptReceiveModal(p){
 }
 
 function EmberCreate(p){
+  var [step,setStep]=useState(0);
   var [ws,setWs]=useState("");
-  /* 「何にもならない気がした」を選んだら即時フローへ */
-  var acc=ws?ACCEPTANCE_TEXTS[ws]:null;
-  var isFastPath=!!acc;
-  function submitFast(){
-    var id="e"+Date.now();
-    p.onSubmitFast&&p.onSubmitFast({
-      id:id,writeState:ws,feeling:"",wanted:"",title:null,memo:"",bodyText:"",reaction:"",soul:false,
-      initialMetrics:normalizeMetrics({satisfaction:50,meaning:50,value:50}),
+  var [fe,setFe]=useState("");
+  var [wa,setWa]=useState("");
+  var [title,setTitle]=useState("");
+  var [memo,setMemo]=useState("");
+  var [body,setBody]=useState("");
+  var [reaction,setReaction]=useState("");
+  var [imS,setImS]=useState(50);
+  var [imM,setImM]=useState(50);
+  var [imV,setImV]=useState(50);
+  var steps=[
+    {q:"最近書いたあとに残っているものの状態は？",opts:WRITE_STATES,val:ws,set:setWs},
+    {q:"何が残っていますか？",opts:FEELINGS,val:fe,set:setFe},
+    {q:"本当は何を受け取ってほしかったですか？",opts:WANTED,val:wa,set:setWa}
+  ];
+  var isInfo=step>=steps.length;
+  var cur=steps[step];
+  var hasSoul=!!(title.trim()||memo.trim()||body.trim()||reaction.trim());
+  function submit(){
+    p.onSubmit&&p.onSubmit({
+      id:"e"+Date.now(),
+      writeState:ws,feeling:fe,wanted:wa,
+      title:title.trim()||null,memo:memo.trim(),bodyText:body.trim(),reaction:reaction.trim(),
+      soul:hasSoul,
+      initialMetrics:normalizeMetrics({satisfaction:imS,meaning:imM,value:imV}),
       status:"awaiting",progress:0,createdAt:nowISO()
     });
   }
   return(<div className="ov" onClick={p.onClose}><div className="bsh ec-bsh" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
     <p className="sh-title">残り火を預ける</p>
-    {!ws&&<>
-      <p className="ec-q">最近書いたあとに残っているものは？</p>
-      <div className="ec-opts">
-        {WRITE_STATES.map(function(opt){return(
-          <button key={opt} className={"ec-opt"+(ws===opt?" ec-on":"")} onClick={function(){setWs(opt);}}>
-            {opt}
-          </button>
-        );})}
-      </div>
+    <p className="ec-step">{Math.min(step+1,steps.length+1)} / {steps.length+1}</p>
+    {!isInfo&&<>
+      <p className="ec-q">{cur.q}</p>
+      <div className="ec-opts">{cur.opts.map(function(opt){return(<button key={opt} className={"ec-opt"+(cur.val===opt?" ec-on":"")} onClick={function(){cur.set(opt);}}>{opt}</button>);})}</div>
     </>}
-    {ws&&isFastPath&&<div className="ec-fast">
-      <p className="ec-selected">「{ws}」</p>
-      <div className="ec-acceptance-preview">
-        <p className="ec-acc-text">{acc.text}</p>
-        {acc.holdText&&<p className="ec-acc-hold">{acc.holdText}</p>}
-        {acc.nextQuestion&&<div className="ec-acc-question">
-          <span className="ec-acc-qlabel">次の問い</span>
-          <p>{acc.nextQuestion}</p>
-        </div>}
+    {isInfo&&<div className="ec-extra">
+      <p className="ec-q">追加情報</p>
+      <div className="ec-note soul-note">ここは空欄でも預けられます。<br/>ただ、情報を入れることで、この残り火はあなたの魂になります。</div>
+      <div className="ec-metric-box">
+        <div className="ec-metric-title">最初の残り火</div>
+        <p>この残り火を預ける時点の、書いたものとの距離を記録します。数字は判決ではなく、あとで変化を見るための目印です。</p>
+        <MetricInput label="書いた納得" value={imS} onChange={setImS}/>
+        <MetricInput label="書いた意味" value={imM} onChange={setImM}/>
+        <MetricInput label="書いた価値" value={imV} onChange={setImV}/>
       </div>
-      <button className="btn btn-p" style={{width:"100%",marginTop:"1rem"}} onClick={submitFast}>受け取る</button>
-      <button className="btn btn-g" style={{width:"100%",marginTop:"6px"}} onClick={function(){setWs("");}}>選び直す</button>
+      <label className="ec-field"><span>タイトル 任意</span><input type="text" value={title} placeholder="例：読まれなかった記事の残り火" onChange={function(e){setTitle(e.target.value);}}/></label>
+      <label className="ec-field"><span>メモ 任意</span><input type="text" value={memo} placeholder="例：公開したあと、何度も通知を見た" onChange={function(e){setMemo(e.target.value);}}/></label>
+      <label className="ec-field"><span>あなたの言葉 任意</span><textarea value={body} placeholder="読まれなかったことより、何も返ってこなかったことが痛かった。" onChange={function(e){setBody(e.target.value);}}/></label>
+      <label className="ec-field"><span>反応・評価・スキの数など 任意</span><textarea value={reaction} placeholder="例：いいね3件、コメントなし／スキ0だった／読了率は良かったらしい" onChange={function(e){setReaction(e.target.value);}}/></label>
+      <div className={"soul-preview"+(hasSoul?" soul-on":"")}>{hasSoul?"この残り火は、あなたの魂になっています。":"通常の残り火として預けられます。"}</div>
     </div>}
-    {ws&&!isFastPath&&<>
-      <p className="ec-selected">「{ws}」を選択中</p>
-      <p className="ec-q-sub">詳しく教えてください（任意）</p>
-      <button className="btn btn-p" style={{width:"100%",marginTop:"1rem"}} onClick={function(){
-        var id="e"+Date.now();
-        p.onSubmit&&p.onSubmit({id:id,writeState:ws,feeling:"",wanted:"",title:null,memo:"",bodyText:"",reaction:"",soul:false,initialMetrics:normalizeMetrics({satisfaction:50,meaning:50,value:50}),status:"awaiting",progress:0,createdAt:nowISO()});
-      }}>預ける</button>
-      <button className="btn btn-g" style={{width:"100%",marginTop:"6px"}} onClick={function(){setWs("");}}>選び直す</button>
-    </>}
-    <button className="btn btn-g" style={{marginTop:8}} onClick={p.onClose}>閉じる</button>
+    <div className="ec-nav">
+      {step>0&&<button className="btn btn-g" onClick={function(){setStep(function(s){return s-1;});}}>戻る</button>}
+      {!isInfo&&<button className="btn btn-p" onClick={function(){if(cur.val)setStep(function(s){return s+1;});}} style={{opacity:cur.val?1:.45}}>次へ</button>}
+      {isInfo&&<button className="btn btn-p" onClick={submit}>預ける</button>}
+    </div>
+    <button className="btn btn-g" style={{marginTop:4}} onClick={p.onClose}>閉じる</button>
   </div></div>);
 }
 function ConvView(p){var game=p.game,onRead=p.onRead;var unlocked=getUnlockedConvIds(game);var hints=getNextUnlockInfo(game);var pairs={};CONVS.forEach(function(c){var k=c.a+"-"+c.b;if(!pairs[k])pairs[k]={a:c.a,b:c.b,convs:[]};pairs[k].convs.push(c);});return <div className="scroll"><div className="cv-wrap">{hints.length>0&&<div className="cv-hints"><div className="lh">もうすぐ発生する場面</div>{hints.map(function(h){return <div key={h.id} className="cv-hint-row"><span className={"nd cd-"+h.a}/><span className={"nd cd-"+h.b}/><span className="cv-hn">「{h.title}」</span><span className="cv-need">連携度あと {h.need}</span></div>;})}</div>}{Object.keys(pairs).map(function(key){var pair=pairs[key];var bondV=game.characters[pair.a].bonds[pair.b]||0;return <div key={key} className="cv-pair"><div className="cv-pair-head"><span className={"nd cd-"+pair.a}/><span className="cv-pn">{NAMES[pair.a]}</span><span className="cv-x">×</span><span className={"nd cd-"+pair.b}/><span className="cv-pn">{NAMES[pair.b]}</span><span className="cv-bond">連携 {bondV}</span></div>{pair.convs.map(function(c){var isU=unlocked.indexOf(c.id)>=0,isR=game.readConvs&&game.readConvs.indexOf(c.id)>=0,isRcv=game.receivedScenes&&game.receivedScenes.indexOf(c.id)>=0;return <div key={c.id} className={"cv-item"+(isU?" cv-open":"")+(isR?" cv-read":"")} onClick={isU?function(){onRead(c.id);}:undefined}>{isU?<><span className="cv-title">「{c.title}」</span>{isRcv&&<span className="cv-rcvd">受領済</span>}{!isR&&!isRcv&&<span className="cv-new">NEW</span>}{isR&&!isRcv&&<span className="cv-unrcvd">受領できます</span>}</>:<><span className="cv-locked">🔒 「{c.title}」</span><span className="cv-th">連携度 {c.th} で解放</span></>}</div>;})}</div>;})} </div></div>;}

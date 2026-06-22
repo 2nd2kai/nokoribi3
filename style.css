@@ -3866,6 +3866,12 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .acc-copy-btn{width:100%;background:rgba(219,164,94,.12);border:1px solid rgba(219,164,94,.4);border-radius:8px;color:var(--ember2);padding:10px;font-family:var(--serif);font-size:13px;cursor:pointer;transition:background .15s}
 .acc-copy-btn:active{background:rgba(219,164,94,.22)}
 .acc-copy-done{background:rgba(110,159,168,.12)!important;border-color:rgba(110,159,168,.4)!important;color:var(--calm)!important}
+.acc-choices{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;margin-bottom:8px}
+.acc-choice{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:20px;color:var(--fg);font-family:var(--serif);font-size:12.5px;padding:7px 14px;cursor:pointer;transition:background .12s,border-color .12s;flex-shrink:0}
+.acc-choice:active{background:rgba(255,255,255,.1)}
+.acc-choice-on{background:rgba(219,164,94,.15)!important;border-color:rgba(219,164,94,.6)!important;color:var(--ember2)!important}
+.acc-choice-skip{color:var(--faint);border-color:rgba(255,255,255,.08)}
+.acc-choice-skip.acc-choice-on{background:rgba(110,159,168,.1)!important;border-color:rgba(110,159,168,.4)!important;color:var(--calm)!important}
 .receipt-ai-block{background:rgba(219,164,94,.05);border:1px solid rgba(219,164,94,.18);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;margin-top:14px}
 .receipt-ai-title{font-size:10px;color:var(--ember);letter-spacing:.14em;font-weight:600;font-family:var(--sans);margin:0}
 .receipt-ai-desc{font-family:var(--serif);font-size:12px;color:var(--dim);line-height:1.7;margin:0}
