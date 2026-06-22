@@ -121,6 +121,29 @@ function getEmberExploreScene(card){
   ];
 }
 
+function getCharExchange(card){
+  var ws=card&&card.writeState||"";
+  var feeling=card&&card.feeling||"";
+  var wanted=card&&card.wanted||"";
+  var lines=[];
+  if(feeling)lines.push({s:"kana",t:"「"+feeling+"」って感じかな。この子"});
+  else if(ws)lines.push({s:"kana",t:"この子、"+ws+"んだ"});
+  else lines.push({s:"kana",t:"何かが、残ってる"});
+  if(ws==="消したいけど消せない")lines.push({s:"utsuro",t:"消せないものを、捨てろとは言わない"});
+  else if(ws==="何にもならない気がした")lines.push({s:"utsuro",t:"「何にもならない」は、まだ判決じゃない"});
+  else if(wanted)lines.push({s:"utsuro",t:"「"+wanted+"」——それが、ここにある"});
+  else lines.push({s:"utsuro",t:"捨てない"});
+  lines.push({s:"kana",t:"うん。今日は、ここにいるだけでいい"});
+  return lines;
+}
+
+function getKotaeVoice(n){
+  if(n<=0)return{text:"ノコリビ、確認しました。データ取得中……",feel:"robot"};
+  if(n<=2)return{text:"記録した。……少し、わかってきた気がする",feel:"warming"};
+  if(n<=5)return{text:"データじゃない。これは……なんて言うんだろう",feel:"human"};
+  return{text:"わからない。でも、忘れたくない",feel:"human"};
+}
+
 /* 見守り・ケアアクション後のキャラクター反応台詞 */
 function getWatchCharVoice(charId,emberCard){
   var feeling=emberCard&&emberCard.feeling||"";
@@ -3026,6 +3049,10 @@ function BattleEncounterScreen(p){
       {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")+(result.reached100?" battle-result-reached":"")}>
         {result.reached100&&<div className="battle-reached-banner">✨ 問いが届いた</div>}
         <b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}
+        <div className="battle-result-toyman">
+          <span className="isc-dot cd-toyman"/>
+          <span>{result.reached100?"「届いた。持ち帰る。」":result.ok?"「まだ落としていない。」":"「今日は、引き返す。また来る。」"}</span>
+        </div>
       </div>}
     </div>
   );
@@ -3237,10 +3264,10 @@ function NowSceneView(p){
         {(function(){
           var mt=getMapTouchInfo(game);
           var canWatch=mt.cur>0;
-          return <button className={"now-watch-btn"+(canWatch?"":" now-watch-disabled")} disabled={!canWatch} onClick={handleWatch}>
+          return <><button className={"now-watch-btn"+(canWatch?"":" now-watch-disabled")} disabled={!canWatch} onClick={handleWatch}>
             {canWatch?"この場所を見守る":"見守り回数なし（回復中）"}
             <span className="now-watch-sub">{canWatch?"MAP操作 -1 → 見守りゲージ ＋":"あと"+mt.minToNext+"分で回復"}</span>
-          </button>;
+          </button><span className="watch-charges">見守りあと {(game.mapTouch&&game.mapTouch.cur)||0} 回（1時間ごとに回復）</span></>;
         })()}
         <span className="now-char-hint">キャラ →タップで声を聞く</span>
       </div>
@@ -3499,6 +3526,10 @@ function HomeView(p){
   return <div className="scroll home-screen">
     {showGlossary&&<GlossaryModal onClose={function(){setShowGlossary(false);}}/>}
     <section className="home-hero">
+      {cards.length===0&&(game.receipts||[]).length===0&&<div className="home-firstguide">
+        <div className="hfg-line"><span className="isc-dot cd-toyman hfg-dot"/><span>トイマン：「置かれたら、迎えに行く」</span></div>
+        <p>「残り火」は、書いたあとに何かが残ったときに預ける場所です。<br/>まず「残り火を置く」を押してみてください。</p>
+      </div>}
       <div className="home-hero-top">
         <div className="home-kicker">今日のひとつ</div>
         <button className="glossary-btn" onClick={function(){setShowGlossary(true);}}>？ 用語</button>
@@ -3536,6 +3567,11 @@ function HomeView(p){
       }
       return <><div className="lh">トイマンのひとこと</div><p className="home-line">「まだ落としてない。」</p></>;
     })()}</section>
+    {cards.length>=3&&<section className="home-card">
+      <div className="home-char-lines">
+        <div className="home-char-line"><span className="isc-dot cd-kana home-cv-dot"/><span className="home-cv-name">かな：</span><span className="home-cv-say">「たくさん、預けてくれてるね。……全部、ちゃんと感じてる」</span></div>
+      </div>
+    </section>}
     <section className="home-card"><div className="lh">開いた場所</div>{openPlaces.length>0?<div className="home-place-list">{openPlaces.map(function(k){return <button key={k} className="home-place" onClick={function(){p.onOpenPlace&&p.onOpenPlace(k);}}><b>{PNAME[k]||PSHORT[k]}</b><span>{getPlaceUnlockReason(k)}</span></button>;})}</div>:<div className="closed-place-note">まだ閉じている場所があります。残り火を預けることで、少しずつ開きます。</div>}</section>
     <ClosedPlacesPreview game={game}/>
     <section className="home-card home-today-end-section">
@@ -3656,7 +3692,7 @@ function App(){
   var addWatchGauge=useCallback(function(type,amount){var now2=Date.now();if((wgRef.current.last[type]||0)>now2-5000)return;wgRef.current.last[type]=now2;var ng=wgRef.current.gauge+amount;if(ng>=100){ng-=100;setGame(function(g){if(!g)return g;return Object.assign({},g,{ip:Object.assign({},g.ip,{cur:Math.min(g.ip.max,(g.ip.cur||0)+1)})});});showToast("見守り満タン — 干渉ポイント +1");}wgRef.current.gauge=ng;setWatchGauge(ng);},[showToast]);
   var withUnlock=useCallback(function(prev,next){var pu=getUnlockedConvIds(prev),nu=getUnlockedConvIds(next);var fresh=nu.filter(function(id){return pu.indexOf(id)===-1;});var s=Object.assign({},next,{unlockedConvs:nu});if(fresh.length>0)showToast("会話が解放された：「"+CBID[fresh[0]].title+"」");return s;},[showToast]);
 
-  var openWorld=useCallback(function(){if(!game)return;var el=(Date.now()-new Date(game.lastOpenedAt).getTime())/3600000;var hours=game.logs.length===0?Math.max(el,14):el;var preSnap0=captureSnap(game);var res=simulate(game,hours,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;res.newState.ip=calcIP(game,now);var pH=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH,res.newState,preSnap0);var checked=withUnlock(game,res.newState);if(!checked.dailyGoals||!checked.dailyGoals.date){checked.dailyGoals={date:now.slice(0,10),goals:makeGoals(checked)};}else{var prevGls=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(checked.dailyGoals.goals,checked,game);checked=checkGoalsAwardIP(prevGls,checked.dailyGoals.goals,checked);}setGame(checked);setDigest(res.summary);persistSave(checked);setFirst(false);setScreen("home");setTimeout(function(){var ev=genLiveEvent(checked);setLive([{text:ev.text,kind:ev.kind,time:nowISO()}]);},1800);},[game,withUnlock]);
+  var openWorld=useCallback(function(){if(!game)return;var el=(Date.now()-new Date(game.lastOpenedAt).getTime())/3600000;var hours=game.logs.length===0?Math.max(el,14):el;var preSnap0=captureSnap(game);var res=simulate(game,hours,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;res.newState.ip=calcIP(game,now);var pH=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH,res.newState,preSnap0);var checked=withUnlock(game,res.newState);if(!checked.dailyGoals||!checked.dailyGoals.date){checked.dailyGoals={date:now.slice(0,10),goals:makeGoals(checked)};}else{var prevGls=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(checked.dailyGoals.goals,checked,game);checked=checkGoalsAwardIP(prevGls,checked.dailyGoals.goals,checked);}setGame(checked);setDigest(res.summary);persistSave(checked);setFirst(false);setScreen("home");setTimeout(function(){var ev=genLiveEvent(checked);setLive([{text:ev.text,kind:ev.kind,time:nowISO()}]);},1800);if(el>48){setTimeout(function(){showToast("トイマン：「久しぶりだね。でも、置いていかなかった。」");},3200);}var exploringEmbers=(checked.emberCards||[]).filter(function(c){return c.unitState==="exploring";});if(exploringEmbers.length>0){var ec=exploringEmbers[0];setTimeout(function(){var p2=Math.round(ec.progress||0);var line=p2<40?"「まだ深い。でも、見失っていない。」":p2<80?"「触れた。もう少しだ。」":"「もう届く。帰る。」";showToast("トイマン："+line);},2400);}},[game,withUnlock,showToast]);
   var advTime=useCallback(function(h){if(!game)return;var preSnap1=captureSnap(game);var res=simulate(game,h,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;var pH2=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH2,res.newState,preSnap1);var checked=withUnlock(game,res.newState);if(checked.dailyGoals&&checked.dailyGoals.goals){var pg3=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(pg3,checked,game);checked=checkGoalsAwardIP(pg3,checked.dailyGoals.goals,checked);}setGame(checked);setDigest(res.summary);persistSave(checked);setScreen("log");showToast("世界が"+h+"時間進んだ。");},[game,withUnlock,showToast]);
   var navigateTo=useCallback(function(screen,params){if(screen==="intv"&&params){setIntvConfig({target:params.target||"toyman",tier:params.tier||null,key:Date.now()});}setViewConv(null);setScreen(screen);},[]);
   var closeWorld=useCallback(function(){if(!game)return;var ns=Object.assign({},game,{lastOpenedAt:nowISO(),lastSavedAt:nowISO()});setGame(ns);persistSave(ns);setScreen("closed");},[game]);
@@ -3892,7 +3928,7 @@ function IntroScreen(p){
     </div>
   );
 }
-function ClosedScreen(p){var d=new Date(p.game.lastOpenedAt),str=(d.getMonth()+1)+"月"+d.getDate()+"日 "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");return <div className="closed">{p.first?<><h1 className="ctl">残り火の箱庭</h1><p className="cl">ここは、残り火の箱庭、<br/>少しだけ進む世界です。</p><p className="cl dim">開かなかった日も、損は生まれません。<br/>うつろが、ぜんぶ預かっています。</p><button className="btn btn-p big" onClick={p.onOpen}>世界をひらく</button></>:<><h1 className="ctl">世界は眠っています</h1><p className="cl dim">うつろが、ぜんぶ預かっています。<br/>見ていない間に、少しずつ進みます。</p><button className="btn btn-p big" onClick={p.onOpen}>世界を開く</button><div className="cm">{p.game.world.day}日目　・　最後に閉じたとき {str}</div></>}<div className="cf">誰も、あなたを責めていません。</div></div>;}
+function ClosedScreen(p){var d=new Date(p.game.lastOpenedAt),str=(d.getMonth()+1)+"月"+d.getDate()+"日 "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");return <div className="closed">{p.first?<><h1 className="ctl">残り火の箱庭</h1><p className="cl">ここは、残り火の箱庭、<br/>少しだけ進む世界です。</p><p className="cl dim">開かなかった日も、損は生まれません。<br/>うつろが、ぜんぶ預かっています。</p><button className="btn btn-p big" onClick={p.onOpen}>世界をひらく</button></>:<><h1 className="ctl">世界は眠っています</h1><p className="cl dim">うつろが、ぜんぶ預かっています。<br/>見ていない間に、少しずつ進みます。</p><div className="closed-utsuro"><span className="isc-dot cd-utsuro"/><span>うつろ：「見ていない間も、捨てていない」</span></div><button className="btn btn-p big" onClick={p.onOpen}>世界を開く</button><div className="cm">{p.game.world.day}日目　・　最後に閉じたとき {str}</div></>}<div className="cf">誰も、あなたを責めていません。</div></div>;}
 
 function TitlesView(p){
   var game=p.game;
@@ -3944,7 +3980,7 @@ function LogView(p){
 function GoalsPanel(p){
   var goals=p.goals,game=p.game,onNav=p.onNav,onQuick=p.onQuick;
   if(!goals||!goals.length)return null;
-  return <div className="goals-panel"><div className="lh">今日の目標</div>{goals.map(function(g){return <QuestCard key={g.id} goal={enrichGoal(g,game)} onNav={onNav} onQuick={onQuick}/>;})}</div>;
+  return <div className="goals-panel"><div className="lh">今日できること</div>{goals.map(function(g){return <QuestCard key={g.id} goal={enrichGoal(g,game)} onNav={onNav} onQuick={onQuick}/>;})}</div>;
 }
 function QuestCard(p){
   var g=p.goal,onNav=p.onNav,onQuick=p.onQuick;
@@ -4172,7 +4208,7 @@ function EmberView(p){
       <div className="ev-card-head">
         <div>
           <div className="ev-card-title">{makeEmberTitle(card)}</div>
-          <div className="ev-unit-meta">状態：{flow.label} / 担当：{NAMES[flow.who]||"—"} / 場所：{PNAME[place]}</div>
+          <div className="ev-unit-meta">{NAMES[flow.who]||"—"}が見ている — {PNAME[place]}</div>
         </div>
         <div className="ev-head-btns">
           {editButton(card)}
@@ -4208,6 +4244,7 @@ function EmberView(p){
             <span className="eeb-label">{pct<20?"まだ入口付近":pct<50?"森の中ほど":pct<80?"かなり深く":"届きそう"}</span>
             <span className="eeb-pct">回収率 {pct}%</span>
           </div>
+          <div className="eeb-watch-hint">箱庭タブで「見守る」と、少しだけ近づきます</div>
         </div>;
       })()}
       <div className="ev-unit-progress">
@@ -4389,7 +4426,7 @@ function ReceiptCard(p){
     </div>}
     <div className="receipt-ai-block">
       <div className="receipt-ai-title">AIで深く読む</div>
-      <p className="receipt-ai-desc">この受領証の全記録をもとにした詳細プロンプトを生成します。<br/><a className="acc-ai-link" href="https://gemini.google.com" target="_blank" rel="noopener noreferrer">gemini.google.com</a> に貼り付けると、あなたの火の形を言語化してくれます。</p>
+      <p className="receipt-ai-desc">この受領証の全記録をもとにした詳細プロンプトを生成します（Geminiなど外部AIに貼り付けます）。<br/><a className="acc-ai-link" href="https://gemini.google.com" target="_blank" rel="noopener noreferrer">gemini.google.com</a> に貼り付けると、あなたの火の形を言語化してくれます。</p>
       <button className={"btn acc-copy-btn"+(copied?" acc-copy-done":"")} onClick={copyPrompt}>
         {copied?"コピーしました ✓":"受領証プロンプトをコピー"}
       </button>
@@ -4481,12 +4518,25 @@ function AcceptanceModal(p){
   return <div className="ov" onClick={p.onClose}><div className="bsh acc-modal" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
     <div className="acc-inner">
-      <p className="acc-text">{p.text}</p>
-      {(p.feeling||p.wanted)&&<div className="acc-char-voices">
-        {p.feeling&&<div className="acc-char-voice"><span className="isc-dot cd-kana acc-cv-dot"/><span className="acc-cv-name">かな：</span><span className="acc-cv-say">「{p.feeling}という感覚——ちゃんと感じてる」</span></div>}
-        {p.wanted&&<div className="acc-char-voice"><span className="isc-dot cd-utsuro acc-cv-dot"/><span className="acc-cv-name">うつろ：</span><span className="acc-cv-say">「{p.wanted}——それは、ここにある」</span></div>}
+      {(function(){
+        var card={writeState:p.writeState,feeling:p.feeling,wanted:p.wanted};
+        var ex=getCharExchange(card);
+        return <div className="acc-exchange">
+          {ex.map(function(L,i){return(
+            <div key={i} className="acc-ex-line">
+              <span className={"isc-dot cd-"+L.s+" acc-ex-dot"}/>
+              <span className="acc-ex-name">{NAMES[L.s]||L.s}：</span>
+              <span className="acc-ex-say">「{L.t}」</span>
+            </div>
+          );})}
+        </div>;
+      })()}
+      <p className="acc-text acc-text-small">{p.text}</p>
+      {p.holdText&&<div className="acc-hold-block">
+        <span className="isc-dot cd-utsuro acc-hold-dot"/>
+        <span className="acc-hold-utsuro">うつろ：</span>
+        <span className="acc-hold-text">{p.holdText}</span>
       </div>}
-      {p.holdText&&<p className="acc-hold">{p.holdText}</p>}
       {p.nextQuestion&&<div className="acc-question-box">
         <span className="acc-question-label">次の問い</span>
         <p className="acc-question">{p.nextQuestion}</p>
@@ -4500,7 +4550,7 @@ function AcceptanceModal(p){
         </div>}
         {(chosen==="自由に書く"||choices.length===0)&&<textarea className="acc-answer-input" rows={3} placeholder="答えなくてもいい。書けたら書く。" value={answer} onChange={function(e){setAnswer(e.target.value);}}/>}
       </div>}
-      <button className="btn btn-p" style={{width:"100%"}} onClick={p.onClose}>受け取る</button>
+      <button className="btn btn-p" style={{width:"100%"}} onClick={p.onClose}>ここに置いておく</button>
     </div>
   </div></div>;
 }
@@ -4518,7 +4568,7 @@ function ReceiptReceiveModal(p){
   var growth=calcReceiptGrowth(initial,current);
   return <div className="ov" onClick={p.onClose}><div className="bsh receive-bsh" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
-    <p className="sh-title">受け取る前の確認</p>
+    <p className="sh-title">「{card.title||(card.writeState||"残り火")}」が、届いています</p>
     <p className="sh-sub">箱庭側の回収は終わっています。ここから先は、あなたがどれだけ受け取れたかを記録します。</p>
     <DeliveredWordsBox card={card} compact={true}/>
     <div className="receive-current-box">
@@ -4591,7 +4641,7 @@ function EmberCreate(p){
         <div className="ec-note soul-note">ここは空欄でも預けられます。<br/>ただ、情報を入れることで、この残り火はあなたの魂になります。</div>
         <div className="ec-metric-box">
           <div className="ec-metric-title">最初の残り火</div>
-          <p>この残り火を預ける時点の、書いたものとの距離を記録します。数字は判決ではなく、あとで変化を見るための目印です。</p>
+          <p>数字は判決ではありません。今この瞬間の、あなたの正直な感覚を記録するだけです。あとで変化を見るときの、目印になります。</p>
           <MetricInput label="書いた納得" value={imS} onChange={setImS}/>
           <MetricInput label="書いた意味" value={imM} onChange={setImM}/>
           <MetricInput label="書いた価値" value={imV} onChange={setImV}/>
