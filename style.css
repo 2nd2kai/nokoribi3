@@ -3571,6 +3571,31 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .ev-custom-actions{display:flex;gap:10px}
 .ev-custom-actions .btn{flex:1}
 
+/* ── 次のアクション：光るボタン ── */
+@keyframes next-pulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(219,164,94,.0),0 0 0 2px rgba(219,164,94,.35);}
+  50%{box-shadow:0 0 0 6px rgba(219,164,94,.0),0 0 14px 2px rgba(219,164,94,.55);}
+}
+.btn-next-action{
+  position:relative;
+  animation:next-pulse 1.8s ease-in-out infinite;
+  outline:2px solid rgba(219,164,94,.6);
+  outline-offset:2px;
+}
+/* タブナビゲーションの次アクション通知 */
+.nbtn-next{
+  position:relative;
+  color:var(--ember2) !important;
+}
+.nbtn-dot{
+  position:absolute;
+  top:4px;right:6px;
+  width:6px;height:6px;
+  border-radius:50%;
+  background:var(--ember);
+  animation:next-pulse 1.8s ease-in-out infinite;
+}
+
 /* ── 話者名インライン表示 ── */
 .isc-speaker-inline,
 .cvd-speaker-inline{

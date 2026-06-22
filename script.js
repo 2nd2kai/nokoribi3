@@ -1482,6 +1482,26 @@ function checkGoalsAwardIP(prevGoals,newGoals,state){
 }
 
 function getActiveEmber(game){return (game.emberCards||[]).find(function(c){return c.status!=="ready"&&c.status!=="awaiting";})||null;}
+/* 今ユーザーが押すべき次の1アクションを返す。
+   返り値: {screen, action, cardId} または null
+   screen: "home"|"ember"
+   action: "create"|"depart"|"answer"|"receive"  */
+function getNextAction(game){
+  if(!game)return null;
+  var cards=game.emberCards||[];
+  /* 受け取れる残り火が最優先 */
+  var ready=cards.find(function(c){return c.unitState==="completed"||c.status==="ready";});
+  if(ready)return{screen:"ember",action:"receive",cardId:ready.id};
+  /* 問い札が出ているカード */
+  var pending=cards.find(function(c){return c.questionPending&&c.pendingQuestion;});
+  if(pending)return{screen:"ember",action:"answer",cardId:pending.id};
+  /* 出発待ち */
+  var waiting=cards.find(function(c){return c.unitState==="waiting"||c.status==="awaiting";});
+  if(waiting)return{screen:"ember",action:"depart",cardId:waiting.id};
+  /* カードが何もない */
+  if(cards.length===0)return{screen:"home",action:"create",cardId:null};
+  return null;
+}
 function getEmberNeed(card){return Math.max(0,100-Math.round(card.progress||0));}
 function getEmberActionForStatus(status){
   if(status==="unreceived")return{target:"toyman",tier:3,label:"一括探索",verb:"トイマンで進める"};
@@ -3338,6 +3358,7 @@ function HomeView(p){
   var active=cards.find(function(c){return c.status!=="ready"&&c.status!=="awaiting";})||cards[0]||null;
   var ready=cards.find(function(c){return c.status==="ready";});
   var openPlaces=getUnlockedPlaceKeys(game).filter(function(k){return game.unlocks&&game.unlocks.places&&game.unlocks.places[k];});
+  var next=getNextAction(game);
   var nextText=ready?"受け取れる残り火があります。":active?"「"+makeEmberTitle(active)+"」を見守っています。":"まずは、ひとつだけ置いてみてください。";
   return <div className="scroll home-screen">
     <section className="home-hero">
@@ -3346,12 +3367,12 @@ function HomeView(p){
       {!active&&!ready&&<p>ここは、書いたあとに残ってしまったものを、なかったことにしないための場所です。</p>}
       {active&&<p>箱庭は、この残り火を消さずに扱っています。急がなくていい。まず、届いていることを確認します。</p>}
       <div className="home-actions">
-        {!active&&!ready&&<button className="btn btn-p" onClick={p.onCreate}>残り火を置く</button>}
-        {(active||ready)&&<button className="btn btn-p" onClick={function(){p.onNav&&p.onNav("ember");}}>残り火を見る</button>}
+        {!active&&!ready&&<button className={"btn btn-p"+(next&&next.action==="create"?" btn-next-action":"")} onClick={p.onCreate}>残り火を置く</button>}
+        {(active||ready)&&<button className={"btn btn-p"+(next&&next.screen==="ember"?" btn-next-action":"")} onClick={function(){p.onNav&&p.onNav("ember");}}>残り火を見る</button>}
         {openPlaces.length>0&&<button className="btn btn-g" onClick={function(){p.onNav&&p.onNav("peek");}}>箱庭を見る</button>}
       </div>
     </section>
-    {active&&<section className="home-card"><div className="lh">いま動いている残り火</div><div className="home-fire-title">「{makeEmberTitle(active)}」</div><DeliveredWordsBox card={active} compact={true}/><div className="home-fire-foot">{getEmberUnitLabel(active)} / {Math.round(active.progress||0)}%</div>{(active.status==="awaiting"||active.unitState==="waiting")&&<div className="home-depart-box"><div className="hdb-title">出発待ち</div><p>出発させることで、トイマンがあなたの「{makeEmberTitle(active)}」を探しに行きます。見つけるのは答えではなく、問いの欠片です。</p><button className="btn btn-p touchable" onClick={function(){p.onDepart&&p.onDepart(active.id);}}>トイマンを未受領の森に出発させる</button></div>}</section>}
+    {active&&<section className="home-card"><div className="lh">いま動いている残り火</div><div className="home-fire-title">「{makeEmberTitle(active)}」</div><DeliveredWordsBox card={active} compact={true}/><div className="home-fire-foot">{getEmberUnitLabel(active)} / {Math.round(active.progress||0)}%</div>{(active.status==="awaiting"||active.unitState==="waiting")&&<div className="home-depart-box"><div className="hdb-title">出発待ち</div><p>出発させることで、トイマンがあなたの「{makeEmberTitle(active)}」を探しに行きます。見つけるのは答えではなく、問いの欠片です。</p><button className={"btn btn-p touchable"+(next&&next.action==="depart"?" btn-next-action":"")} onClick={function(){p.onDepart&&p.onDepart(active.id);}}>トイマンを未受領の森に出発させる</button></div>}</section>}
     <section className="home-card"><div className="lh">トイマンのひとこと</div><p className="home-line">「{active?"まだ落としてない。":"置かれたら、拾いに行く。"}」</p></section>
     <section className="home-card"><div className="lh">開いた場所</div>{openPlaces.length>0?<div className="home-place-list">{openPlaces.map(function(k){return <button key={k} className="home-place" onClick={function(){p.onOpenPlace&&p.onOpenPlace(k);}}><b>{PNAME[k]||PSHORT[k]}</b><span>{getPlaceUnlockReason(k)}</span></button>;})}</div>:<div className="closed-place-note">まだ閉じている場所があります。残り火を預けることで、少しずつ開きます。</div>}</section>
     <ClosedPlacesPreview game={game}/>
@@ -3376,6 +3397,7 @@ function App(){
   var [live,setLive]=useState([]);
   var [prog,setProg]=useState({toyman:0,kana:0,utsuro:0,kotae:0});
   
+  var nextAction=game?getNextAction(game):null;
   var [expanded,setExpanded]=useState(null);
   var [viewConv,setViewConv]=useState(null);
   var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
@@ -3509,7 +3531,7 @@ function App(){
         <InterventionTab game={game} onExecute={handleTieredIntv} config={intvConfig}/>
       </>}
       {screen!=="battle"&&<nav className="bnav">
-        {getVisibleTabs(game).map(function(t){return <button key={t.id} className={"nbtn"+(screen===t.id?" nbtn-on":"")} onClick={function(){if(t.id!=="conv")setViewConv(null);setScreen(t.id);}}>{t.label}</button>;})}
+        {getVisibleTabs(game).map(function(t){var isNext=nextAction&&nextAction.screen===t.id&&screen!==t.id;return <button key={t.id} className={"nbtn"+(screen===t.id?" nbtn-on":"")+(isNext?" nbtn-next":"")} onClick={function(){if(t.id!=="conv")setViewConv(null);setScreen(t.id);}}>{t.label}{isNext&&<span className="nbtn-dot"/>}</button>;})}
       </nav>}
     </>}
     
@@ -3903,6 +3925,7 @@ function ProcessingLine(p){
 }
 function EmberView(p){
   var game=p.game,onReceive=p.onReceive,onOpenCreate=p.onOpenCreate,onDepart=p.onDepart,onDelete=p.onDelete,onAdvance=p.onAdvance,onBurnReceipt=p.onBurnReceipt,onEditEmber=p.onEditEmber;
+  var next=getNextAction(game);
   var [editingId,setEditingId]=useState(null);
   var [editTitle,setEditTitle]=useState("");
   var [editMemo,setEditMemo]=useState("");
@@ -3983,19 +4006,19 @@ function EmberView(p){
           <p className="etr-stage">はじまりの部屋の灯りが、一度だけ揺れた。<br/>トイマンは顔を上げた。</p>
           <p className="etr-say">「森に、残り火」<br/>「つよい」<br/>「未回収」<br/>「いま行く」</p>
         </div>
-        <button className="btn btn-p touchable" onClick={function(){onDepart&&onDepart(card.id);}}>トイマンを未受領の森へ出発させる</button>
+        <button className={"btn btn-p touchable"+(next&&next.action==="depart"&&next.cardId===card.id?" btn-next-action":"")} onClick={function(){onDepart&&onDepart(card.id);}}>トイマンを未受領の森へ出発させる</button>
       </div>}
       {isCompleted&&<div className="ev-receive-ready-box">
         <div className="err-k">受領待ち</div>
         <p>箱庭側の回収は終わっています。ここから先は、あなたが受け取る段階です。</p>
         <div className="err-q">問い：{flow.question}</div>
-        <button className="btn btn-p touchable" onClick={function(){onReceive&&onReceive(card.id);}}>自分で受け取る</button>
+        <button className={"btn btn-p touchable"+(next&&next.action==="receive"&&next.cardId===card.id?" btn-next-action":"")} onClick={function(){onReceive&&onReceive(card.id);}}>自分で受け取る</button>
       </div>}
       {card.answers&&card.answers.length>0&&<div className="ev-answer-log">
         {card.answers.slice(-3).map(function(a,i){return <span key={i}>「{a.answer}」</span>;})}
       </div>}
       {card.unitState!=="waiting"&&flow.choices&&flow.choices.length>0&&!isCompleted?<div className="ev-choice-grid">
-        {pending?flow.choices.map(function(ch){return <button key={ch} className="ev-choice-btn" disabled={answeredToday} onClick={function(){onAdvance&&onAdvance(card.id,ch,false);}}>{ch}</button>;}):<button className="ev-choice-btn ev-choice-wait" disabled>ゲージ100%で問い札が出ます</button>}
+        {pending?flow.choices.map(function(ch,ci){return <button key={ch} className={"ev-choice-btn"+(next&&next.action==="answer"&&next.cardId===card.id&&ci===0?" btn-next-action":"")} disabled={answeredToday} onClick={function(){onAdvance&&onAdvance(card.id,ch,false);}}>{ch}</button>;}):<button className="ev-choice-btn ev-choice-wait" disabled>ゲージ100%で問い札が出ます</button>}
         {pending&&customAnswerId!==card.id&&<button className="ev-choice-btn ev-choice-custom" disabled={answeredToday} onClick={function(){setCustomAnswerId(card.id);setCustomAnswerText("");}}>この他に、答えを入力する</button>}
         {pending&&customAnswerId===card.id&&<div className="ev-custom-answer">
           <textarea value={customAnswerText} placeholder="自分の言葉で答えてください。" onChange={function(e){setCustomAnswerText(e.target.value);}}/>
