@@ -3781,3 +3781,27 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
   font-size:12px !important;
   font-weight:600;
 }
+
+/* ── v5.50: 提案③ 手紙×残り火 エモーション連動 ── */
+/* 残り火パネルを最上部に */
+.now-ember-panel.nep-top{margin:0;border-top:none;border-bottom:1px solid rgba(219,164,94,.22);order:-1}
+.nep-feeling{font-family:var(--serif);font-size:12px;color:var(--dim);line-height:1.6}
+.nep-question{font-family:var(--serif);font-size:12px;color:var(--ember2);line-height:1.65;margin-top:3px;padding:6px 10px;border-left:2px solid rgba(219,164,94,.5);background:rgba(219,164,94,.06);border-radius:0 6px 6px 0}
+
+/* リッチ手紙結果パネル */
+.lrp-rich{cursor:pointer;transition:opacity .2s}
+.lrp-rich:hover{opacity:.85}
+.lrp-close-hint{font-size:9px;color:var(--faint);text-align:right;font-family:var(--sans);letter-spacing:.08em;margin-bottom:2px}
+.lrp-label{font-family:var(--serif);font-size:12px;color:var(--ember2);letter-spacing:.06em;margin-bottom:4px;font-weight:500}
+/* 残り火フラグメント — 手紙の切れ端のような表示 */
+.lrp-ember-frag{background:rgba(219,164,94,.08);border:1px solid rgba(219,164,94,.22);border-left:3px solid var(--ember);border-radius:0 8px 8px 0;padding:10px 12px;margin:4px 0;display:flex;flex-direction:column;gap:5px;animation:fragIn .3s ease}
+@keyframes fragIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+.lrp-frag-anon{border-left-color:var(--dim);background:rgba(255,255,255,.04)}
+.lrp-frag-title{font-family:var(--serif);font-size:14px;color:var(--ember2);font-weight:500;line-height:1.5}
+.lrp-frag-line{font-family:var(--serif);font-size:12.5px;color:var(--p);line-height:1.65}
+.lrp-frag-question{font-family:var(--serif);font-size:12px;color:var(--co);line-height:1.7;padding:5px 8px;background:rgba(176,168,204,.08);border-radius:5px;margin-top:2px}
+.lrp-frag-progress{display:flex;align-items:center;gap:8px;margin-top:4px}
+.lrp-frag-pct{font-family:var(--mono);font-size:11px;color:var(--ember);font-weight:600}
+.lrp-frag-status{font-family:var(--serif);font-size:10.5px;color:var(--dim)}
+.lrp-route{font-family:var(--serif);font-size:10.5px;color:var(--faint);margin-top:4px}
+.lrp-ip{font-family:var(--mono);font-size:10.5px;color:var(--calm);margin-top:2px}

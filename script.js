@@ -1239,7 +1239,21 @@ function clickLetter(game,facility,letterId){
   ];
   if(fireGain>0)lines.push("「"+fireTitle+"」の回収が進んだ（+"+fireGain+"%）");
   s.logs=[{hours:0,events:[{text:lines.join("\n"),kind:"store",pri:4}],ts:nowISO()}].concat(s.logs||[]).slice(0,30);
-  return{ok:true,state:s,gained:1,stored:stored,content:content,from:beforeLabel?beforeLabel.label:beforeNode,to:afterLabel?afterLabel.label:afterNode,lines:lines,fireGain:fireGain,fireTitle:fireTitle};
+  /* 残り火のコンテキストを手紙結果に含める（提案③：手紙と残り火を感情的に連動） */
+  var emberCtx=null;
+  if(srcCard){
+    emberCtx={
+      title:makeEmberTitle(srcCard),
+      feeling:srcCard.feeling||"",
+      wanted:srcCard.wanted||"",
+      bodyText:srcCard.bodyText||"",
+      question:(srcCard.pendingQuestion&&srcCard.pendingQuestion.question)||srcCard.question||"",
+      status:srcCard.status||"",
+      progress:Math.round(srcCard.progress||0),
+      answerCount:(srcCard.shadowAnswers||[]).length,
+    };
+  }
+  return{ok:true,state:s,gained:1,stored:stored,content:content,from:beforeLabel?beforeLabel.label:beforeNode,to:afterLabel?afterLabel.label:afterNode,lines:lines,fireGain:fireGain,fireTitle:fireTitle,emberCtx:emberCtx};
 }
 /* 表示用：あるノードに今いる手紙を集計し、物理表示4件＋overflowバッジに分ける */
 function getLettersAtNode(game,facility,nodeId){
@@ -3102,6 +3116,22 @@ function NowSceneView(p){
 
   return(
     <div className="now-wrap">
+      {/* 現在進行中の残り火 — 最上部に移動（提案③：残り火ジャーニーを最優先表示） */}
+      {activeEmber&&<div className={"now-ember-panel nep-top"+(emberAtLoc?" nep-here":"")}>
+        <div className="nep-head">処理中の残り火</div>
+        <div className="nep-title">「{makeEmberTitle(activeEmber)}」</div>
+        {activeEmber.feeling&&<div className="nep-feeling">感情：{activeEmber.feeling}</div>}
+        {activeEmber.wanted&&<div className="nep-feeling">本当は：{activeEmber.wanted}</div>}
+        <div className="nep-status">
+          <span className={"nd cd-"+(EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].who||"kotae")}/>
+          <span className="nep-where">{EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].label}</span>
+          <span className="nep-pct">{Math.round(activeEmber.progress||0)}%</span>
+        </div>
+        <Bar value={activeEmber.progress||0} color="var(--ember)" h={4}/>
+        <div className="nep-next">あと{Math.max(0,100-Math.round(activeEmber.progress||0))}%で、{getEmberNextLabel(activeEmber.status)}</div>
+        {activeEmber.pendingQuestion&&activeEmber.pendingQuestion.question&&<div className="nep-question">問い：{activeEmber.pendingQuestion.question}</div>}
+      </div>}
+
       {/* ヘッダー */}
       <div className="now-hdr">
         <div>
@@ -3162,28 +3192,35 @@ function NowSceneView(p){
 
       {/* 気配 */}
       {(function(){var atm=getAtmosphere(game);return atm.length>0&&<div className="now-atm">{atm.map(function(h,i){return <span key={i} className="now-atm-h">・{h}</span>;})}</div>;})()}
-      {letterResult&&<div className={"letter-result-panel"+(letterResult.stored?" letter-result-stored":"")}>
-        <b>{letterResult.stored?"手紙が保管庫に届きました":"手紙が進みました"}</b>
-        {letterResult.content&&<p>中身（{letterResult.content.kind}）：「{letterResult.content.text}」</p>}
-        {!letterResult.stored&&<small>{letterResult.from} → {letterResult.to}</small>}
-        {letterResult.stored&&<small>この小さな火は、消えずに保管されました。</small>}
-        {letterResult.fireGain>0&&<em className="lrp-fire">🔥「{letterResult.fireTitle}」の回収 +{letterResult.fireGain}%</em>}
-        <em>干渉ポイント +{letterResult.gained||1}</em>
-      </div>}
+      {letterResult&&(function(){
+        var ec=letterResult.emberCtx;
+        var storedClass=letterResult.stored?" letter-result-stored":"";
+        return(
+          <div className={"letter-result-panel lrp-rich"+storedClass} onClick={function(){setLetterResult(null);}}>
+            <div className="lrp-close-hint">タップで閉じる</div>
+            <div className="lrp-label">{letterResult.stored?"手紙が保管庫に届きました":"手紙が届いた"}</div>
+            {ec&&<div className="lrp-ember-frag">
+              <div className="lrp-frag-title">「{ec.title}」</div>
+              {ec.feeling&&<div className="lrp-frag-line">感情：{ec.feeling}</div>}
+              {ec.wanted&&<div className="lrp-frag-line">本当は：{ec.wanted}</div>}
+              {ec.question&&<div className="lrp-frag-question">問い：{ec.question}</div>}
+              <div className="lrp-frag-progress">
+                <span className="lrp-frag-pct">{ec.progress}%</span>
+                <span className="lrp-frag-status">{EMBER_STATUS[ec.status]&&EMBER_STATUS[ec.status].label||""}</span>
+              </div>
+            </div>}
+            {!ec&&letterResult.content&&<div className="lrp-ember-frag lrp-frag-anon">
+              <div className="lrp-frag-line">「{letterResult.content.text}」</div>
+            </div>}
+            {letterResult.fireGain>0&&<div className="lrp-fire">🔥 回収進捗 +{letterResult.fireGain}%</div>}
+            <div className="lrp-route">{letterResult.from} → {letterResult.to}</div>
+            <div className="lrp-ip">干渉ポイント +{letterResult.gained||1}</div>
+          </div>
+        );
+      })()}
 
 
-      {/* 現在進行中の残り火 */}
-      {activeEmber&&<div className={"now-ember-panel"+(emberAtLoc?" nep-here":"")}>
-        <div className="nep-head">処理中の残り火</div>
-        <div className="nep-title">「{makeEmberTitle(activeEmber)}」</div>
-        <div className="nep-status">
-          <span className={"nd cd-"+(EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].who||"kotae")}/>
-          <span className="nep-where">{EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].label}</span>
-          <span className="nep-pct">{Math.round(activeEmber.progress||0)}%</span>
-        </div>
-        <Bar value={activeEmber.progress||0} color="var(--ember)" h={3}/>
-        <div className="nep-next">あと{Math.max(0,100-Math.round(activeEmber.progress||0))}%で、{getEmberNextLabel(activeEmber.status)}</div>
-      </div>}
+      {/* 現在進行中の残り火 — 上部に移動済み */}
 
       {canBattle&&<BattleEntryPanel game={game} onOpen={function(){p.onOpenBattle&&p.onOpenBattle();}}/>}
 
