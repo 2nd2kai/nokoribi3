@@ -4179,19 +4179,7 @@ function EmberView(p){
     {receipts.length>0&&<div className="ev-section">
       <div className="lh">受領証</div>
       <p className="ev-receipt-guide">卒業した受領証は「心へ返す」ことができます。心へ返すと、その分だけ箱庭が静かになっていきます。卒業したものを全部返しきると、ひとつの区切りが訪れます。</p>
-      {receipts.map(function(r){var grad=r.receiptStatus==="graduated";return(<div key={r.id} className={"ev-receipt"+(grad?" ev-receipt-grad":"")}>
-        <div className="ev-receipt-head">
-          <div className="ev-card-title">{r.title}</div>
-          <span className={"ev-receipt-badge "+(grad?"erb-grad":"erb-prov")}>{grad?"卒業":"仮"}</span>
-        </div>
-        <ReceiptWordsBox receipt={r}/><ReceiptMetricBox receipt={r}/><pre className="ev-receipt-text">{r.text}</pre>
-        {(r.shadowAnswers||[]).length>0&&<div className="ev-shadow-answers">
-          <div className="bsa-log-title">影と向き合った記録（{r.shadowAnswers.length}回）</div>
-          {r.shadowAnswers.map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">「{a.shadow}」</span><span className="bsa-ans">→「{a.answer}」</span></div>;})}
-        </div>}
-        {grad?<button className="btn btn-burn touchable" onClick={function(){onBurnReceipt&&onBurnReceipt(r.id);}}>心へ返す（燃やす）</button>
-          :<div className="ev-receipt-locked">プラス変化が30%に届くと、心へ返せます（今 {r.positiveGrowthTotal||0}%）</div>}
-      </div>);})}
+      {receipts.map(function(r){var grad=r.receiptStatus==="graduated";return(<ReceiptCard key={r.id} r={r} grad={grad} onBurnReceipt={onBurnReceipt}/>);})}
     </div>}
     {(game.returnedToHeart||[]).length>0&&<div className="ev-section">
       <div className="lh">心へ返したもの</div>
@@ -4210,29 +4198,114 @@ function MetricInput(p){
   </label>;
 }
 
-function buildGeminiPrompt(data,answer){
-  var lines=["以下の残り火データをもとに、この人の火の中にあったものを100〜150字で言語化してください。","アドバイスや評価はしないでください。","「この火の中には〇〇があった」という形式で、断定せず寄り添う文体で書いてください。",""];
-  if(data.writeState)lines.push("状態："+data.writeState);
-  if(data.feeling)lines.push("感情："+data.feeling);
-  if(data.wanted)lines.push("本当は："+data.wanted);
-  if(data.bodyText)lines.push("あなたの言葉："+data.bodyText);
-  if(answer&&answer.trim())lines.push("次の問いへの答え："+answer.trim());
+function ReceiptCard(p){
+  var r=p.r,grad=p.grad;
+  var [copied,setCopied]=useState(false);
+  function copyPrompt(){
+    var prompt=buildGeminiPrompt(r);
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(prompt).then(function(){setCopied(true);setTimeout(function(){setCopied(false);},2500);});
+    }else{
+      var ta=document.createElement("textarea");ta.value=prompt;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);setCopied(true);setTimeout(function(){setCopied(false);},2500);
+    }
+  }
+  return <div className={"ev-receipt"+(grad?" ev-receipt-grad":"")}>
+    <div className="ev-receipt-head">
+      <div className="ev-card-title">{r.title}</div>
+      <span className={"ev-receipt-badge "+(grad?"erb-grad":"erb-prov")}>{grad?"卒業":"仮"}</span>
+    </div>
+    <ReceiptWordsBox receipt={r}/><ReceiptMetricBox receipt={r}/><pre className="ev-receipt-text">{r.text}</pre>
+    {(r.shadowAnswers||[]).length>0&&<div className="ev-shadow-answers">
+      <div className="bsa-log-title">影と向き合った記録（{r.shadowAnswers.length}回）</div>
+      {r.shadowAnswers.map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">「{a.shadow}」</span><span className="bsa-ans">→「{a.answer}」</span></div>;})}
+    </div>}
+    <div className="receipt-ai-block">
+      <div className="receipt-ai-title">AIで深く読む</div>
+      <p className="receipt-ai-desc">この受領証の全記録をもとにした詳細プロンプトを生成します。<br/><a className="acc-ai-link" href="https://gemini.google.com" target="_blank" rel="noopener noreferrer">gemini.google.com</a> に貼り付けると、あなたの火の形を言語化してくれます。</p>
+      <button className={"btn acc-copy-btn"+(copied?" acc-copy-done":"")} onClick={copyPrompt}>
+        {copied?"コピーしました ✓":"受領証プロンプトをコピー"}
+      </button>
+    </div>
+    {grad?<button className="btn btn-burn touchable" onClick={function(){p.onBurnReceipt&&p.onBurnReceipt(r.id);}}>心へ返す（燃やす）</button>
+      :<div className="ev-receipt-locked">プラス変化が30%に届くと、心へ返せます（今 {r.positiveGrowthTotal||0}%）</div>}
+  </div>;
+}
+function buildGeminiPrompt(receipt){
+  var lines=[];
+  lines.push("# 残り火の受領証 — 深層読解プロンプト");
+  lines.push("");
+  lines.push("以下は、ある人が「残り火の箱庭」というアプリで預けた感情の記録です。");
+  lines.push("この人の内側にあったものを、階層立てて丁寧に読み解いてください。");
+  lines.push("");
+  lines.push("## お願いしたいこと");
+  lines.push("- アドバイスや評価はしないでください");
+  lines.push("- 「あなたは〇〇だ」と断定せず、「〜だったのかもしれない」「〜があったように見える」という寄り添う文体で書いてください");
+  lines.push("- 以下の4つの視点で分けて書いてください：");
+  lines.push("  1. **この火の中にあったもの** — 感情の核にあったものは何か");
+  lines.push("  2. **本当はどうしたかったのか** — 表には出なかった願いや期待");
+  lines.push("  3. **問いを持ち歩いた意味** — この人が問いと向き合うことで何が動いたか");
+  lines.push("  4. **今日のこの人へ** — 判決を下さず、ただそばにいる一言");
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push("## 記録データ");
+  lines.push("");
+  if(receipt.writeState)lines.push("**状態（残り火の種類）：** "+receipt.writeState);
+  if(receipt.feeling)lines.push("**そのときの感情：** "+receipt.feeling);
+  if(receipt.wanted)lines.push("**本当は：** "+receipt.wanted);
+  if(receipt.bodyText&&receipt.bodyText.trim()){
+    lines.push("");
+    lines.push("**あなたの言葉（自由記述）：**");
+    lines.push(receipt.bodyText.trim());
+  }
+  if(receipt.memo&&receipt.memo.trim()&&receipt.memo!=="よくやった"){
+    lines.push("");
+    lines.push("**メモ：** "+receipt.memo.trim());
+  }
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push("## 持ち帰った問い");
+  if(receipt.questionTicket&&receipt.questionTicket.question){
+    lines.push("「"+receipt.questionTicket.question+"」");
+  }else if(receipt.nextQuestion){
+    lines.push("「"+receipt.nextQuestion+"」");
+  }else{
+    lines.push("（問いはまだ定まっていない）");
+  }
+  if((receipt.shadowAnswers||[]).length>0){
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+    lines.push("## 影との対話の記録（"+receipt.shadowAnswers.length+"回）");
+    lines.push("この人は「影」（自分の内側にある声）と向き合い、以下のように答えました：");
+    lines.push("");
+    receipt.shadowAnswers.forEach(function(a,i){
+      lines.push((i+1)+". 影の声：「"+a.shadow+"」");
+      lines.push("   この人の答え：「"+a.answer+"」");
+    });
+  }
+  if(receipt.acceptanceText){
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+    lines.push("## 受け取り文（アプリが返した言葉）");
+    lines.push(receipt.acceptanceText);
+  }
+  if(receipt.holdText){
+    lines.push("");
+    lines.push("**今日の保留：** "+receipt.holdText);
+  }
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push("以上の記録をもとに、4つの視点で読み解いてください。");
+  lines.push("長さは合計400〜600字を目安に。この人の火がどんな形をしていたか、感じるように書いてください。");
   return lines.join("\n");
 }
 
 function AcceptanceModal(p){
   var [answer,setAnswer]=useState("");
-  var [copied,setCopied]=useState(false);
-  var hasPromptData=!!(p.writeState||p.feeling||p.wanted||p.bodyText||p.nextQuestion);
-  function copyPrompt(){
-    var prompt=buildGeminiPrompt({writeState:p.writeState,feeling:p.feeling,wanted:p.wanted,bodyText:p.bodyText},answer);
-    if(navigator.clipboard){
-      navigator.clipboard.writeText(prompt).then(function(){setCopied(true);setTimeout(function(){setCopied(false);},2500);});
-    }else{
-      /* フォールバック */
-      var ta=document.createElement("textarea");ta.value=prompt;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);setCopied(true);setTimeout(function(){setCopied(false);},2500);
-    }
-  }
   return <div className="ov" onClick={p.onClose}><div className="bsh acc-modal" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
     <div className="acc-inner">
@@ -4242,13 +4315,6 @@ function AcceptanceModal(p){
         <span className="acc-question-label">次の問い</span>
         <p className="acc-question">{p.nextQuestion}</p>
         <textarea className="acc-answer-input" rows={3} placeholder="答えなくてもいい。書けたら書く。" value={answer} onChange={function(e){setAnswer(e.target.value);}}/>
-      </div>}
-      {hasPromptData&&<div className="acc-ai-section">
-        <p className="acc-ai-label">AIで深く読む</p>
-        <p className="acc-ai-desc">このデータを元にしたプロンプトを生成します。<a className="acc-ai-link" href="https://gemini.google.com" target="_blank" rel="noopener noreferrer">gemini.google.com</a> に貼り付けると、あなたの火の中にあったものを言語化してくれます。</p>
-        <button className={"btn acc-copy-btn"+(copied?" acc-copy-done":"")} onClick={copyPrompt}>
-          {copied?"コピーしました ✓":"プロンプトをコピー"}
-        </button>
       </div>}
       <button className="btn btn-p" style={{width:"100%"}} onClick={p.onClose}>受け取る</button>
     </div>
