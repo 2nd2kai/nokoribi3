@@ -1402,8 +1402,9 @@ function InternalPlaceMap(p){
         var n=nodes.find(function(x){return x.id===em.node;})||nodes[nodes.length-1]||{x:280,y:124};
         return <button className="room-ember-marker" style={{left:(n.x/360*100)+"%",top:((n.y+28)/180*100)+"%"}} onClick={function(e){e.stopPropagation();}}>
           <span className="rem-fire">🔥</span>
-          <span className="rem-label">問い炎</span>
+          <span className="rem-label">回収率</span>
           <span className="rem-pct">{Math.round(em.card.progress||0)}%</span>
+          <span className="rem-desc">100%で問いが届く</span>
         </button>;
       })())}
 
@@ -3234,6 +3235,9 @@ function NowSceneView(p){
           <div className={"letter-result-panel lrp-rich"+storedClass} onClick={function(){setLetterResult(null);}}>
             <div className="lrp-close-hint">タップで閉じる</div>
             <div className="lrp-label">{letterResult.stored?"手紙が保管庫に届きました":"手紙が届いた"}</div>
+            {(letterResult.lines||[]).length>0&&<div className="lrp-lines">
+              {letterResult.lines.map(function(l,i){return <div key={i} className="lrp-change-line">{l}</div>;})}
+            </div>}
             {ec&&<div className="lrp-ember-frag">
               <div className="lrp-frag-title">「{ec.title}」</div>
               {ec.feeling&&<div className="lrp-frag-line">感情：{ec.feeling}</div>}
@@ -3241,15 +3245,14 @@ function NowSceneView(p){
               {ec.question&&<div className="lrp-frag-question">問い：{ec.question}</div>}
               <div className="lrp-frag-progress">
                 <span className="lrp-frag-pct">{ec.progress}%</span>
-                <span className="lrp-frag-status">{EMBER_STATUS[ec.status]&&EMBER_STATUS[ec.status].label||""}</span>
+                <span className="lrp-frag-status">（残り火の回収率 — 100%で問いが届く）</span>
               </div>
             </div>}
             {!ec&&letterResult.content&&<div className="lrp-ember-frag lrp-frag-anon">
               <div className="lrp-frag-line">「{letterResult.content.text}」</div>
             </div>}
-            {letterResult.fireGain>0&&<div className="lrp-fire">🔥 回収進捗 +{letterResult.fireGain}%</div>}
-            <div className="lrp-route">{letterResult.from} → {letterResult.to}</div>
-            <div className="lrp-ip">干渉ポイント +{letterResult.gained||1}</div>
+            {letterResult.fireGain>0&&<div className="lrp-fire">回収率 +{letterResult.fireGain}%</div>}
+            <div className="lrp-ip">見守り +{letterResult.gained||1}</div>
           </div>
         );
       })()}
