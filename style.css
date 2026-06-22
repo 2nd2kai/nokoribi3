@@ -3570,3 +3570,25 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .ev-custom-note{font-size:11px;color:var(--ember2);font-family:var(--serif)}
 .ev-custom-actions{display:flex;gap:10px}
 .ev-custom-actions .btn{flex:1}
+
+/* ── 話者名インライン表示 ── */
+.isc-speaker-inline,
+.cvd-speaker-inline{
+  font-family:var(--sans);
+  font-size:.82em;
+  letter-spacing:.05em;
+  margin-right:2px;
+  font-weight:600;
+}
+
+.isc-line.cd-toyman .isc-speaker-inline{color:var(--ct)}
+.isc-line.cd-kana    .isc-speaker-inline{color:var(--ck)}
+.isc-line.cd-utsuro  .isc-speaker-inline{color:var(--cu)}
+.isc-line.cd-kotae   .isc-speaker-inline{color:var(--co)}
+.isc-line.cd-auditor .isc-speaker-inline{color:var(--ca)}
+
+.cvd-line.cd-toyman .cvd-speaker-inline{color:var(--ct)}
+.cvd-line.cd-kana   .cvd-speaker-inline{color:var(--ck)}
+.cvd-line.cd-utsuro .cvd-speaker-inline{color:var(--cu)}
+.cvd-line.cd-kotae  .cvd-speaker-inline{color:var(--co)}
+.cvd-line.cd-auditor .cvd-speaker-inline{color:var(--ca)}
