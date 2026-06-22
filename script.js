@@ -3448,6 +3448,7 @@ function HomeView(p){
     <section className="home-card"><div className="lh">トイマンのひとこと</div><p className="home-line">「{active?"まだ落としてない。":"置かれたら、拾いに行く。"}」</p></section>
     <section className="home-card"><div className="lh">開いた場所</div>{openPlaces.length>0?<div className="home-place-list">{openPlaces.map(function(k){return <button key={k} className="home-place" onClick={function(){p.onOpenPlace&&p.onOpenPlace(k);}}><b>{PNAME[k]||PSHORT[k]}</b><span>{getPlaceUnlockReason(k)}</span></button>;})}</div>:<div className="closed-place-note">まだ閉じている場所があります。残り火を預けることで、少しずつ開きます。</div>}</section>
     <ClosedPlacesPreview game={game}/>
+    <div className="home-version">MVP確認版 v0.2</div>
   </div>;
 }
 function ClosedPlacesPreview(p){

@@ -3805,6 +3805,7 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .lrp-frag-status{font-family:var(--serif);font-size:10.5px;color:var(--dim)}
 .lrp-route{font-family:var(--serif);font-size:10.5px;color:var(--faint);margin-top:4px}
 .lrp-ip{font-family:var(--mono);font-size:10.5px;color:var(--calm);margin-top:2px}
+.home-version{text-align:center;padding:12px 0 4px;font-size:10px;color:var(--faint);font-family:var(--mono);letter-spacing:.08em;opacity:.6}
 
 /* ── v5.52: タブ追加・戦闘UX・いまのようす明確化 ── */
 
