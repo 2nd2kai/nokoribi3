@@ -454,7 +454,7 @@ function checkUnlocks(s){
    初見では「ホーム / 残り火 / ログ」だけを見せる。
    施設は削除せず、残り火の内容に応じて箱庭内で開く。 */
 const BASE_TABS={home:true,ember:true,log:true,garden:false,titles:false,conv:false,intv:false};
-const BASE_PLACES={inspection_bureau:false,tears_spring:false,starting_room:false,post_office:false,record_tower:false,unexplored_forest:false};
+const BASE_PLACES={inspection_bureau:false,tears_spring:false,starting_room:true,post_office:false,record_tower:false,unexplored_forest:false};
 /* キャラの初登場：最初はトイマンだけ。残り火が進むたびに、担当キャラが順に現れる。
    この版の残り火フローは 探索(トイマン)→保管(うつろ)→休息(かな)→読解(コタエ)。
    審査官は検品庁が開く時に現れる。 */
@@ -2390,6 +2390,7 @@ function CardWorldMap(p){
   var game=p.game,onPlaceSelect=p.onPlaceSelect;
   var active=getActiveEmber(game);
   var emberPlace=active?getEmberPlace(active):null;
+  var openKeys=getUnlockedPlaceKeys(game);
   var places=[
     {key:"post_office",icon:"✉",desc:"手紙を選び、残り火を送り出す場所"},
     {key:"starting_room",icon:"🕯",desc:"残り火が生まれ、最初の言葉を得る部屋"},
@@ -2410,6 +2411,19 @@ function CardWorldMap(p){
       </div>
       <div className="world-card-grid">
         {places.map(function(pl){
+          var unlocked=openKeys.indexOf(pl.key)!==-1;
+          if(!unlocked){
+            return(
+              <div key={pl.key} className="world-place-card world-place-locked" aria-disabled="true">
+                <div className="wpc-top">
+                  <span className="wpc-icon">🔒</span>
+                  <div className="wpc-name">{PSHORT[pl.key]}</div>
+                </div>
+                <div className="wpc-desc">まだ閉じています。</div>
+                <div className="wpc-locked-note">残り火が進むと、ここが開きます。</div>
+              </div>
+            );
+          }
           var m=game.world.map[pl.key]||{};
           var pct=Math.max(0,Math.min(100,Math.round((m.progress_rate||0)*100)));
           var lv=m.level||1;
@@ -2444,6 +2458,7 @@ function CardWorldMap(p){
 
 function MapSVG(p){
   var game=p.game;
+  var openKeys=getUnlockedPlaceKeys(game);
   var dmap={};getAllDeltas(game).forEach(function(d){if(d.dp!==null&&d.dp>0.003)dmap[d.key]=Math.round(d.dp*100);});
   var atNode={};ALL_IDS.forEach(function(id){var k=toNK(game.characters[id].location);if(!atNode[k])atNode[k]=[];atNode[k].push(id);});
   // 残り火の場所マッピング
@@ -2457,7 +2472,8 @@ function MapSVG(p){
       var m=game.world.map[key]||{};var lv=m.level||1,pct=Math.round((m.progress_rate||0)*100);
       var toNext=100-pct;var col=PCOL(key);var eCount=emberNode[key]||0;
       var progressArc=isF?(R*pct/100+" "+R):null;
-      return(<g key={key}>
+      var locked=openKeys.indexOf(key)===-1;
+      return(<g key={key} opacity={locked?0.3:1}>
         <circle cx={n.x} cy={n.y} r={nr} className={"mn"+(isF?" mf":"")}/>
         {/* 全場所に進捗リング */}
         {!isF&&<circle cx={n.x} cy={n.y} r={nr} fill="none" stroke={col} strokeWidth="2.5" strokeDasharray={(2*Math.PI*nr*pct/100)+" "+(2*Math.PI*nr)} strokeDashoffset={2*Math.PI*nr*0.25} opacity="0.65"/>}
