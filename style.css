@@ -4028,4 +4028,17 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 /* Kotae voice in EmberCreate */
 .ec-kotae-voice{display:flex;align-items:center;gap:8px;font-size:12.5px;font-family:var(--serif);color:var(--dim);margin-bottom:8px;letter-spacing:.04em}
 .ec-kv-dot{flex-shrink:0}
+
+/* ── 帰還のぞき見オーバーレイ ── */
+.rcv-overlay{position:absolute;top:0;left:0;right:0;bottom:0;z-index:200;background:rgba(14,12,20,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;animation:op-fadeup .35s ease}
+.rcv-inner{display:flex;flex-direction:column;align-items:center;gap:14px;padding:28px 24px;max-width:320px;width:100%;pointer-events:none}
+.rcv-eyebrow{font-family:var(--sans);font-size:10px;letter-spacing:.18em;color:var(--faint);text-transform:uppercase}
+.rcv-title{font-family:var(--serif);font-size:15px;font-weight:600;color:var(--ember2);letter-spacing:.06em}
+.rcv-scene{background:rgba(255,255,255,.04);border:1px solid rgba(219,164,94,.18);border-radius:12px;padding:18px 20px;width:100%;min-height:90px;display:flex;align-items:center}
+.rcv-line{display:flex;flex-direction:column;gap:6px;width:100%}
+.rcv-speaker{font-family:var(--sans);font-size:11px;letter-spacing:.06em;color:var(--faint)}
+.rcv-say{font-family:var(--serif);font-size:16px;line-height:1.7;color:var(--p);margin:0}
+.rcv-progress{font-family:var(--mono);font-size:10px;color:var(--faint)}
+.rcv-hint{font-size:10px;color:rgba(219,164,94,.55);letter-spacing:.08em}
+.rcv-skip{position:absolute;bottom:28px;right:20px;background:none;border:none;color:var(--faint);font-family:var(--sans);font-size:11px;letter-spacing:.06em;cursor:pointer;padding:6px 10px;pointer-events:auto}
 .ec-kv-say{line-height:1.6}
