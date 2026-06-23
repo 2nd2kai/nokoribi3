@@ -1142,7 +1142,27 @@ function getPersonalShadowVoices(card){
   if(voices.length===0)voices=["どうせ届いてない。","見られていないものは、なかったのと同じだ。","その火、誰が受け取るの？"];
   return voices;
 }
+/* 向き合った回数（言葉を残した回数）から、影の「濃さ」を求める。
+   何度も言葉をぶつけた影は、薄れていく。戦闘数値ではなく、声と見た目だけが変わる。 */
+function getShadowIntensity(card){
+  var n=(card&&card.shadowAnswers)?card.shadowAnswers.filter(function(a){return a&&a.answer;}).length:0;
+  if(n>=5)return{level:3,count:n,label:"かすかな声",ratio:0.12};
+  if(n>=3)return{level:2,count:n,label:"薄れていく声",ratio:0.4};
+  if(n>=1)return{level:1,count:n,label:"揺らぐ声",ratio:0.72};
+  return{level:0,count:n,label:"濃い影",ratio:1};
+}
+/* 何度も向き合われた影が漏らす、和らいだ声。鋭さが抜けていく。 */
+const SOFTENED_SHADOW_VOICES=[
+  "……もう、そんなに強くは言えない。",
+  "……あなたがそう言うなら。",
+  "……まだここにいるけど、前ほど確かじゃない。",
+  "……聞こえては、いる。",
+  "……そうか。そう思って、書いたのか。"
+];
 function getShadowVoiceForCard(card,index){
+  var intensity=getShadowIntensity(card);
+  /* 3回以上向き合った影は、声のトーンが鋭→静へ変わる */
+  if(intensity.level>=2)return SOFTENED_SHADOW_VOICES[Math.abs(index||0)%SOFTENED_SHADOW_VOICES.length];
   var voices=card?getPersonalShadowVoices(card):SHADOW_VOICES["未受領の影"];
   return voices[Math.abs(index||0)%voices.length];
 }
@@ -2499,7 +2519,31 @@ function burnReceipt(game,receiptId){
   }
   return{ok:true,state:s,msg:"「"+receipt.title+"」を心へ返した。",isEnding:!!s.endingReady};
 }
-function generateReceiptText(card){var lines=[];if(card&&card.route==="judgment_conversion"){lines.push("── 判決変換ルート ──","","最初、それは判決のように届いた。","「何にもならない気がした」","","審査官は成果なしの札を出そうとした。","けれど、コタエがその札を伏せた。","","これは失敗ではなく、まだ答えになっていない問いです。","","問い：","これは、何になってほしかったのか？","","受領名：","何になってほしかったのかを探す火","","判決としてではなく、問いとして受け取る。");return lines.join("\n");}var lines=[];if(card.writeState)lines.push("── "+card.writeState+" ──","");if(card.feeling)lines.push("「"+card.feeling+"」のまま残っていた。");if(card.wanted)lines.push(card.wanted==="まだ分からない"?"本当は、何を求めていたのか、まだ分からない。":"本当は、"+card.wanted+"。");if(card.questionTicket)lines.push("","持ち帰られた問い：","「"+card.questionTicket.question+"」");lines.push("","空っぽになったのは、","そこに何もなかったからではない。","","そこに火があったからだ。","","私は、これを感じていた。","私は、これを書いた。","私は、ここで終われなかった。","","だからこれは、失敗ではなく、","私が確かに燃えていた証として受け取る。");return lines.join("\n");}
+function generateReceiptText(card){
+  var lines=[];
+  if(card&&card.route==="judgment_conversion"){lines.push("── 判決変換ルート ──","","最初、それは判決のように届いた。","「何にもならない気がした」","","審査官は成果なしの札を出そうとした。","けれど、コタエがその札を伏せた。","","これは失敗ではなく、まだ答えになっていない問いです。","","問い：","これは、何になってほしかったのか？","","受領名：","何になってほしかったのかを探す火","","判決としてではなく、問いとして受け取る。");return lines.join("\n");}
+  if(card.writeState)lines.push("── "+card.writeState+" ──","");
+  if(card.feeling)lines.push("「"+card.feeling+"」のまま残っていた。");
+  if(card.wanted)lines.push(card.wanted==="まだ分からない"?"本当は、何を求めていたのか、まだ分からない。":"本当は、"+card.wanted+"。");
+  if(card.questionTicket)lines.push("","持ち帰られた問い：","「"+card.questionTicket.question+"」");
+  lines.push("","空っぽになったのは、","そこに何もなかったからではない。","","そこに火があったからだ。");
+  /* ── あなた自身が残した言葉を編み込む。向き合った数だけ、受領証はあなたの声で厚くなる ── */
+  if(card.bodyText&&card.bodyText.trim()){
+    lines.push("","── 預けたときの、私の言葉 ──","",card.bodyText.trim());
+  }
+  var answered=(card.shadowAnswers||[]).filter(function(a){return a&&a.answer&&String(a.answer).trim();});
+  if(answered.length>0){
+    lines.push("","── 私が、影に返した言葉（"+answered.length+"回）──","");
+    answered.forEach(function(a){
+      lines.push("影は言った。「"+a.shadow+"」");
+      lines.push("私は答えた。「"+String(a.answer).trim()+"」");
+      lines.push("");
+    });
+    lines.push("これは、誰かにもらった言葉ではない。","私が、この火のために自分で見つけた言葉だ。");
+  }
+  lines.push("","私は、これを感じていた。","私は、これを書いた。","私は、ここで終われなかった。","","だからこれは、失敗ではなく、","私が確かに燃えていた証として受け取る。");
+  return lines.join("\n");
+}
 
 
 function shortText(t,n){t=String(t||"");n=n||64;return t.length>n?t.slice(0,n)+"……":t;}
@@ -3067,22 +3111,36 @@ function SceneResultPop(p){
   return(<div className="ev-result-pop">{lines.map(function(l,i){return <div key={i} className="ev-pop-line">{l}</div>;})}</div>);
 }
 
+/* 入力補助：タップで書き出しを差し込める起点フレーズ。書く心理的ハードルを下げる。 */
+const SHADOW_REPLY_STARTERS=["それでも書いたのは、","本当は、こう言いたかった。","この声に言い返すなら、","わたしがこれを残したのは、"];
+function appendStarterTo(setter,phrase){setter(function(prev){return prev&&prev.trim()?prev.replace(/\s*$/,"")+"\n"+phrase:phrase;});}
+
+/* 箱庭タブの導線：その場でひと言だけ返す軽量版。じっくり書きたいときは全画面へ。 */
 function BattleEntryPanel(p){
   var game=p.game;
   var pv=makeBattlePreview(game);
   var card=getToymanBattleEmber(game);
+  var [quick,setQuick]=useState("");
   if(!card)return null;
   var voice=getShadowVoiceForCard(card,pv.turns||0);
+  var intensity=getShadowIntensity(card);
+  var disabled=pv.mod.blocked||pv.cooldownMs>0||game.characters.toyman.lastAction!=="exploring";
+  function sendQuick(){if(!quick.trim())return;p.onManualBattle&&p.onManualBattle("hold",quick.trim());setQuick("");}
   return(
-    <div className="battle-entry-panel">
+    <div className={"battle-entry-panel si-lv"+intensity.level}>
       <div className="battle-entry-head">
         <span>「{makeEmberTitle(card)}」に、影の声が届いている</span>
+        <span className="bep-intensity">{intensity.label}</span>
       </div>
       <div className="shadow-voice-box svb-inline">
         <p className="svb-voice">「{voice}」</p>
       </div>
-      <small className="battle-entry-sub">押さなくても自動で進みます。向き合うと、あなたの言葉が残り火に刻まれます。</small>
-      <button className="btn btn-p battle-open-btn" onClick={p.onOpen}>この声と向き合う</button>
+      <div className="battle-entry-quick">
+        <input className="beq-input" type="text" placeholder="その場でひと言、返す（任意）" value={quick} onChange={function(e){setQuick(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter")sendQuick();}}/>
+        <button className="btn btn-p beq-send" disabled={disabled||!quick.trim()} onClick={sendQuick}>渡す</button>
+      </div>
+      <button className="battle-open-link" onClick={p.onOpen}>じっくり書いて向き合う →</button>
+      <small className="battle-entry-sub">押さなくても自動で進みます。{pv.cooldownMs>0?"（少し待つと、また返せます）":"渡した言葉は残り火に刻まれます。"}</small>
     </div>
   );
 }
@@ -3092,61 +3150,6 @@ function BattleActionButton(p){
     <b>{a.label}</b><span>{a.sub}</span><small>{a.hint}</small>
   </button>;
 }
-function BattleEncounterModal(p){
-  var game=p.game;
-  var pv=makeBattlePreview(game);
-  var card=getToymanBattleEmber(game);
-  var result=p.result;
-  var [selfAnswer,setSelfAnswer]=useState("");
-  var cdSec=Math.ceil((pv.cooldownMs||0)/1000);
-  var disabled=pv.mod.blocked||pv.cooldownMs>0||!card||game.characters.toyman.lastAction!=="exploring";
-  var pastAnswers=(card&&card.shadowAnswers)||[];
-  function doSubmit(){p.onManualBattle&&p.onManualBattle("hold",selfAnswer);setSelfAnswer("");}
-  function doSilent(){p.onManualBattle&&p.onManualBattle("hold","");setSelfAnswer("");}
-  function doRetreat(){p.onManualBattle&&p.onManualBattle("retreat","");setSelfAnswer("");}
-  return(
-    <div className="ov battle-ov" onClick={p.onClose}>
-      <div className="battle-modal" onClick={function(e){e.stopPropagation();}}>
-        <div className="sh-handle"/>
-        <div className="battle-title-row">
-          <div><div className="battle-k">影と向き合う</div>{card&&<p className="battle-card-name">「{makeEmberTitle(card)}」</p>}</div>
-          <button className="care-x" onClick={p.onClose}>×</button>
-        </div>
-        <div className="shadow-voice-box">
-          <p className="svb-label">影の声</p>
-          <p className="svb-voice">「{pv.voice}」</p>
-          <p className="svb-context">書いたあとに浮かぶ内なる声。判決ではなく、声として聞く。</p>
-        </div>
-        <div className="battle-self-answer-box">
-          <label className="bsa-label">この声に、あなたの言葉を返す</label>
-          <textarea className="bsa-input" rows={3} placeholder={"自由に書いてください。\nこの声に対して思うこと、\nあなたが書いたものについての本音、何でも。"} value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
-          {selfAnswer.trim()&&<p className="bsa-bonus">この言葉は残り火に刻まれます。受領証に残ります。</p>}
-        </div>
-        <div className="battle-face-actions">
-          <button className="btn btn-p" disabled={disabled||!selfAnswer.trim()} onClick={doSubmit}>言葉を渡して前へ進む</button>
-          <button className="btn btn-g" disabled={disabled} onClick={doSilent}>言葉なしで前へ進む</button>
-          <button className="btn btn-g battle-retreat-btn" onClick={doRetreat}>今日はここまでにする</button>
-        </div>
-        {pv.cooldownMs>0&&<p className="battle-cd">次に向き合えるまで あと {cdSec} 秒</p>}
-        {pv.mod.blocked&&<p className="battle-note">{pv.mod.note}</p>}
-        <div className="battle-progress-row">
-          <span>回収率</span><b>{pv.progress}%</b>
-          <Bar value={pv.progress} color="var(--ember)" h={4}/>
-        </div>
-        {pastAnswers.length>0&&<div className="bsa-log">
-          <div className="bsa-log-title">これまでの向き合い（{pastAnswers.length}回）</div>
-          {pastAnswers.slice(-3).map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">「{a.shadow}」</span>{a.answer&&<span className="bsa-ans">→「{a.answer}」</span>}</div>;})}
-        </div>}
-        {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")+(result.reached100?" battle-result-reached":"")}>
-          {result.reached100&&<div className="battle-reached-banner">問いが届いた</div>}
-          <b>{result.msg||"結果"}</b>
-          {result.ok&&<p className="br-progress">回収率 {pv.progress}%</p>}
-        </div>}
-      </div>
-    </div>
-  );
-}
-
 function BattleEncounterScreen(p){
   var game=p.game;
   var [result,setResult]=useState(null);
@@ -3155,6 +3158,7 @@ function BattleEncounterScreen(p){
   var card=getToymanBattleEmber(game);
   var cdSec=Math.ceil((pv.cooldownMs||0)/1000);
   var disabled=pv.mod.blocked||pv.cooldownMs>0||!card||game.characters.toyman.lastAction!=="exploring";
+  var intensity=getShadowIntensity(card);
   function doSubmit(){var r=p.onManualBattle&&p.onManualBattle("hold",selfAnswer);if(r)setResult(r);setSelfAnswer("");}
   function doRetreat(){var r=p.onManualBattle&&p.onManualBattle("retreat","");if(r)setResult(r);}
   return(
@@ -3176,12 +3180,23 @@ function BattleEncounterScreen(p){
           {card.shadowAnswers.slice(-3).map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">「{a.shadow}」</span>{a.answer&&<span className="bsa-ans">→「{a.answer}」</span>}</div>;})}
         </div>}
       </div>}
-      <div className="shadow-voice-box shadow-voice-full">
-        <p className="svb-label">影の声</p>
+      <div className={"shadow-voice-box shadow-voice-full si-lv"+intensity.level}>
+        <div className="svb-top">
+          <p className="svb-label">影の声</p>
+          {card&&<span className="shadow-intensity">
+            <span className="si-label">{intensity.label}</span>
+            <span className="si-dots">{[0,1,2,3].map(function(i){return <span key={i} className={"si-dot"+(i<(4-intensity.level)?" si-dot-on":"")}/>;})}</span>
+          </span>}
+        </div>
         <p className="svb-voice">「{pv.voice}」</p>
+        {intensity.level>=2&&<p className="svb-soften-note">あなたの言葉が届いている。影が、薄れてきた。</p>}
       </div>
       <div className="battle-self-answer-box">
         <label className="bsa-label">この声に、あなたの言葉を返す</label>
+        <div className="bsa-starters">
+          <span className="bsa-starters-hint">書き出しに迷ったら：</span>
+          {SHADOW_REPLY_STARTERS.map(function(s){return <button key={s} type="button" className="bsa-chip" onClick={function(){appendStarterTo(setSelfAnswer,s);}}>{s}</button>;})}
+        </div>
         <textarea className="bsa-input" rows={4} placeholder={"自由に書いてください。\nこの声に対して思うこと、\nあなたが書いたものについての本音、何でも。\n（書かなくても前へ進めます）"} value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
         {selfAnswer.trim()&&<p className="bsa-bonus">この言葉は残り火に刻まれます。受領証に残ります。</p>}
       </div>
@@ -3456,7 +3471,7 @@ function NowSceneView(p){
 
       {/* 現在進行中の残り火 — 上部に移動済み */}
 
-      {canBattle&&<BattleEntryPanel game={game} onOpen={function(){p.onOpenBattle&&p.onOpenBattle();}}/>}
+      {canBattle&&<BattleEntryPanel game={game} onManualBattle={p.onManualBattle} onOpen={function(){p.onOpenBattle&&p.onOpenBattle();}}/>}
 
       {/* この場所を進めると */}
       {benefits.length>0&&<div className="now-benefits">
@@ -3964,7 +3979,7 @@ function App(){
     {departTargetId&&<DepartureOverlay card={(game.emberCards||[]).find(function(c){return c.id===departTargetId;})} onCancel={function(){setDepartTargetId(null);}} onConfirm={function(){confirmDepartCb(departTargetId);}}/>}
     {burnTargetId&&<BurnConfirmModal receipt={(game.receipts||[]).find(function(r){return r.id===burnTargetId;})} onCancel={function(){setBurnTargetId(null);}} onConfirm={function(){confirmBurnCb(burnTargetId);}}/>}
     {(game.introQueue||[]).length>0&&<IntroSceneOverlay scene={INTRO_SCENES[(game.introQueue||[])[0]]} onClose={function(){dismissIntroSceneCb((game.introQueue||[])[0]);}}/>}
-    {receiptAcceptance&&<AcceptanceModal text={receiptAcceptance.text} holdText={receiptAcceptance.holdText} nextQuestion={receiptAcceptance.nextQuestion} writeState={receiptAcceptance.writeState} feeling={receiptAcceptance.feeling} wanted={receiptAcceptance.wanted} bodyText={receiptAcceptance.bodyText} onClose={function(){setReceiptAcceptance(null);}}/>}
+    {receiptAcceptance&&<AcceptanceModal text={receiptAcceptance.text} holdText={receiptAcceptance.holdText} nextQuestion={receiptAcceptance.nextQuestion} writeState={receiptAcceptance.writeState} feeling={receiptAcceptance.feeling} wanted={receiptAcceptance.wanted} bodyText={receiptAcceptance.bodyText} shadowAnswers={receiptAcceptance.shadowAnswers} onClose={function(){setReceiptAcceptance(null);}}/>}
     {witnessTargetId&&(function(){var wc=(game.emberCards||[]).find(function(c){return c.id===witnessTargetId;});return wc?<WitnessOverlay card={wc} game={game} onComplete={function(){setReceiveTargetId(witnessTargetId);setWitnessTargetId(null);}} onClose={function(){setWitnessTargetId(null);}}/>:null;})()}
     {sendGiftOpen&&<SendGiftModal onClose={function(){setSendGiftOpen(false);}} onSend={sendGiftCb}/>}
     {receiveTarget&&<ReceiptReceiveModal card={receiveTarget} onClose={function(){setReceiveTargetId(null);}} onSubmit={function(input){
@@ -3974,7 +3989,7 @@ function App(){
       addWatchGauge("receive_ember",25);
       var latest=(ns.receipts||[])[0];
       if(latest){
-        setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",holdText:latest.holdText||null,nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？",writeState:latest.writeState||"",feeling:latest.feeling||"",wanted:latest.wanted||"",bodyText:latest.bodyText||""});
+        setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",holdText:latest.holdText||null,nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？",writeState:latest.writeState||"",feeling:latest.feeling||"",wanted:latest.wanted||"",bodyText:latest.bodyText||"",shadowAnswers:latest.shadowAnswers||[]});
       }
     }}/>}
     {toast&&<div className="toast">{toast}</div>}
@@ -4787,6 +4802,20 @@ function AcceptanceModal(p){
         </div>;
       })()}
       <p className="acc-text acc-text-small">{p.text}</p>
+      {(function(){
+        var answered=(p.shadowAnswers||[]).filter(function(a){return a&&a.answer&&String(a.answer).trim();});
+        if(answered.length===0)return null;
+        return <div className="acc-words-trail">
+          <div className="awt-head">あなたはこの火に、{answered.length}個の言葉を残しました</div>
+          <div className="awt-list">
+            {answered.slice(-4).map(function(a,i){return <div key={i} className="awt-item">
+              <span className="awt-shadow">「{a.shadow}」</span>
+              <span className="awt-ans">→「{String(a.answer).trim()}」</span>
+            </div>;})}
+          </div>
+          <p className="awt-foot">この言葉は、受領証にそのまま刻まれました。</p>
+        </div>;
+      })()}
       {p.holdText&&<div className="acc-hold-block">
         <span className="isc-dot cd-utsuro acc-hold-dot"/>
         <span className="acc-hold-utsuro">うつろ：</span>

@@ -4196,3 +4196,40 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .battle-ov{z-index:30}
 .ev-shadow-answers{display:flex;flex-direction:column;gap:6px;padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid var(--line2);border-radius:10px}
 .battle-note{font-size:11.5px;color:var(--faint);font-family:var(--serif);line-height:1.6}
+
+/* ── 提案2：受領の瞬間に「言葉の軌跡」を主役で見せる ── */
+.acc-words-trail{margin:14px 0;padding:14px 15px;background:linear-gradient(180deg,rgba(219,164,94,.08),rgba(219,164,94,.03));border:1px solid rgba(219,164,94,.25);border-radius:12px;display:flex;flex-direction:column;gap:10px}
+.awt-head{font-family:var(--serif);font-size:14px;color:var(--ember2);letter-spacing:.04em;line-height:1.6}
+.awt-list{display:flex;flex-direction:column;gap:9px}
+.awt-item{display:flex;flex-direction:column;gap:3px;font-family:var(--serif);line-height:1.7}
+.awt-shadow{font-size:12.5px;color:var(--faint)}
+.awt-ans{font-size:14px;color:var(--p);padding-left:12px;border-left:2px solid rgba(219,164,94,.4)}
+.awt-foot{font-size:11.5px;color:var(--dim);font-family:var(--serif);margin:0;letter-spacing:.03em}
+
+/* ── 提案3：影の濃さ（向き合うほど薄れる） ── */
+.svb-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.shadow-intensity{display:flex;align-items:center;gap:7px}
+.si-label{font-size:10.5px;color:var(--faint);letter-spacing:.06em;font-family:var(--sans)}
+.si-dots{display:inline-flex;gap:3px}
+.si-dot{width:7px;height:7px;border-radius:50%;background:rgba(232,227,212,.12);transition:background .4s ease}
+.si-dot-on{background:var(--ct);box-shadow:0 0 6px -1px rgba(192,56,56,.6)}
+.svb-soften-note{font-size:11.5px;color:var(--co);font-family:var(--serif);line-height:1.6;margin:4px 0 0;letter-spacing:.03em}
+.shadow-voice-full.si-lv2 .svb-voice,.shadow-voice-full.si-lv3 .svb-voice{color:var(--dim)}
+.shadow-voice-full.si-lv3 .svb-voice{opacity:.78}
+.battle-entry-panel.si-lv2,.battle-entry-panel.si-lv3{background:linear-gradient(180deg,rgba(176,168,204,.06),rgba(176,168,204,.02))}
+.bep-intensity{font-size:10px;color:var(--faint)!important;letter-spacing:.06em;font-weight:400!important}
+
+/* ── 提案4：書き出し起点フレーズ（入力ハードルを下げる） ── */
+.bsa-starters{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.bsa-starters-hint{font-size:11px;color:var(--faint);font-family:var(--sans);margin-right:2px}
+.bsa-chip{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:999px;color:var(--dim);font-size:11.5px;padding:5px 11px;cursor:pointer;font-family:var(--serif);letter-spacing:.02em;transition:border-color .2s,color .2s}
+.bsa-chip:hover{border-color:var(--ember);color:var(--p)}
+
+/* ── 提案5：箱庭タブの「その場でひと言」インライン導線 ── */
+.battle-entry-quick{display:flex;gap:8px;align-items:stretch}
+.beq-input{flex:1;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-family:var(--serif);font-size:13.5px;color:var(--p);box-sizing:border-box}
+.beq-input::placeholder{color:var(--faint)}
+.beq-send{padding:8px 16px;font-size:13px;flex-shrink:0}
+.beq-send:disabled{opacity:.4;cursor:not-allowed}
+.battle-open-link{background:none;border:none;color:var(--ember2);font-size:12.5px;font-family:var(--sans);cursor:pointer;padding:2px 0;text-align:left;letter-spacing:.03em}
+.battle-open-link:hover{text-decoration:underline}
