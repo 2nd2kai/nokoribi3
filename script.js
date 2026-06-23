@@ -626,6 +626,15 @@ const getCharsAtLoc=function(game,loc){if(!game||!game.characters||!loc)return[]
 /* ── アイテム付与 ── */
 function grantItem(s,key,count){if(!s.inventory)s.inventory={};s.inventory[key]=(s.inventory[key]||0)+count;}
 
+/* ── 灯貨：捨てなかった証 ── */
+/* 灯貨は作品の価値を測らない。捨てられそうになった言葉の中に、
+   まだ消してはいけない火を見つけた証として発行される。 */
+function grantToka(s,amount,reason){
+  if(!s.toka)s.toka={total:0,log:[]};
+  s.toka.total=(s.toka.total||0)+amount;
+  s.toka.log=[{amount:amount,reason:reason,at:nowISO()}].concat(s.toka.log||[]).slice(0,50);
+}
+
 /* ── 称号チェック＆付与 ── */
 function checkAndGrantAchievements(s,rewards){
   if(!s.achievements)s.achievements={};
@@ -824,6 +833,7 @@ function migrateGame(g){
   if(!g.battle.lastManualBattleAt)g.battle.lastManualBattleAt=0;
   if(!g.battle.lastLines)g.battle.lastLines=[];
   if(g.battle.encounter===undefined)g.battle.encounter=null;
+  if(!g.toka)g.toka={total:0,log:[]};
   if(!g.inventory)g.inventory={ash_fragment:0,nameless_envelope:0,water_drop:0,unread_paper:0,small_light:0,pending_tag:0,red_stamp_mark:0,lost_voice:0,dried_tear:0,old_ink:0,question_ticket:0};
   if(!g.achievements)g.achievements={};
   if(!g.unlocks)g.unlocks={scene_book:false,intervention:false,world_record:false,title_book:false,item_book:false};
@@ -957,6 +967,7 @@ function initGame(){
     battle:{watch:0,lastManualBattleAt:0,manualCount:0,lastLines:[],encounter:null},
     emberCards:[],receipts:[],
     ip:{cur:5,max:20,lastCalc:now},mapTouch:{cur:1,max:6,lastCalc:now},unlockedConvs:[],readConvs:[],receivedScenes:[],readStories:[],returnedToHeart:[],endingReady:false,endingSeen:false,introQueue:[],seenIntroScenes:[],dailyGoals:{date:"",goals:[]},policy:"care",logs:[],archive:[],
+    toka:{total:0,log:[]},
     inventory:{ash_fragment:0,nameless_envelope:0,water_drop:0,unread_paper:0,small_light:0,pending_tag:0,red_stamp_mark:0,lost_voice:0,dried_tear:0,old_ink:0},
     achievements:{},unlocks:{scene_book:false,intervention:false,world_record:false,title_book:false,item_book:false,tabs:Object.assign({},BASE_TABS),places:Object.assign({},BASE_PLACES)},
     recentRewards:[],newAchievements:[],
@@ -2078,6 +2089,8 @@ function applyJudgmentConversionRoute(state,card){
   ],ts:nowISO()}].concat(s.logs||[]).slice(0,30);
   s.lastSavedAt=nowISO();
   unlockPlacesFromCard(s,c,false);
+  if(!s.toka)s.toka={total:0,log:[]};
+  grantToka(s,3,"判決を確定せず、問いとして保留した。");
   return{state:s,card:c,converted:true,event:ev};
 }
 function addNewEmberToState(game,card){
@@ -2101,6 +2114,8 @@ function addNewEmberToState(game,card){
   });
   var s=Object.assign({},game,{emberCards:[unit].concat(game.emberCards||[]),lastSavedAt:nowISO(),recentPlaceUnlocks:[]});
   unlockPlacesFromCard(s,unit,false);
+  if(!s.toka)s.toka={total:0,log:[]};
+  grantToka(s,1,"捨てずに預けた。今夜の火を、なかったことにしなかった。");
   return{state:s,card:unit,converted:false,event:null};
 }
 
@@ -2567,7 +2582,12 @@ function receiveEmberCard(game,emberId,receiptInput){
   s.emberCards=(s.emberCards||[]).filter(function(c){return c.id!==emberId;});
   s.ip.cur=Math.min(s.ip.max,(s.ip.cur||0)+(growth.canGraduate?3:1));
   grantItem(s,"red_stamp_mark",1);
-  var rw=[{type:"receipt",title:receipt.title},{type:"item",name:ITEM_NAMES.red_stamp_mark,count:1},{type:"ip",amount:growth.canGraduate?3:1}];
+  /* 灯貨：受領時の価値発見。指標の平均値（0-100）÷10 の灯貨を発行。最低1枚。 */
+  if(!s.toka)s.toka={total:0,log:[]};
+  var cur=growth.current||{};
+  var tokaAmt=Math.max(1,Math.round(((cur.satisfaction||0)+(cur.meaning||0)+(cur.value||0))/3/10));
+  grantToka(s,tokaAmt,"この火の中に、まだ消してはいけない火を確認した。");
+  var rw=[{type:"receipt",title:receipt.title},{type:"item",name:ITEM_NAMES.red_stamp_mark,count:1},{type:"ip",amount:growth.canGraduate?3:1},{type:"toka",amount:tokaAmt}];
   checkAndGrantAchievements(s,rw);
   checkUnlocks(s);
   s.recentRewards=rw;
@@ -3869,9 +3889,9 @@ function HomeView(p){
       </section>;
     })()}
     <section className="home-card bad-night-entry">
-      <div className="lh">緊急保留</div>
+      <div className="lh">判決保留</div>
       <h3 className="bne-title">書くのをやめようとしている、あなたへ</h3>
-      <p className="bne-desc">何を考えても悪い方向に行く夜は、結論を出さないための場所へ行けます。</p>
+      <p className="bne-desc">心が沈んでいるとき、結論を出さないための場所へ行けます。判決は、今夜受理しません。</p>
       <button className="btn btn-g" onClick={function(){p.onBadNight&&p.onBadNight();}}>今夜の判決を保留する</button>
     </section>
     <section className="home-card home-today-end-section">
@@ -3879,6 +3899,11 @@ function HomeView(p){
       <p>無理に続けなくていい。今日見た分は、ちゃんと残ります。</p>
       <button className="btn btn-g home-today-btn" onClick={function(){p.onTodayEnd&&p.onTodayEnd();}}>今日はここで閉じる</button>
     </section>
+    {(game.toka&&game.toka.total>0)&&<div className="home-toka-bar">
+      <span className="htb-label">灯貨</span>
+      <span className="htb-count">{game.toka.total}</span>
+      <span className="htb-desc">捨てなかった証</span>
+    </div>}
     <div className="home-version">残り火の箱庭</div>
   </div>;
 }
@@ -4514,8 +4539,15 @@ function verdictToQuestion(verdict,freeText){
 function tomorrowMorningISO(){
   var d=new Date();d.setDate(d.getDate()+1);d.setHours(6,0,0,0);return d.toISOString();
 }
+const BAD_NIGHT_WEIGHTS=[
+  {id:"light",label:"少し重い",desc:"何かが引っかかっている"},
+  {id:"heavy",label:"かなり重い",desc:"頭の中でずっとループしている"},
+  {id:"dark",label:"全部が暗い",desc:"出口が見えない"},
+  {id:"nolang",label:"言葉が出てこない",desc:"形にもできない"}
+];
 function BadNightMode(p){
   var [step,setStep]=useState(0);
+  var [weight,setWeight]=useState("");
   var [verdict,setVerdict]=useState("");
   var [freeVerdict,setFreeVerdict]=useState("");
   var [pain,setPain]=useState("");
@@ -4525,25 +4557,23 @@ function BadNightMode(p){
   var isFreeP=pain==="自由に書く";
   var effectiveVerdict=isFreeV?freeVerdict.trim():verdict;
   var effectivePain=isFreeP?freePain.trim():pain;
-  var question=done?verdictToQuestion(effectiveVerdict,freeVerdict):"";
-  function goStep1(){setStep(1);}
-  function goStep2(){if(!effectiveVerdict)return;setStep(2);}
-  function goStep3(){
-    if(!effectivePain)return;
-    var q=verdictToQuestion(effectiveVerdict,freeVerdict);
+  var isNoLang=weight==="nolang";
+  function saveCard(vt,pt){
+    var q=verdictToQuestion(vt||"まだ言葉にできない","");
     var card={
       id:"e"+Date.now(),
       route:"judgment_conversion",
       mode:"bad_night",
-      writeState:"バッドの夜に判決が出た",
-      feeling:effectivePain||"まだ分からない",
+      weightLevel:weight,
+      writeState:"心が沈んでいるとき、判決が出た",
+      feeling:pt||"まだ分からない",
       wanted:"まだ分からない",
       title:"今夜の判決",
-      memo:effectiveVerdict,
+      memo:vt||"（言葉にならなかった）",
       bodyText:isFreeV?freeVerdict:"",
       reaction:"",
-      judgmentText:effectiveVerdict,
-      painText:effectivePain,
+      judgmentText:vt||"（言葉にならなかった）",
+      painText:pt||"",
       question:q,
       holdText:"今夜の判決は、今日は受理しません。",
       holdUntil:tomorrowMorningISO(),
@@ -4556,9 +4586,14 @@ function BadNightMode(p){
     };
     p.onSubmit&&p.onSubmit(card);
     setDone(true);
-    setStep(3);
+    setStep(99);
+    return q;
   }
-  if(done&&step===3){
+  function goStep1(){if(!weight)return;if(isNoLang){saveCard("","");return;}setStep(1);}
+  function goStep2(){if(!effectiveVerdict)return;setStep(2);}
+  function goStep3(){if(!effectivePain)return;saveCard(effectiveVerdict,effectivePain);}
+  if(done&&step===99){
+    var finalQ=verdictToQuestion(effectiveVerdict||"まだ言葉にできない","");
     return <div className="ov bad-night-ov"><div className="bsh bad-night-done" onClick={function(e){e.stopPropagation();}}>
       <div className="sh-handle"/>
       <div className="bnd-inner">
@@ -4566,13 +4601,19 @@ function BadNightMode(p){
           <div className="bnd-char"><span className="isc-dot cd-auditor bnd-dot"/><span className="bnd-name">審査官</span><span className="bnd-say">「今夜の判決は受理しない。保留だ。」</span></div>
           <div className="bnd-char"><span className="isc-dot cd-utsuro bnd-dot"/><span className="bnd-name">うつろ</span><span className="bnd-say">「封筒に入れた。明日まで、捨てない。」</span></div>
           <div className="bnd-char"><span className="isc-dot cd-toyman bnd-dot"/><span className="bnd-name">トイマン</span><span className="bnd-say">「問いとして持ち帰る。答えは今はいらない。」</span></div>
+          <div className="bnd-char"><span className="isc-dot cd-kana bnd-dot"/><span className="bnd-name">かな</span><span className="bnd-say">「痛かったんだね。それは、軽くない。」</span></div>
         </div>
-        <div className="bnd-result">
+        {!isNoLang&&effectiveVerdict&&<div className="bnd-result">
           <div className="bnd-result-label">判決</div>
           <div className="bnd-result-verdict">「{effectiveVerdict}」</div>
           <div className="bnd-result-label" style={{marginTop:"14px"}}>問いとして預けた</div>
-          <div className="bnd-result-q">「{verdictToQuestion(effectiveVerdict,freeVerdict)}」</div>
-        </div>
+          <div className="bnd-result-q">「{finalQ}」</div>
+        </div>}
+        {isNoLang&&<div className="bnd-result">
+          <div className="bnd-result-label">言葉にならないまま、ここに置いた</div>
+          <div className="bnd-result-q">「言葉にできないまま、どこに置いておきたい？」</div>
+        </div>}
+        <div className="bnd-toka-note">灯貨を3枚発行しました。<br/><small>判決を確定せず、問いとして保留した証です。</small></div>
         <div className="bnd-close-msg">今夜は、決めなかった。<br/>それでいい。</div>
         <button className="btn btn-g" style={{width:"100%"}} onClick={p.onClose}>閉じる</button>
       </div>
@@ -4590,12 +4631,22 @@ function BadNightMode(p){
         <div className="bn-char"><span className="isc-dot cd-utsuro bn-dot"/><span className="bn-name">うつろ</span><span className="bn-say">「捨てない。決めない。預かる。」</span></div>
       </div>
       <div className="bn-body">
-        <p>バッドに入っているとき、頭はすぐに判決を出そうとします。</p>
-        <p>書くのをやめる。自分には価値がない。もう意味がない。</p>
+        <p>心が沈んでいるとき、頭はすぐに判決を出そうとします。</p>
+        <p>書くのをやめる。もう意味がない。自分には価値がない。</p>
         <p>でも、その判決は今夜ここでは受理しません。<br/>今日は、決めないためにここへ来ました。</p>
       </div>
-      <p className="bn-safety">今すぐ自分を傷つけそうな場合は、アプリではなく、近くの人・緊急窓口・医療機関につながってください。この場所は、危険が去ったあとに、言葉を預けるための場所です。</p>
-      <button className="btn btn-p" style={{width:"100%"}} onClick={goStep1}>判決を保留する</button>
+      <div className="bn-weight-section">
+        <div className="bn-weight-label">今、どのくらい沈んでいますか</div>
+        <div className="bn-weight-choices">
+          {BAD_NIGHT_WEIGHTS.map(function(w){return <button key={w.id} className={"bn-weight-chip"+(weight===w.id?" bn-weight-on":"")} onClick={function(){setWeight(w.id);}}>
+            <span className="bn-wc-label">{w.label}</span>
+            <span className="bn-wc-desc">{w.desc}</span>
+          </button>;})}
+        </div>
+      </div>
+      {weight==="dark"&&<p className="bn-safety">今すぐ自分を傷つけそうな場合は、アプリではなく、近くの人・緊急窓口・医療機関につながってください。この場所は、危険が去ったあとに、言葉を預けるための場所です。</p>}
+      {weight==="nolang"&&<p className="bn-nolang-note">言葉にできなくても、ここに置けます。タップ1回で預けられます。</p>}
+      <button className="btn btn-p" style={{width:"100%"}} disabled={!weight} onClick={goStep1}>{isNoLang?"言葉にならないまま、ここに置く":"判決を保留する"}</button>
       <button className="btn btn-g bn-cancel" onClick={p.onClose}>今日はここで閉じる</button>
     </div>}
     {step===1&&<div className="bn-inner">

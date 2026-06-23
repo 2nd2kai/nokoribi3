@@ -4293,3 +4293,22 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .evbn-judgment{font-size:12px;color:rgba(255,255,255,.5);margin-bottom:6px;font-family:var(--serif)}
 .evbn-question{font-size:14px;color:var(--p);font-family:var(--serif);margin-bottom:8px}
 .evbn-note{font-size:12px;color:var(--faint);margin:0;line-height:1.5}
+
+/* 重さ選択 */
+.bn-weight-section{margin:18px 0 14px}
+.bn-weight-label{font-size:11.5px;color:var(--faint);letter-spacing:.08em;margin-bottom:10px}
+.bn-weight-choices{display:flex;flex-direction:column;gap:8px}
+.bn-weight-chip{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:12px 14px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:3px;transition:background .15s,border-color .15s}
+.bn-weight-chip:hover{background:rgba(255,255,255,.09)}
+.bn-weight-chip.bn-weight-on{background:rgba(180,100,40,.18);border-color:rgba(180,100,40,.5)}
+.bn-wc-label{font-size:14px;color:var(--p);font-family:var(--serif)}
+.bn-wc-desc{font-size:11.5px;color:var(--faint)}
+.bn-nolang-note{font-size:13px;color:var(--ember2);background:rgba(180,100,40,.1);border-radius:9px;padding:10px 12px;margin:10px 0;line-height:1.5}
+/* 完了画面 灯貨表示 */
+.bnd-toka-note{text-align:center;font-size:13px;color:var(--ember2);margin:0 0 16px;padding:10px 14px;background:rgba(180,100,40,.1);border-radius:10px;line-height:1.6}
+.bnd-toka-note small{font-size:11px;color:var(--faint);display:block;margin-top:4px}
+/* ホーム灯貨バー */
+.home-toka-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;margin:0 0 4px;background:rgba(180,100,40,.08);border-radius:10px}
+.htb-label{font-size:11px;letter-spacing:.1em;color:var(--ember2);min-width:32px}
+.htb-count{font-size:22px;font-family:var(--serif);color:var(--p);line-height:1}
+.htb-desc{font-size:11.5px;color:var(--faint)}
