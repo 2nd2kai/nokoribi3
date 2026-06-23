@@ -144,12 +144,21 @@ function getKotaeVoice(n){
   return{text:"わからない。でも、忘れたくない",feel:"human"};
 }
 
-/* ── 哲学的な問いの進化 ── */
+/* ── 哲学的な問いの進化 ──
+   放置（受け取り）だけでも問いは進む。答えると、さらに深い問いへ加速する。
+   進度 = 受け取り数 + 回答数×3（答えると一気に深まる） */
+function getQuestionProgress(game){
+  var r=(game.receipts||[]).length;
+  var a=(game.questionAnswers||[]).length;
+  return r+a*3;
+}
 function getPhilosophicalQuestion(game){
-  var n=(game.receipts||[]).length;
-  if(n<3)return{id:"q01",text:"書き終わったあと、なぜ虚しくなるのか",depth:1};
-  if(n<6)return{id:"q02",text:"つくることは、何のためにあるのか",depth:2};
-  return{id:"q03",text:"痛みは、創作の素材になるのか",depth:3};
+  var p=getQuestionProgress(game);
+  if(p<3)return{id:"q01",text:"書き終わったあと、なぜ虚しくなるのか",depth:1};
+  if(p<6)return{id:"q02",text:"つくることは、何のためにあるのか",depth:2};
+  if(p<10)return{id:"q03",text:"痛みは、創作の素材になるのか",depth:3};
+  if(p<15)return{id:"q04",text:"誰にも届かなくても、つくる意味はあるのか",depth:4};
+  return{id:"q05",text:"つくり続けた先に、私は何を赦せるのか",depth:5};
 }
 
 /* ── 受け取り「見届ける」セリフ（残り火の内容に反応） ── */
@@ -3629,7 +3638,7 @@ function HomeView(p){
     <section className="home-card home-q-card" onClick={p.onPhilAnswer} style={{cursor:"pointer"}}>
       <div className="lh">今の問い <span className="home-q-depth">深度 {philQ.depth}</span></div>
       <p className="home-q-text">「{philQ.text}」</p>
-      <p className="home-q-note">タップして、自分の言葉を残せます。</p>
+      <p className="home-q-note">{(game.questionAnswers||[]).length>0?"答えると、問いはさらに深くなる。":"答えなくても、世界は進む。答えれば、問いが深まる。"}</p>
     </section>
     {isExploringNow&&<section className="home-card home-send-card">
       <div className="lh">トイマンへ送る</div>
@@ -3787,7 +3796,7 @@ function App(){
   var addEmber=useCallback(function(card){if(!game)return;var res=addNewEmberToState(game,card);var ns=res.state;ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};setGame(ns);persistSave(ns);setShowCreate(false);var pu=(ns.recentPlaceUnlocks||[])[0];showToast(pu?("新しい場所が開きました：「"+pu.name+"」"):(res.converted?"判決を問いとして保管しました。":"「"+makeEmberTitle(res.card)+"」を預けました。"));},[game,showToast]);
   var readConv=useCallback(function(id){setViewConv(id);if(!game)return;if(game.readConvs.indexOf(id)===-1){var ns=Object.assign({},game,{readConvs:[id].concat(game.readConvs)});setGame(ns);persistSave(ns);}},[game]);
   var receiveConv=useCallback(function(id){if(!game)return;var conv=CBID[id];if(!conv)return;if(game.receivedScenes&&game.receivedScenes.indexOf(id)!==-1)return;var ns=applySceneFx(game,conv);ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);showToast("「"+conv.title+"」を受領した。");},[game,showToast]);
-  var savePhilAnswer=useCallback(function(ans){if(!game||!ans.trim())return;var ns=Object.assign({},game,{questionAnswers:([{q:getPhilosophicalQuestion(game).text,a:ans,at:nowISO()}]).concat(game.questionAnswers||[]).slice(0,30),lastSavedAt:nowISO()});setGame(ns);persistSave(ns);showToast("コタエ：「記録した。あなたの言葉を。」");},[game,showToast]);
+  var savePhilAnswer=useCallback(function(ans){if(!game||!ans.trim())return;var beforeD=getPhilosophicalQuestion(game).depth;var ns=Object.assign({},game,{questionAnswers:([{q:getPhilosophicalQuestion(game).text,a:ans,at:nowISO()}]).concat(game.questionAnswers||[]).slice(0,30),lastSavedAt:nowISO()});setGame(ns);persistSave(ns);var afterD=getPhilosophicalQuestion(ns).depth;showToast(afterD>beforeD?"コタエ：「記録した。……問いが、深くなった。」":"コタエ：「記録した。あなたの言葉を。」");},[game,showToast]);
 
   /* B: うつろイベント — ホーム初表示時に低確率で発火 */
   useEffect(function(){
