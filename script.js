@@ -3856,6 +3856,24 @@ function HomeView(p){
     </section>}
     <section className="home-card"><div className="lh">開いた場所</div>{openPlaces.length>0?<div className="home-place-list">{openPlaces.map(function(k){return <button key={k} className="home-place" onClick={function(){p.onOpenPlace&&p.onOpenPlace(k);}}><b>{PNAME[k]||PSHORT[k]}</b><span>{getPlaceUnlockReason(k)}</span></button>;})}</div>:<div className="closed-place-note">まだ閉じている場所があります。残り火を預けることで、少しずつ開きます。</div>}</section>
     <ClosedPlacesPreview game={game}/>
+    {(function(){
+      var pending=(game.emberCards||[]).find(function(c){return c.mode==="bad_night"&&(c.unitState==="waiting"||c.status==="awaiting");});
+      if(!pending)return null;
+      return <section className="home-card bad-night-pending">
+        <div className="lh">保留中の判決</div>
+        <div className="bnp-char"><span className="isc-dot cd-auditor"/><span className="bnp-say">審査官：「受理しない。保留だ。」</span></div>
+        <div className="bnp-judgment">判決：「{pending.judgmentText||pending.memo}」</div>
+        <div className="bnp-question">問い：「{pending.question}」</div>
+        <p className="bnp-note">今夜の判決は、まだ正式決定ではありません。</p>
+        <button className="btn btn-g" onClick={function(){p.onNav&&p.onNav("ember");}}>この問いを見る</button>
+      </section>;
+    })()}
+    <section className="home-card bad-night-entry">
+      <div className="lh">緊急保留</div>
+      <h3 className="bne-title">書くのをやめようとしている、あなたへ</h3>
+      <p className="bne-desc">何を考えても悪い方向に行く夜は、結論を出さないための場所へ行けます。</p>
+      <button className="btn btn-g" onClick={function(){p.onBadNight&&p.onBadNight();}}>今夜の判決を保留する</button>
+    </section>
     <section className="home-card home-today-end-section">
       <div className="lh">今日はここまで</div>
       <p>無理に続けなくていい。今日見た分は、ちゃんと残ります。</p>
@@ -3889,7 +3907,7 @@ function App(){
   var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [battleFrom,setBattleFrom]=useState("peek");var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
   var gameRef=useRef(null),toastRef=useRef(null);
   var [watchGauge,setWatchGauge]=useState(0);var wgRef=useRef({gauge:0,last:{}});var [returnConvId,setReturnConvId]=useState(null);var [witnessTargetId,setWitnessTargetId]=useState(null);var [sendGiftOpen,setSendGiftOpen]=useState(false);var [utsuroEventActive,setUtsuroEventActive]=useState(false);var [closingPreview,setClosingPreview]=useState(null);var [philAnswerOpen,setPhilAnswerOpen]=useState(false);var [kotaeStuck,setKotaeStuck]=useState(false);
-  var [saveError,setSaveError]=useState(false);
+  var [saveError,setSaveError]=useState(false);var [showBadNight,setShowBadNight]=useState(false);
   useEffect(function(){gameRef.current=game;},[game]);
 
   useEffect(function(){var saved=loadSave();if(saved){setGame(migrateGame(saved));setFirst(false);}else{var f=initGame();setGame(f);setFirst(true);persistSave(f);}setScreen("closed");},[]); // eslint-disable-line
@@ -4010,7 +4028,7 @@ function App(){
     {screen!=="closed"&&screen!=="ending"&&<>
       {screen==="home"&&<>
         <Header title="ホーム" day={game.world.day}/>
-        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}}/>
+        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onBadNight={function(){setShowBadNight(true);}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}}/>
       </>}
       {screen==="log"&&<>
         <Header title="記録" day={game.world.day}/>
@@ -4057,6 +4075,7 @@ function App(){
     {closingPreview&&<ClosingPreviewOverlay text={closingPreview} onClose={function(){setClosingPreview(null);closeWorld(true);}}/>}
     {philAnswerOpen&&<PhilAnswerModal question={getPhilosophicalQuestion(game).text} onClose={function(){setPhilAnswerOpen(false);}} onSave={function(a){savePhilAnswer(a);setPhilAnswerOpen(false);}}/>}
     {showCreate&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber}/>}
+    {showBadNight&&<BadNightMode onClose={function(){setShowBadNight(false);}} onSubmit={function(card){addEmber(card);setShowBadNight(false);var ns=cloneS(game);ns.logs=[{hours:0,events:[{text:"今夜の判決を、問いとして保留した。",kind:"record",pri:5},{text:"審査官：「今夜は受理しない」",kind:"auditor",pri:5},{text:"うつろ：「明日まで、捨てない」",kind:"record",pri:4}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);}}/>}
     {departTargetId&&<DepartureOverlay card={(game.emberCards||[]).find(function(c){return c.id===departTargetId;})} onCancel={function(){setDepartTargetId(null);}} onConfirm={function(){confirmDepartCb(departTargetId);}}/>}
     {burnTargetId&&<BurnConfirmModal receipt={(game.receipts||[]).find(function(r){return r.id===burnTargetId;})} onCancel={function(){setBurnTargetId(null);}} onConfirm={function(){confirmBurnCb(burnTargetId);}}/>}
     {(game.introQueue||[]).length>0&&<IntroSceneOverlay scene={INTRO_SCENES[(game.introQueue||[])[0]]} onClose={function(){dismissIntroSceneCb((game.introQueue||[])[0]);}}/>}
@@ -4450,6 +4469,161 @@ function CharCard(p){
 </div>;
 }
 
+/* ── バッド夜モード（書くのをやめようとしている、あなたへ） ── */
+const BAD_NIGHT_VERDICTS=[
+  "書くのをやめたほうがいいかもしれない",
+  "自分は本物じゃない",
+  "誰にも届かない",
+  "先にいる人に追いつけない",
+  "何者にもなれない",
+  "もう意味がない",
+  "全部、重い",
+  "続けることに意味が見えない",
+  "まだ言葉にできない",
+  "自由に書く"
+];
+const BAD_NIGHT_PAINS=[
+  "届いてほしかった",
+  "反応がほしかった",
+  "認めてほしかった",
+  "本物になりたかった",
+  "変わりたかった",
+  "可能性が欲しかった",
+  "置いていかれた気がした",
+  "比べて苦しくなった",
+  "休みたかった",
+  "まだ分からない",
+  "自由に書く"
+];
+const VERDICT_TO_QUESTION={
+  "書くのをやめたほうがいいかもしれない":"今夜、何が報われなかったと感じた？",
+  "自分は本物じゃない":"本物になれたら、誰に何を届けたかった？",
+  "誰にも届かない":"どんな反応なら、届いたと思えた？",
+  "先にいる人に追いつけない":"先にいる人を見たとき、何を奪われたように感じた？",
+  "何者にもなれない":"何者かになれたら、何を証明できる気がした？",
+  "もう意味がない":"本当は、何になってほしかった？",
+  "全部、重い":"今夜、いちばん重くなっているものは何？",
+  "続けることに意味が見えない":"続けていた自分が、本当に守りたかったものは何？",
+  "まだ言葉にできない":"言葉にできないまま、どこに置いておきたい？"
+};
+function verdictToQuestion(verdict,freeText){
+  if(VERDICT_TO_QUESTION[verdict])return VERDICT_TO_QUESTION[verdict];
+  if(freeText&&freeText.trim())return "その判決は、本当は何を守ろうとしていた？";
+  return "今夜の痛みの奥に、どんな大切なものがあった？";
+}
+function tomorrowMorningISO(){
+  var d=new Date();d.setDate(d.getDate()+1);d.setHours(6,0,0,0);return d.toISOString();
+}
+function BadNightMode(p){
+  var [step,setStep]=useState(0);
+  var [verdict,setVerdict]=useState("");
+  var [freeVerdict,setFreeVerdict]=useState("");
+  var [pain,setPain]=useState("");
+  var [freePain,setFreePain]=useState("");
+  var [done,setDone]=useState(false);
+  var isFreeV=verdict==="自由に書く";
+  var isFreeP=pain==="自由に書く";
+  var effectiveVerdict=isFreeV?freeVerdict.trim():verdict;
+  var effectivePain=isFreeP?freePain.trim():pain;
+  var question=done?verdictToQuestion(effectiveVerdict,freeVerdict):"";
+  function goStep1(){setStep(1);}
+  function goStep2(){if(!effectiveVerdict)return;setStep(2);}
+  function goStep3(){
+    if(!effectivePain)return;
+    var q=verdictToQuestion(effectiveVerdict,freeVerdict);
+    var card={
+      id:"e"+Date.now(),
+      route:"judgment_conversion",
+      mode:"bad_night",
+      writeState:"バッドの夜に判決が出た",
+      feeling:effectivePain||"まだ分からない",
+      wanted:"まだ分からない",
+      title:"今夜の判決",
+      memo:effectiveVerdict,
+      bodyText:isFreeV?freeVerdict:"",
+      reaction:"",
+      judgmentText:effectiveVerdict,
+      painText:effectivePain,
+      question:q,
+      holdText:"今夜の判決は、今日は受理しません。",
+      holdUntil:tomorrowMorningISO(),
+      soul:true,
+      initialMetrics:{satisfaction:10,meaning:10,value:10},
+      status:"awaiting",
+      unitState:"waiting",
+      progress:0,
+      createdAt:nowISO()
+    };
+    p.onSubmit&&p.onSubmit(card);
+    setDone(true);
+    setStep(3);
+  }
+  if(done&&step===3){
+    return <div className="ov bad-night-ov"><div className="bsh bad-night-done" onClick={function(e){e.stopPropagation();}}>
+      <div className="sh-handle"/>
+      <div className="bnd-inner">
+        <div className="bnd-char-lines">
+          <div className="bnd-char"><span className="isc-dot cd-auditor bnd-dot"/><span className="bnd-name">審査官</span><span className="bnd-say">「今夜の判決は受理しない。保留だ。」</span></div>
+          <div className="bnd-char"><span className="isc-dot cd-utsuro bnd-dot"/><span className="bnd-name">うつろ</span><span className="bnd-say">「封筒に入れた。明日まで、捨てない。」</span></div>
+          <div className="bnd-char"><span className="isc-dot cd-toyman bnd-dot"/><span className="bnd-name">トイマン</span><span className="bnd-say">「問いとして持ち帰る。答えは今はいらない。」</span></div>
+        </div>
+        <div className="bnd-result">
+          <div className="bnd-result-label">判決</div>
+          <div className="bnd-result-verdict">「{effectiveVerdict}」</div>
+          <div className="bnd-result-label" style={{marginTop:"14px"}}>問いとして預けた</div>
+          <div className="bnd-result-q">「{verdictToQuestion(effectiveVerdict,freeVerdict)}」</div>
+        </div>
+        <div className="bnd-close-msg">今夜は、決めなかった。<br/>それでいい。</div>
+        <button className="btn btn-g" style={{width:"100%"}} onClick={p.onClose}>閉じる</button>
+      </div>
+    </div></div>;
+  }
+  return <div className="ov bad-night-ov" onClick={p.onClose}><div className="bsh bad-night-modal" onClick={function(e){e.stopPropagation();}}>
+    <div className="sh-handle"/>
+    {step===0&&<div className="bn-inner">
+      <div className="bn-head">
+        <div className="bn-kicker">書くのをやめようとしている、あなたへ</div>
+        <h2 className="bn-title">今夜は、決めない</h2>
+      </div>
+      <div className="bn-char-lines">
+        <div className="bn-char"><span className="isc-dot cd-auditor bn-dot"/><span className="bn-name">審査官</span><span className="bn-say">「これは判決の気配だ。だが、今夜は受理しない。」</span></div>
+        <div className="bn-char"><span className="isc-dot cd-utsuro bn-dot"/><span className="bn-name">うつろ</span><span className="bn-say">「捨てない。決めない。預かる。」</span></div>
+      </div>
+      <div className="bn-body">
+        <p>バッドに入っているとき、頭はすぐに判決を出そうとします。</p>
+        <p>書くのをやめる。自分には価値がない。もう意味がない。</p>
+        <p>でも、その判決は今夜ここでは受理しません。<br/>今日は、決めないためにここへ来ました。</p>
+      </div>
+      <p className="bn-safety">今すぐ自分を傷つけそうな場合は、アプリではなく、近くの人・緊急窓口・医療機関につながってください。この場所は、危険が去ったあとに、言葉を預けるための場所です。</p>
+      <button className="btn btn-p" style={{width:"100%"}} onClick={goStep1}>判決を保留する</button>
+      <button className="btn btn-g bn-cancel" onClick={p.onClose}>今日はここで閉じる</button>
+    </div>}
+    {step===1&&<div className="bn-inner">
+      <div className="bn-step-label">STEP 1 / 2</div>
+      <h2 className="bn-title">今夜、頭が出している判決は？</h2>
+      <p className="bn-sub">正しいかどうかは確認しません。今出ている言葉を拾います。</p>
+      <div className="bn-choices">
+        {BAD_NIGHT_VERDICTS.map(function(v){return <button key={v} className={"bn-chip"+(verdict===v?" bn-chip-on":"")} onClick={function(){setVerdict(v);if(v!=="自由に書く")setFreeVerdict("");}}>{v}</button>;})}
+      </div>
+      {isFreeV&&<textarea className="bn-free-input" rows={3} placeholder="例：誰にも読まれないなら意味がない気がする" value={freeVerdict} onChange={function(e){setFreeVerdict(e.target.value);}} onClick={function(e){e.stopPropagation();}}/>}
+      <button className="btn btn-p" style={{width:"100%",marginTop:"16px"}} disabled={!effectiveVerdict} onClick={goStep2}>次へ</button>
+      <button className="btn btn-g bn-cancel" onClick={p.onClose}>今日はここで閉じる</button>
+    </div>}
+    {step===2&&<div className="bn-inner">
+      <div className="bn-step-label">STEP 2 / 2</div>
+      <h2 className="bn-title">その判決の奥に、何があった？</h2>
+      <p className="bn-sub">判決の下には、だいたい痛みがあります。近いものを選ぶだけです。</p>
+      <div className="bn-choices">
+        {BAD_NIGHT_PAINS.map(function(v){return <button key={v} className={"bn-chip"+(pain===v?" bn-chip-on":"")} onClick={function(){setPain(v);if(v!=="自由に書く")setFreePain("");}}>{v}</button>;})}
+      </div>
+      {isFreeP&&<textarea className="bn-free-input" rows={3} placeholder="例：本当は、まだ自分にも未来があると思いたかった" value={freePain} onChange={function(e){setFreePain(e.target.value);}} onClick={function(e){e.stopPropagation();}}/>}
+      <button className="btn btn-p" style={{width:"100%",marginTop:"16px"}} disabled={!effectivePain} onClick={goStep3}>問いに変える</button>
+      <button className="btn btn-g bn-cancel" onClick={p.onClose}>今日はここで閉じる</button>
+    </div>}
+  </div></div>;
+}
+/* ── /バッド夜モード ── */
+
 function JudgmentRoutePanel(p){
   var game=p.game;
   var card=(game.emberCards||[]).find(function(c){return c.route==="judgment_conversion";});
@@ -4569,7 +4743,13 @@ function EmberView(p){
         </div>
       </div>
       {editForm(card)}
-      {card.route==="judgment_conversion"&&<div className="ev-route-badge">判決火 → 問い火</div>}
+      {card.mode==="bad_night"&&<div className="ev-route-badge ev-badnight-badge">判決保留</div>}
+      {card.mode==="bad_night"&&card.judgmentText&&<div className="ev-badnight-box">
+        <div className="evbn-judgment">判決：「{card.judgmentText}」</div>
+        <div className="evbn-question">問い：「{card.question||"今夜、何が報われなかったと感じた？"}」</div>
+        <p className="evbn-note">これは答えを出すための残り火ではありません。今夜の判決を、問いとして一晩預けるための残り火です。</p>
+      </div>}
+      {card.route==="judgment_conversion"&&!card.mode&&<div className="ev-route-badge">判決火 → 問い火</div>}
       {card.soul&&<div className="ev-soul-badge">魂入り — この残り火は、あなたの言葉を持っています</div>}
       <DeliveredWordsBox card={card}/>
       {card.questionTicket&&<div className="ev-ticket-box">

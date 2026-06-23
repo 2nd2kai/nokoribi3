@@ -4244,3 +4244,52 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .acc-ref-hint{font-size:11.5px;color:var(--ember2);margin:6px 0 0;opacity:.75}
 /* awt-foot を削除し、余白調整 */
 .awt-list{padding-bottom:4px}
+
+/* ── バッド夜モード ── */
+.bad-night-ov{background:rgba(0,0,0,.85)!important}
+.bad-night-modal{max-height:90vh;overflow-y:auto;background:#111318}
+.bad-night-done{max-height:90vh;overflow-y:auto;background:#0d1016}
+.bn-inner,.bnd-inner{padding:20px 18px 28px}
+.bn-kicker{font-size:11px;letter-spacing:.14em;color:var(--ember2);margin-bottom:8px;opacity:.8}
+.bn-title{font-size:20px;font-family:var(--serif);color:var(--p);margin:0 0 16px;line-height:1.4}
+.bn-step-label{font-size:10.5px;color:var(--faint);letter-spacing:.1em;margin-bottom:10px}
+.bn-char-lines,.bnd-char-lines{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.bn-char,.bnd-char{display:flex;align-items:baseline;gap:7px;font-size:13px}
+.bn-dot,.bnd-dot{flex-shrink:0;margin-top:2px}
+.bn-name,.bnd-name{font-size:11px;color:var(--faint);min-width:46px}
+.bn-say,.bnd-say{color:var(--p);line-height:1.5;font-family:var(--serif)}
+.bn-body{margin:14px 0 16px;display:flex;flex-direction:column;gap:8px}
+.bn-body p{font-size:14px;line-height:1.7;color:rgba(255,255,255,.75);margin:0}
+.bn-safety{font-size:11.5px;color:var(--faint);line-height:1.6;margin:12px 0 18px;padding:10px 12px;background:rgba(255,255,255,.04);border-radius:8px}
+.bn-sub{font-size:13px;color:var(--faint);margin:0 0 14px;line-height:1.5}
+.bn-choices{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.bn-chip{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:7px 14px;font-size:13px;font-family:var(--serif);color:var(--p);cursor:pointer;line-height:1;transition:background .15s,border-color .15s}
+.bn-chip:hover{background:rgba(255,255,255,.1)}
+.bn-chip.bn-chip-on{background:rgba(var(--ember-rgb,180,100,40),.22);border-color:var(--ember2);color:var(--ember2)}
+.bn-free-input{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:10px 13px;font-size:14px;font-family:var(--serif);color:var(--p);resize:none;box-sizing:border-box;line-height:1.6;margin-top:8px}
+.bn-free-input::placeholder{color:var(--faint)}
+.bn-free-input:focus{outline:none;border-color:rgba(180,100,40,.4)}
+.bn-cancel{width:100%;margin-top:10px;font-size:13px;opacity:.6}
+/* 完了画面 */
+.bnd-result{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:16px;margin:14px 0 18px}
+.bnd-result-label{font-size:10.5px;letter-spacing:.12em;color:var(--faint);margin-bottom:6px}
+.bnd-result-verdict{font-size:14px;font-family:var(--serif);color:rgba(255,255,255,.6);line-height:1.5}
+.bnd-result-q{font-size:15px;font-family:var(--serif);color:var(--p);line-height:1.6}
+.bnd-close-msg{text-align:center;font-size:17px;font-family:var(--serif);color:var(--p);line-height:1.8;margin:6px 0 22px;opacity:.9}
+/* ホーム入口 */
+.bad-night-entry{border-left:2px solid rgba(180,100,40,.4)!important}
+.bne-title{font-size:15px;font-family:var(--serif);color:var(--p);margin:6px 0 8px}
+.bne-desc{font-size:13px;color:var(--faint);margin:0 0 14px;line-height:1.5}
+/* ホーム保留中 */
+.bad-night-pending{background:rgba(100,60,20,.12)!important;border-left:2px solid var(--ember2)!important}
+.bnp-char{display:flex;align-items:baseline;gap:6px;font-size:13px;margin-bottom:10px;color:var(--faint)}
+.bnp-say{font-family:var(--serif)}
+.bnp-judgment{font-size:13px;color:rgba(255,255,255,.6);margin-bottom:6px;font-family:var(--serif)}
+.bnp-question{font-size:14px;color:var(--p);font-family:var(--serif);margin-bottom:8px}
+.bnp-note{font-size:12px;color:var(--faint);margin:0 0 14px}
+/* 残り火タブ */
+.ev-badnight-badge{background:rgba(180,100,40,.18)!important;color:var(--ember2)!important;border:1px solid rgba(180,100,40,.3)!important}
+.ev-badnight-box{background:rgba(100,60,20,.12);border-radius:10px;padding:12px 14px;margin:8px 0}
+.evbn-judgment{font-size:12px;color:rgba(255,255,255,.5);margin-bottom:6px;font-family:var(--serif)}
+.evbn-question{font-size:14px;color:var(--p);font-family:var(--serif);margin-bottom:8px}
+.evbn-note{font-size:12px;color:var(--faint);margin:0;line-height:1.5}
