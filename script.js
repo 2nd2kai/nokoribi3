@@ -144,6 +144,30 @@ function getKotaeVoice(n){
   return{text:"わからない。でも、忘れたくない",feel:"human"};
 }
 
+/* ── 哲学的な問いの進化 ── */
+function getPhilosophicalQuestion(game){
+  var n=(game.receipts||[]).length;
+  if(n<3)return{id:"q01",text:"書き終わったあと、なぜ虚しくなるのか",depth:1};
+  if(n<6)return{id:"q02",text:"つくることは、何のためにあるのか",depth:2};
+  return{id:"q03",text:"痛みは、創作の素材になるのか",depth:3};
+}
+
+/* ── 受け取り「見届ける」セリフ ── */
+function getWitnessLines(card,game){
+  var title=makeEmberTitle(card);
+  var audBond=(game.characters.auditor&&game.characters.auditor.bonds&&game.characters.auditor.bonds.kana)||0;
+  var audLine=audBond>=8?"保留ではなく、受領だ。":"……確かに、届いている。";
+  return[
+    {s:"toyman",t:"持ち帰った。「"+title+"」を。"},
+    {s:"kana",  t:"……受け取っていい？"},
+    {s:"toyman",t:"頼む。"},
+    {s:"kana",  t:"受け取った。"},
+    {s:"utsuro",t:"預かる。消さない。"},
+    {s:"kotae", t:"記録した。"},
+    {s:"auditor",t:audLine},
+  ];
+}
+
 /* 見守り・ケアアクション後のキャラクター反応台詞 */
 function getWatchCharVoice(charId,emberCard){
   var feeling=emberCard&&emberCard.feeling||"";
@@ -3538,6 +3562,8 @@ function HomeView(p){
   var ready=cards.find(function(c){return c.status==="ready";});
   var openPlaces=getUnlockedPlaceKeys(game).filter(function(k){return game.unlocks&&game.unlocks.places&&game.unlocks.places[k];});
   var next=getNextAction(game);
+  var philQ=getPhilosophicalQuestion(game);
+  var isExploringNow=active&&active.unitState==="exploring";
   var nextText=ready?"受け取れる残り火があります。":active?"「"+makeEmberTitle(active)+"」を見守っています。":"まずは、ひとつだけ置いてみてください。";
   return <div className="scroll home-screen">
     {showGlossary&&<GlossaryModal onClose={function(){setShowGlossary(false);}}/>}
@@ -3583,10 +3609,15 @@ function HomeView(p){
       }
       return <><div className="lh">トイマンのひとこと</div><p className="home-line">「まだ落としてない。」</p></>;
     })()}</section>
-    {active&&active.currentQuestion&&<section className="home-card home-q-card">
-      <div className="lh">今の問い</div>
-      <p className="home-q-text">「{active.currentQuestion}」</p>
-      <p className="home-q-note">この問いは、残り火が進むにつれて深まっていきます。</p>
+    <section className="home-card home-q-card">
+      <div className="lh">今の問い <span className="home-q-depth">深度 {philQ.depth}</span></div>
+      <p className="home-q-text">「{philQ.text}」</p>
+      <p className="home-q-note">{philQ.depth<3?"受け取りが増えると、問いが深まります。":"問いは、ここまで深まりました。"}</p>
+    </section>
+    {isExploringNow&&<section className="home-card home-send-card">
+      <div className="lh">トイマンへ送る</div>
+      <p className="home-send-note">探索中のトイマンに、何かを届けられます。</p>
+      <button className="btn btn-g home-send-btn" onClick={function(){p.onSendGift&&p.onSendGift();}}>送る</button>
     </section>}
     {cards.length>=3&&<section className="home-card">
       <div className="home-char-lines">
@@ -3627,7 +3658,7 @@ function App(){
   var [viewConv,setViewConv]=useState(null);
   var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
   var gameRef=useRef(null),toastRef=useRef(null);
-  var [watchGauge,setWatchGauge]=useState(0);var wgRef=useRef({gauge:0,last:{}});var [returnConvId,setReturnConvId]=useState(null);
+  var [watchGauge,setWatchGauge]=useState(0);var wgRef=useRef({gauge:0,last:{}});var [returnConvId,setReturnConvId]=useState(null);var [witnessTargetId,setWitnessTargetId]=useState(null);var [sendGiftOpen,setSendGiftOpen]=useState(false);
   var [saveError,setSaveError]=useState(false);
   useEffect(function(){gameRef.current=game;},[game]);
 
@@ -3653,7 +3684,8 @@ function App(){
     });
     return function(){setSaveFailHandler(null);setSaveOkHandler(null);};
   },[showToast]);
-  var receiveEmberCb=useCallback(function(id){if(!game)return;setReceiveTargetId(id);},[game]);
+  var receiveEmberCb=useCallback(function(id){if(!game)return;setWitnessTargetId(id);},[game]);
+  var sendGiftCb=useCallback(function(gift){if(!game)return;var ns=cloneS(game);var t=ns.characters.toyman;if(gift.type==="water"){t.stats.fatigue=Math.max(0,(t.stats.fatigue||0)-10);showToast("トイマン：「助かる。行く。」");}else if(gift.type==="words"){var ec=(ns.emberCards||[]).find(function(c){return c.unitState==="exploring";});if(ec)ec.progress=Math.min(100,(ec.progress||0)+3);showToast("トイマン：「読んだ。行く。」");}else if(gift.type==="light"){ns.watchGaugeBonus=(ns.watchGaugeBonus||0)+20;showToast("トイマン：「見えた。」");}ns.lastSavedAt=nowISO();ns.logs=[{hours:0,events:[{text:"「"+gift.label+"」をトイマンに送った。",kind:"record",pri:3}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);setSendGiftOpen(false);},[game,showToast]);
   /* 「何にもならない気がした」専用：預けた瞬間に受領まで完了させる */
   var addAndReceiveEmber=useCallback(function(card){
     if(!game)return;
@@ -3736,7 +3768,7 @@ function App(){
     {screen!=="closed"&&screen!=="ending"&&<>
       {screen==="home"&&<>
         <Header title="ホーム" day={game.world.day}/>
-        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています。」");setTimeout(function(){closeWorld();},800);}}/>
+        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています。」");setTimeout(function(){closeWorld();},800);}}/>
       </>}
       {screen==="log"&&<>
         <Header title="記録" day={game.world.day}/>
@@ -3785,6 +3817,8 @@ function App(){
     {burnTargetId&&<BurnConfirmModal receipt={(game.receipts||[]).find(function(r){return r.id===burnTargetId;})} onCancel={function(){setBurnTargetId(null);}} onConfirm={function(){confirmBurnCb(burnTargetId);}}/>}
     {(game.introQueue||[]).length>0&&<IntroSceneOverlay scene={INTRO_SCENES[(game.introQueue||[])[0]]} onClose={function(){dismissIntroSceneCb((game.introQueue||[])[0]);}}/>}
     {receiptAcceptance&&<AcceptanceModal text={receiptAcceptance.text} holdText={receiptAcceptance.holdText} nextQuestion={receiptAcceptance.nextQuestion} writeState={receiptAcceptance.writeState} feeling={receiptAcceptance.feeling} wanted={receiptAcceptance.wanted} bodyText={receiptAcceptance.bodyText} onClose={function(){setReceiptAcceptance(null);}}/>}
+    {witnessTargetId&&(function(){var wc=(game.emberCards||[]).find(function(c){return c.id===witnessTargetId;});return wc?<WitnessOverlay card={wc} game={game} onComplete={function(){setReceiveTargetId(witnessTargetId);setWitnessTargetId(null);}} onClose={function(){setWitnessTargetId(null);}}/>:null;})()}
+    {sendGiftOpen&&<SendGiftModal onClose={function(){setSendGiftOpen(false);}} onSend={sendGiftCb}/>}
     {receiveTarget&&<ReceiptReceiveModal card={receiveTarget} onClose={function(){setReceiveTargetId(null);}} onSubmit={function(input){
       var ns=receiveEmberCard(game,receiveTarget.id,input);
       ns.lastSavedAt=nowISO();
@@ -4729,6 +4763,60 @@ function EmberCreate(p){
     </div>
     <button className="btn btn-g" style={{marginTop:4}} onClick={p.onClose}>閉じる</button>
   </div></div>);
+}
+function WitnessOverlay(p){
+  var card=p.card,game=p.game,onComplete=p.onComplete,onClose=p.onClose;
+  var [idx,setIdx]=useState(0);
+  if(!card||!game)return null;
+  var lines=getWitnessLines(card,game);
+  var cur=lines[idx];
+  var isLast=idx>=lines.length-1;
+  function next(){if(isLast){onComplete&&onComplete();}else{setIdx(function(i){return i+1;});}}
+  return <div className="wit-overlay" onClick={next}>
+    <div className="wit-inner">
+      <div className="wit-eyebrow">見届ける</div>
+      <div className="wit-ember-title">「{makeEmberTitle(card)}」</div>
+      <div className="wit-scene">
+        <div className={"wit-line cd-"+cur.s}>
+          <span className={"isc-dot cd-"+cur.s+" wit-dot"}/>
+          <span className="wit-speaker">{NAMES[cur.s]||cur.s}</span>
+          <p className="wit-say">「{cur.t}」</p>
+        </div>
+      </div>
+      <div className="wit-prog">{idx+1} / {lines.length}</div>
+      {isLast
+        ?<button className="btn btn-p wit-complete-btn" onClick={function(e){e.stopPropagation();onComplete&&onComplete();}}>見届けた。受領証を作る</button>
+        :<div className="wit-hint">タップして続き</div>}
+    </div>
+    <button className="wit-skip" onClick={function(e){e.stopPropagation();onClose&&onClose();}}>スキップ</button>
+  </div>;
+}
+function SendGiftModal(p){
+  var [chosen,setChosen]=useState(null);
+  var [words,setWords]=useState("");
+  var gifts=[
+    {type:"water",label:"水",desc:"トイマンの疲労を少し回復させる",icon:"💧"},
+    {type:"words",label:"言葉",desc:"ひとことを送る。少し前へ進む",icon:"✉"},
+    {type:"light",label:"光",desc:"見守りの力を送る",icon:"🕯"},
+  ];
+  function doSend(){if(!chosen)return;p.onSend&&p.onSend({type:chosen.type,label:chosen.label,words:words});}
+  return <div className="ov" onClick={p.onClose}><div className="bsh send-bsh" onClick={function(e){e.stopPropagation();}}>
+    <div className="sh-handle"/>
+    <p className="sh-title">トイマンへ送る</p>
+    <p className="sh-sub">探索中のトイマンに、何かを届けられます。</p>
+    <div className="send-gifts">
+      {gifts.map(function(g){return <button key={g.type} className={"send-gift-btn"+(chosen&&chosen.type===g.type?" send-gift-on":"")} onClick={function(){setChosen(g);}}>
+        <span className="sg-icon">{g.icon}</span>
+        <span className="sg-label">{g.label}</span>
+        <span className="sg-desc">{g.desc}</span>
+      </button>;})}
+    </div>
+    {chosen&&chosen.type==="words"&&<label className="ec-field" style={{marginTop:8}}><span>一言</span><input type="text" value={words} placeholder="例：帰ってきてください" onChange={function(e){setWords(e.target.value);}}/></label>}
+    <div className="receive-actions" style={{marginTop:12}}>
+      <button className="btn btn-g" onClick={p.onClose}>閉じる</button>
+      <button className="btn btn-p" style={{opacity:chosen?1:.45}} onClick={doSend}>送る</button>
+    </div>
+  </div></div>;
 }
 function ReturnConvOverlay(p){
   var conv=p.conv,onClose=p.onClose,onGoConv=p.onGoConv;
