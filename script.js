@@ -1679,7 +1679,7 @@ const STORY_EVENTS=[
    text:"トイマンは未受領の森へ行った。\n問いの奥に、まだ形のないものが落ちていた。\nそれを拾って、引き返した。\n「答えじゃない」と思いながら、手放さなかった。",
    trigger:"hint"},
   {id:"s2",ch:2,title:"記録塔の灯り",
-   text:"コタエは記録塔の灯りの下で、封筒を読んだ。\nまだ読めない部分があった。\nでも捨てなかった。\n「今はわからない。でも、記録しておく。」",
+   text:"コタエは記録塔の灯りの下で、封筒を読んだ。\nまだ読めない部分があった。\nでも捨てなかった。\n「今はわからない。でも、記録しておく」",
    trigger:"analysis"},
   {id:"s3",ch:3,title:"受領",
    text:"審査官が「通していい」と言った日があった。\nそれは、はじめて聞く声だった。\n封筒は、自分宛ての形になった。\n受け取った。\nなかったことにはしなかった。",
@@ -3188,7 +3188,7 @@ function BattleEncounterScreen(p){
         <b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}
         <div className="battle-result-toyman">
           <span className="isc-dot cd-toyman"/>
-          <span>{result.reached100?"「届いた。持ち帰る。」":result.ok?"「まだ落としていない。」":"「今日は、引き返す。また来る。」"}</span>
+          <span>{result.reached100?"「届いた。持ち帰る」":result.ok?"「まだ落としていない」":"「今日は、引き返す。また来る」"}</span>
         </div>
       </div>}
     </div>
@@ -3684,27 +3684,27 @@ function HomeView(p){
     </section>
     {active&&<section className="home-card"><div className="lh">いま動いている残り火</div><div className="home-fire-title">「{makeEmberTitle(active)}」</div><DeliveredWordsBox card={active} compact={true}/><div className="home-fire-foot">{getEmberUnitLabel(active)} / {Math.round(active.progress||0)}%</div>{(active.status==="awaiting"||active.unitState==="waiting")&&<div className="home-depart-box"><div className="hdb-title">出発待ち</div><p>出発させることで、トイマンがあなたの「{makeEmberTitle(active)}」を探しに行きます。見つけるのは答えではなく、問いの欠片です。</p><button className={"btn btn-p touchable"+(next&&next.action==="depart"?" btn-next-action":"")} onClick={function(){p.onDepart&&p.onDepart(active.id);}}>トイマンを未受領の森に出発させる</button></div>}</section>}
     <section className="home-card home-char-voice-card">{(function(){
-      if(!active)return <><div className="lh">トイマンのひとこと</div><p className="home-line">「置かれたら、拾いに行く。」</p></>;
+      if(!active)return <><div className="lh">トイマンのひとこと</div><p className="home-line">「置かれたら、拾いに行く」</p></>;
       var p=active.progress||0;
       var isExploring=active.unitState==="exploring";
       var isWaiting=active.status==="awaiting"||active.unitState==="waiting";
       var isReady=active.status==="ready";
       if(isReady)return <><div className="lh">トイマンのひとこと</div>
         <div className="home-char-lines">
-          <div className="home-char-line"><span className="isc-dot cd-toyman home-cv-dot"/><span className="home-cv-name">トイマン：</span><span className="home-cv-say">「全部、持ち帰った」</span></div>
-          <div className="home-char-line"><span className="isc-dot cd-kana home-cv-dot"/><span className="home-cv-name">かな：</span><span className="home-cv-say">「受け取れるよ。今。」</span></div>
+          <div className="home-char-line"><div className="home-cv-namerow"><span className="isc-dot cd-toyman home-cv-dot"/><span className="home-cv-name">トイマン</span></div><span className="home-cv-say">「全部、持ち帰った」</span></div>
+          <div className="home-char-line"><div className="home-cv-namerow"><span className="isc-dot cd-kana home-cv-dot"/><span className="home-cv-name">かな</span></div><span className="home-cv-say">「受け取れるよ。今」</span></div>
         </div></>;
       if(isWaiting)return <><div className="lh">トイマンのひとこと</div>
         <div className="home-char-lines">
-          <div className="home-char-line"><span className="isc-dot cd-toyman home-cv-dot"/><span className="home-cv-name">トイマン：</span><span className="home-cv-say">「出発の準備ができている」</span></div>
-          <div className="home-char-line"><span className="isc-dot cd-toyman home-cv-dot"/><span className="home-cv-name">トイマン：</span><span className="home-cv-say">「いつでも行ける」</span></div>
+          <div className="home-char-line"><div className="home-cv-namerow"><span className="isc-dot cd-toyman home-cv-dot"/><span className="home-cv-name">トイマン</span></div><span className="home-cv-say">「出発の準備ができている」</span></div>
+          <div className="home-char-line"><div className="home-cv-namerow"><span className="isc-dot cd-toyman home-cv-dot"/><span className="home-cv-name">トイマン</span></div><span className="home-cv-say">「いつでも行ける」</span></div>
         </div></>;
       if(isExploring){var sc=getEmberExploreScene(active);var sl=sc.slice(0,2);return <><div className="lh">箱庭の今</div>
         <div className="home-char-lines">
-          {sl.map(function(L,i){return <div key={i} className="home-char-line"><span className={"isc-dot cd-"+L.s+" home-cv-dot"}/><span className="home-cv-name">{NAMES[L.s]||L.s}：</span><span className="home-cv-say">「{L.t}」</span></div>;})}
+          {sl.map(function(L,i){return <div key={i} className="home-char-line"><div className="home-cv-namerow"><span className={"isc-dot cd-"+L.s+" home-cv-dot"}/><span className="home-cv-name">{NAMES[L.s]||L.s}</span></div><span className="home-cv-say">「{L.t}」</span></div>;})}
         </div></>;
       }
-      return <><div className="lh">トイマンのひとこと</div><p className="home-line">「まだ落としてない。」</p></>;
+      return <><div className="lh">トイマンのひとこと</div><p className="home-line">「まだ落としてない」</p></>;
     })()}</section>
     {p.utsuroEvent&&<section className="home-card home-utsuro-event" onClick={p.onUtsuroFound}>
       <div className="lh">うつろより</div>
@@ -3715,7 +3715,7 @@ function HomeView(p){
     {p.kotaeStuck&&<section className="home-card home-kotae-stuck" onClick={p.onKotaeResume}>
       <div className="lh">コタエより</div>
       <div className="uev-line"><span className="isc-dot cd-kotae uev-dot"/>
-        <p className="uev-say">「……これは、すぐには記録できない。」</p></div>
+        <p className="uev-say">「……これは、すぐには記録できない」</p></div>
       <p className="uev-hint">タップして続ける</p>
     </section>}
     <section className="home-card home-q-card" onClick={p.onPhilAnswer} style={{cursor:"pointer"}}>
@@ -3744,7 +3744,7 @@ function HomeView(p){
     </section>}
     {cards.length>=3&&<section className="home-card">
       <div className="home-char-lines">
-        <div className="home-char-line"><span className="isc-dot cd-kana home-cv-dot"/><span className="home-cv-name">かな：</span><span className="home-cv-say">「たくさん、預けてくれてるね。……全部、ちゃんと感じてる」</span></div>
+        <div className="home-char-line"><div className="home-cv-namerow"><span className="isc-dot cd-kana home-cv-dot"/><span className="home-cv-name">かな</span></div><span className="home-cv-say">「たくさん、預けてくれてるね。……全部、ちゃんと感じてる」</span></div>
       </div>
     </section>}
     <section className="home-card"><div className="lh">開いた場所</div>{openPlaces.length>0?<div className="home-place-list">{openPlaces.map(function(k){return <button key={k} className="home-place" onClick={function(){p.onOpenPlace&&p.onOpenPlace(k);}}><b>{PNAME[k]||PSHORT[k]}</b><span>{getPlaceUnlockReason(k)}</span></button>;})}</div>:<div className="closed-place-note">まだ閉じている場所があります。残り火を預けることで、少しずつ開きます。</div>}</section>
@@ -3808,7 +3808,7 @@ function App(){
     return function(){setSaveFailHandler(null);setSaveOkHandler(null);};
   },[showToast]);
   var receiveEmberCb=useCallback(function(id){if(!game)return;setWitnessTargetId(id);},[game]);
-  var sendGiftCb=useCallback(function(gift){if(!game)return;var ns=cloneS(game);var t=ns.characters.toyman;if(gift.type==="water"){t.stats.fatigue=Math.max(0,(t.stats.fatigue||0)-10);showToast("トイマン：「助かる。行く。」");}else if(gift.type==="words"){var ec=(ns.emberCards||[]).find(function(c){return c.unitState==="exploring";});if(ec)ec.progress=Math.min(100,(ec.progress||0)+3);showToast("トイマン：「読んだ。行く。」");}else if(gift.type==="light"){ns.watchGaugeBonus=(ns.watchGaugeBonus||0)+20;showToast("トイマン：「見えた。」");}ns.lastSavedAt=nowISO();ns.logs=[{hours:0,events:[{text:"「"+gift.label+"」をトイマンに送った。",kind:"record",pri:3}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);setSendGiftOpen(false);},[game,showToast]);
+  var sendGiftCb=useCallback(function(gift){if(!game)return;var ns=cloneS(game);var t=ns.characters.toyman;if(gift.type==="water"){t.stats.fatigue=Math.max(0,(t.stats.fatigue||0)-10);showToast("トイマン：「助かる。行く」");}else if(gift.type==="words"){var ec=(ns.emberCards||[]).find(function(c){return c.unitState==="exploring";});if(ec)ec.progress=Math.min(100,(ec.progress||0)+3);showToast("トイマン：「読んだ。行く」");}else if(gift.type==="light"){ns.watchGaugeBonus=(ns.watchGaugeBonus||0)+20;showToast("トイマン：「見えた」");}ns.lastSavedAt=nowISO();ns.logs=[{hours:0,events:[{text:"「"+gift.label+"」をトイマンに送った。",kind:"record",pri:3}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);setSendGiftOpen(false);},[game,showToast]);
   var departEmberCb=useCallback(function(id){if(!game)return;var card=(game.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;setDepartTargetId(id);},[game]);// eslint-disable-line
   var confirmDepartCb=useCallback(function(id){if(!game)return;var ns=cloneS(game);var card=(ns.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;card=normalizeEmberUnitCard(card);card.unitState="exploring";card.status="unreceived";card.currentQuestion=EMBER_UNIT_FLOW.exploring.question;card.progress=0;
     /* 出発時は探索0%スタート。問いは戦闘・放置で progress=100% に達してから自然発生する */
@@ -3848,7 +3848,7 @@ function App(){
   var addWatchGauge=useCallback(function(type,amount){var now2=Date.now();if((wgRef.current.last[type]||0)>now2-5000)return;wgRef.current.last[type]=now2;var ng=wgRef.current.gauge+amount;if(ng>=100){ng-=100;setGame(function(g){if(!g)return g;return Object.assign({},g,{ip:Object.assign({},g.ip,{cur:Math.min(g.ip.max,(g.ip.cur||0)+1)})});});showToast("見守り満タン — 干渉ポイント +1");}wgRef.current.gauge=ng;setWatchGauge(ng);},[showToast]);
   var withUnlock=useCallback(function(prev,next){var pu=getUnlockedConvIds(prev),nu=getUnlockedConvIds(next);var fresh=nu.filter(function(id){return pu.indexOf(id)===-1;});var s=Object.assign({},next,{unlockedConvs:nu});if(fresh.length>0)showToast("会話が解放された：「"+CBID[fresh[0]].title+"」");return s;},[showToast]);
 
-  var openWorld=useCallback(function(){if(!game)return;var el=(Date.now()-new Date(game.lastOpenedAt).getTime())/3600000;var hours=game.logs.length===0?Math.max(el,14):el;var preSnap0=captureSnap(game);var res=simulate(game,hours,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;res.newState.ip=calcIP(game,now);var pH=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH,res.newState,preSnap0);var checked=withUnlock(game,res.newState);if(!checked.dailyGoals||!checked.dailyGoals.date){checked.dailyGoals={date:now.slice(0,10),goals:makeGoals(checked)};}else{var prevGls=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(checked.dailyGoals.goals,checked,game);checked=checkGoalsAwardIP(prevGls,checked.dailyGoals.goals,checked);}var advancedEmbers=[];if(checked.receipts&&checked.receipts.length){checked.receipts=checked.receipts.map(function(r){var st=getReceiptCherishStage(r,checked);var prev=(r.lastSeenCherish===undefined||r.lastSeenCherish===null)?st:r.lastSeenCherish;if(st>prev&&st>=2)advancedEmbers.push({title:r.title,stage:st});return Object.assign({},r,{lastSeenCherish:st});});}setGame(checked);setDigest(res.summary);persistSave(checked);setFirst(false);setScreen("home");setTimeout(function(){var ev=genLiveEvent(checked);setLive([{text:ev.text,kind:ev.kind,time:nowISO()}]);},1800);if(advancedEmbers.length>0){var ae=advancedEmbers[0];setTimeout(function(){showToast(advancedEmbers.length>1?("留守の間に、"+advancedEmbers.length+"つの残り火が、より深く汲み取られた。"):("「"+ae.title+"」が、より深く汲み取られた。"));},2800);}if(el>1&&game.introSeen){var readIds=checked.readConvs||[];var availC=CONVS.filter(function(c){return(checked.characters[c.a].bonds[c.b]||0)>=c.th;});var unreadC=availC.filter(function(c){return readIds.indexOf(c.id)===-1;});var pool=unreadC.length>0?unreadC:availC;if(pool.length>0){var rConv=pool[Math.floor(Math.random()*pool.length)];setReturnConvId(rConv.id);}}if(el>48){setTimeout(function(){showToast("トイマン：「久しぶりだね。でも、置いていかなかった。」");},3200);}var exploringEmbers=(checked.emberCards||[]).filter(function(c){return c.unitState==="exploring";});if(exploringEmbers.length>0){var ec=exploringEmbers[0];setTimeout(function(){var p2=Math.round(ec.progress||0);var line=p2<40?"「まだ深い。でも、見失っていない。」":p2<80?"「触れた。もう少しだ。」":"「もう届く。帰る。」";showToast("トイマン："+line);},2400);}},[game,withUnlock,showToast]);
+  var openWorld=useCallback(function(){if(!game)return;var el=(Date.now()-new Date(game.lastOpenedAt).getTime())/3600000;var hours=game.logs.length===0?Math.max(el,14):el;var preSnap0=captureSnap(game);var res=simulate(game,hours,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;res.newState.ip=calcIP(game,now);var pH=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH,res.newState,preSnap0);var checked=withUnlock(game,res.newState);if(!checked.dailyGoals||!checked.dailyGoals.date){checked.dailyGoals={date:now.slice(0,10),goals:makeGoals(checked)};}else{var prevGls=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(checked.dailyGoals.goals,checked,game);checked=checkGoalsAwardIP(prevGls,checked.dailyGoals.goals,checked);}var advancedEmbers=[];if(checked.receipts&&checked.receipts.length){checked.receipts=checked.receipts.map(function(r){var st=getReceiptCherishStage(r,checked);var prev=(r.lastSeenCherish===undefined||r.lastSeenCherish===null)?st:r.lastSeenCherish;if(st>prev&&st>=2)advancedEmbers.push({title:r.title,stage:st});return Object.assign({},r,{lastSeenCherish:st});});}setGame(checked);setDigest(res.summary);persistSave(checked);setFirst(false);setScreen("home");setTimeout(function(){var ev=genLiveEvent(checked);setLive([{text:ev.text,kind:ev.kind,time:nowISO()}]);},1800);if(advancedEmbers.length>0){var ae=advancedEmbers[0];setTimeout(function(){showToast(advancedEmbers.length>1?("留守の間に、"+advancedEmbers.length+"つの残り火が、より深く汲み取られた。"):("「"+ae.title+"」が、より深く汲み取られた。"));},2800);}if(el>1&&game.introSeen){var readIds=checked.readConvs||[];var availC=CONVS.filter(function(c){return(checked.characters[c.a].bonds[c.b]||0)>=c.th;});var unreadC=availC.filter(function(c){return readIds.indexOf(c.id)===-1;});var pool=unreadC.length>0?unreadC:availC;if(pool.length>0){var rConv=pool[Math.floor(Math.random()*pool.length)];setReturnConvId(rConv.id);}}if(el>48){setTimeout(function(){showToast("トイマン：「久しぶりだね。でも、置いていかなかった」");},3200);}var exploringEmbers=(checked.emberCards||[]).filter(function(c){return c.unitState==="exploring";});if(exploringEmbers.length>0){var ec=exploringEmbers[0];setTimeout(function(){var p2=Math.round(ec.progress||0);var line=p2<40?"「まだ深い。でも、見失っていない」":p2<80?"「触れた。もう少しだ」":"「もう届く。帰る」";showToast("トイマン："+line);},2400);}},[game,withUnlock,showToast]);
   var advTime=useCallback(function(h){if(!game)return;var preSnap1=captureSnap(game);var res=simulate(game,h,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;var pH2=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH2,res.newState,preSnap1);var checked=withUnlock(game,res.newState);if(checked.dailyGoals&&checked.dailyGoals.goals){var pg3=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(pg3,checked,game);checked=checkGoalsAwardIP(pg3,checked.dailyGoals.goals,checked);}setGame(checked);setDigest(res.summary);persistSave(checked);setScreen("log");showToast("世界が"+h+"時間進んだ。");},[game,withUnlock,showToast]);
   var navigateTo=useCallback(function(screen,params){if(screen==="intv"&&params){setIntvConfig({target:params.target||"toyman",tier:params.tier||null,key:Date.now()});}setViewConv(null);setScreen(screen);},[]);
   var closeWorld=useCallback(function(skipPreview){
@@ -3873,7 +3873,7 @@ function App(){
   var addEmber=useCallback(function(card){if(!game)return;var res=addNewEmberToState(game,card);var ns=res.state;ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};setGame(ns);persistSave(ns);setShowCreate(false);var pu=(ns.recentPlaceUnlocks||[])[0];showToast(pu?("新しい場所が開きました：「"+pu.name+"」"):(res.converted?"判決を問いとして保管しました。":"「"+makeEmberTitle(res.card)+"」を預けました。"));},[game,showToast]);
   var readConv=useCallback(function(id){setViewConv(id);if(!game)return;if(game.readConvs.indexOf(id)===-1){var ns=Object.assign({},game,{readConvs:[id].concat(game.readConvs)});setGame(ns);persistSave(ns);}},[game]);
   var receiveConv=useCallback(function(id){if(!game)return;var conv=CBID[id];if(!conv)return;if(game.receivedScenes&&game.receivedScenes.indexOf(id)!==-1)return;var ns=applySceneFx(game,conv);ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);showToast("「"+conv.title+"」を受領した。");},[game,showToast]);
-  var savePhilAnswer=useCallback(function(ans){if(!game||!ans.trim())return;var beforeD=getPhilosophicalQuestion(game).depth;var ns=Object.assign({},game,{questionAnswers:([{q:getPhilosophicalQuestion(game).text,a:ans,at:nowISO()}]).concat(game.questionAnswers||[]).slice(0,30),lastSavedAt:nowISO()});setGame(ns);persistSave(ns);var afterD=getPhilosophicalQuestion(ns).depth;showToast(afterD>beforeD?"コタエ：「記録した。……問いが、深くなった。」":"コタエ：「記録した。あなたの言葉を。」");},[game,showToast]);
+  var savePhilAnswer=useCallback(function(ans){if(!game||!ans.trim())return;var beforeD=getPhilosophicalQuestion(game).depth;var ns=Object.assign({},game,{questionAnswers:([{q:getPhilosophicalQuestion(game).text,a:ans,at:nowISO()}]).concat(game.questionAnswers||[]).slice(0,30),lastSavedAt:nowISO()});setGame(ns);persistSave(ns);var afterD=getPhilosophicalQuestion(ns).depth;showToast(afterD>beforeD?"コタエ：「記録した。……問いが、深くなった」":"コタエ：「記録した。あなたの言葉を」");},[game,showToast]);
 
   /* B: うつろイベント — ホーム初表示時に低確率で発火 */
   useEffect(function(){
@@ -3903,7 +3903,7 @@ function App(){
     {screen!=="closed"&&screen!=="ending"&&<>
       {screen==="home"&&<>
         <Header title="ホーム" day={game.world.day}/>
-        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています。」");setTimeout(function(){closeWorld(false);},800);}}/>
+        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}}/>
       </>}
       {screen==="log"&&<>
         <Header title="記録" day={game.world.day}/>
@@ -4465,8 +4465,7 @@ function EmberView(p){
             {scene.map(function(L,i){
               if(L.s==="stage")return <p key={i} className="eeb-stage">{L.t}</p>;
               return <div key={i} className="eeb-line">
-                <span className={"isc-dot cd-"+L.s+" eeb-dot"}/>
-                <span className="eeb-speaker">{NAMES[L.s]||L.s}：</span>
+                <div className="eeb-namerow"><span className={"isc-dot cd-"+L.s+" eeb-dot"}/><span className="eeb-speaker">{NAMES[L.s]||L.s}</span></div>
                 <span className="eeb-say">「{L.t}」</span>
               </div>;
             })}
@@ -4598,7 +4597,7 @@ function EmberView(p){
       {receipts.filter(function(r){return r.holdText;}).length>0&&<div className="ev-hold-log">
         <span className="isc-dot cd-utsuro ev-hold-dot"/>
         <span className="ev-hold-utsuro">うつろ：</span>
-        <span>「保留にしたものが、{receipts.filter(function(r){return r.holdText;}).length}つある。捨てていない。」</span>
+        <span>「保留にしたものが、{receipts.filter(function(r){return r.holdText;}).length}つある。捨てていない」</span>
       </div>}
     </div>}
     {(game.returnedToHeart||[]).length>0&&<div className="ev-section">
@@ -4763,8 +4762,7 @@ function AcceptanceModal(p){
         return <div className="acc-exchange">
           {ex.map(function(L,i){return(
             <div key={i} className="acc-ex-line">
-              <span className={"isc-dot cd-"+L.s+" acc-ex-dot"}/>
-              <span className="acc-ex-name">{NAMES[L.s]||L.s}：</span>
+              <div className="acc-ex-namerow"><span className={"isc-dot cd-"+L.s+" acc-ex-dot"}/><span className="acc-ex-name">{NAMES[L.s]||L.s}</span></div>
               <span className="acc-ex-say">「{L.t}」</span>
             </div>
           );})}
@@ -4868,6 +4866,7 @@ function EmberCreate(p){
   return(<div className="ov" onClick={p.onClose}><div className="bsh ec-bsh" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
     <p className="sh-title">残り火を預ける</p>
+    <p className="ec-ember-desc">残り火とは「書いたあとにのこった心残り」のことです</p>
     <p className="ec-step">{Math.min(step+1,steps.length+1)} / {steps.length+1}</p>
     {!isInfo&&<>
       <p className="ec-q">{cur.q}</p>
@@ -4949,9 +4948,8 @@ function WitnessOverlay(p){
       <div className="wit-eyebrow">見届ける</div>
       <div className="wit-ember-title">「{makeEmberTitle(card)}」</div>
       <div className="wit-scene">
-        <div className={"wit-line cd-"+cur.s}>
-          <span className={"isc-dot cd-"+cur.s+" wit-dot"}/>
-          <span className="wit-speaker">{NAMES[cur.s]||cur.s}</span>
+        <div className="wit-line">
+          <div className="wit-speaker-row"><span className={"isc-dot cd-"+cur.s+" wit-dot"}/><span className="wit-speaker">{NAMES[cur.s]||cur.s}</span></div>
           <p className="wit-say">「{cur.t}」</p>
         </div>
       </div>
@@ -5004,8 +5002,8 @@ function ReturnConvOverlay(p){
       <div className="rcv-eyebrow">のぞき見</div>
       <div className="rcv-title">「{conv.title}」</div>
       <div className="rcv-scene">
-        <div className={"rcv-line cd-"+who}>
-          <span className="rcv-speaker">{CNAME[cur[0]]}</span>
+        <div className="rcv-line">
+          <div className="rcv-speaker-row"><span className={"isc-dot cd-"+who+" rcv-dot"}/><span className="rcv-speaker">{CNAME[cur[0]]}</span></div>
           <p className="rcv-say">「{cur[1]}」</p>
         </div>
       </div>
@@ -5026,12 +5024,12 @@ function ConvDetail(p){
     <div className="cvd-pair"><span className={"nd cd-"+conv.a}/> {NAMES[conv.a]} × <span className={"nd cd-"+conv.b}/> {NAMES[conv.b]}</div>
     <div className="cvd-title">「{conv.title}」</div>
     {conv.meaning&&<div className="cvd-meaning"><span className="cvd-mlbl">この場面は</span><p className="cvd-mtext">{conv.meaning}</p></div>}
-    <div className="cvd-lines">{conv.lines.map(function(line,i){var who=WHO[line[0]];var charId=who||line[0];return <div key={i} className={"cvd-line"+(who===conv.a?" cvd-a":" cvd-b")+" cd-"+charId}><span className="cvd-speaker-name">{CNAME[line[0]]}</span><p className="cvd-text">「{line[1]}」</p></div>;})}</div>
+    <div className="cvd-lines">{conv.lines.map(function(line,i){var who=WHO[line[0]];var charId=who||line[0];return <div key={i} className="cvd-line"><div className="cvd-speaker-row"><span className={"isc-dot cd-"+charId+" cvd-sdot"}/><span className="cvd-speaker-name">{CNAME[line[0]]}</span></div><p className="cvd-text">「{line[1]}」</p></div>;})}</div>
     <div className="cvd-receive">
       <div className="cvd-fx-title">{received?"受領済み":"この場面を受領すると"}</div>
       <div className="cvd-fx-list">{fxLines.map(function(l,i){return <span key={i} className="cvd-fx-item">{l}</span>;})}</div>
       {!received&&<button className="btn btn-p cvd-recv-btn" onClick={function(){onReceive&&onReceive(conv.id);}}>この場面を受領する</button>}
-      {received&&<div className="cvd-recv-done">受領済み — この場面を受け取りました</div>}
+      {received&&<div className="cvd-recv-done" style={{marginBottom:8}}>受領済み — この場面を受け取りました</div>}
     </div>
     <button className="back cvd-bottom-back" onClick={onBack}>← もどる</button>
   </div></div>;
