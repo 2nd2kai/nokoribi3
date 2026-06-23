@@ -835,6 +835,7 @@ function migrateGame(g){
   if(!g.battle.lastLines)g.battle.lastLines=[];
   if(g.battle.encounter===undefined)g.battle.encounter=null;
   if(!g.toka)g.toka={total:0,log:[]};
+  if(!g.sentFires)g.sentFires=[];
   if(!g.inventory)g.inventory={ash_fragment:0,nameless_envelope:0,water_drop:0,unread_paper:0,small_light:0,pending_tag:0,red_stamp_mark:0,lost_voice:0,dried_tear:0,old_ink:0,question_ticket:0};
   if(!g.achievements)g.achievements={};
   if(!g.unlocks)g.unlocks={scene_book:false,intervention:false,world_record:false,title_book:false,item_book:false};
@@ -969,6 +970,7 @@ function initGame(){
     emberCards:[],receipts:[],
     ip:{cur:5,max:20,lastCalc:now},mapTouch:{cur:1,max:6,lastCalc:now},unlockedConvs:[],readConvs:[],receivedScenes:[],readStories:[],returnedToHeart:[],endingReady:false,endingSeen:false,introQueue:[],seenIntroScenes:[],dailyGoals:{date:"",goals:[]},policy:"care",logs:[],archive:[],
     toka:{total:0,log:[]},
+    sentFires:[],
     inventory:{ash_fragment:0,nameless_envelope:0,water_drop:0,unread_paper:0,small_light:0,pending_tag:0,red_stamp_mark:0,lost_voice:0,dried_tear:0,old_ink:0},
     achievements:{},unlocks:{scene_book:false,intervention:false,world_record:false,title_book:false,item_book:false,tabs:Object.assign({},BASE_TABS),places:Object.assign({},BASE_PLACES)},
     recentRewards:[],newAchievements:[],
@@ -3890,6 +3892,13 @@ function HomeView(p){
         <button className="btn btn-g" onClick={function(){p.onNav&&p.onNav("ember");}}>この問いを見る</button>
       </section>;
     })()}
+    <section className="home-card journey-entry">
+      <div className="lh">火を送り出す</div>
+      <h3 className="bne-title">どこへ送り、誰と会わせるか</h3>
+      <p className="bne-desc">残り火を旅に出す。送り先で問いの種類が、同行者で問いの声が変わる。帰ってきた問いに、会う。</p>
+      <button className="btn btn-p" onClick={function(){p.onJourney&&p.onJourney();}}>残り火を送り出す</button>
+    </section>
+    <JourneyShelf game={game}/>
     <section className="home-card bad-night-entry">
       <div className="lh">判決保留</div>
       <h3 className="bne-title">書くのをやめようとしている、あなたへ</h3>
@@ -3932,6 +3941,204 @@ function ClosedPlacesPreview(p){
   return <section className="home-card closed-places"><div className="lh">閉じている場所</div><div className="closed-grid">{closed.map(function(k){return <span key={k}>□ {PSHORT[k]}</span>;})}</div><p>残り火を預けることで、必要な場所から開きます。</p></section>;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   火を送り出す ── B-loop 第一スライス
+   預け → 送り先×同行者 → 掘る/置く問い → 答え → 受領証/置き札/預かり札 → 棚
+   （既存 emberCards パイプラインとは独立。データは game.sentFires）
+   ══════════════════════════════════════════════════════════════ */
+const J_DESTS=[
+  {id:"forest",label:"未受領の森",verb:"さがす",desc:"何を、まだ求めていたか"},
+  {id:"spring",label:"涙の泉",verb:"わける",desc:"これは、どの感情だったか"}
+];
+const J_COMPS=[{id:"toyman",name:"トイマン"},{id:"kana",name:"かな"},{id:"utsuro",name:"うつろ"}];
+const J_EMOTIONS=["悔しさ","寂しさ","情けなさ","まだわからない"];
+const J_DANGER_WORDS=["死にたい","しにたい","消えたい","きえたい","いなくなりたい","終わりにしたい","死んだ方"];
+const J_FORM_META={
+  certificate:{label:"受領証",cls:"jf-cert"},
+  placed:{label:"置き札",cls:"jf-placed"},
+  kept:{label:"預かり札",cls:"jf-kept"}
+};
+function jName(c){return ({toyman:"トイマン",kana:"かな",utsuro:"うつろ"})[c]||c;}
+function jHasDanger(s){s=s||"";return J_DANGER_WORDS.some(function(w){return s.indexOf(w)>=0;});}
+function jDigQuestion(dest,comp){
+  if(dest==="spring")return {text:({toyman:"この痛みは、どれから見る？",kana:"どれを、いちばん分かってほしい？",utsuro:"どれが、終わっても残ってる？"})[comp],picker:true};
+  return {text:({toyman:"これ、まだ何を探してた？",kana:"本当は、何て言ってほしかった？",utsuro:"これが終わったあと、何が残ってた？"})[comp],picker:false};
+}
+function jPlaceQuestion(dest,comp){
+  if(dest==="spring")return {text:({toyman:"この気持ちは、今どこまで見ずに置いておく？",kana:"この気持ちを、今は名前にせず置いておく？",utsuro:"この気持ちを、終わったことにせず、どこに置いておく？"})[comp],picker:false};
+  return {text:({toyman:"今は、どこまで探さずに置いておく？",kana:"今は、どの気持ちを名前にせず置いておく？",utsuro:"今は、終わったことにせず、どこに置いておく？"})[comp],picker:false};
+}
+function jReturnReport(comp,placeMode,retreated){
+  var n=jName(comp);
+  if(retreated)return n+"：「途中まで行った。今夜は、ここまでで持ち帰った。」";
+  if(placeMode)return n+"：「奥までは行かずに、戻ってきた。」";
+  return ({toyman:n+"：「奥まで行った。これを見つけた。」",kana:n+"：「そばにいた。これを持って帰ってきた。」",utsuro:n+"：「拾って、封筒に入れて戻った。」"})[comp];
+}
+function jReply(comp,deferred,placeMode){
+  if(deferred)return ({toyman:"いい。まだで。預かっとく。",kana:"いいよ、まだで。そばに置いとく。",utsuro:"終わらせなくていい。置いておく。"})[comp];
+  if(placeMode)return ({toyman:"うん。今夜は、ここに置いた。",kana:"名前にしなくていい。置いておこう。",utsuro:"終わってない。それで、いい。"})[comp];
+  return ({toyman:"読んだ。探した火は、ここにあった。",kana:"うん。そう言ってほしかったんだね。",utsuro:"終わっても、残ってたんだね。"})[comp];
+}
+function jVoiceLine(comp){return ({toyman:"森で見つけた。捨てられてなかった。",kana:"つらい夜だったね、って言った。",utsuro:"終わったあとも、残ってた。"})[comp];}
+function jTitleOf(fire){var k=(fire.kindle||"").trim();return k.length>22?k.slice(0,22)+"…":(k||"名もない火");}
+
+function EmberJourney(p){
+  var [phase,setPhase]=useState("deposit");
+  var [kindle,setKindle]=useState("");
+  var [pain,setPain]=useState("");
+  var [noWords,setNoWords]=useState(false);
+  var [tooHard,setTooHard]=useState(false);
+  var [dest,setDest]=useState("");
+  var [comp,setComp]=useState("");
+  var [retreated,setRetreated]=useState(false);
+  var [q,setQ]=useState(null);
+  var [placeMode,setPlaceMode]=useState(false);
+  var [answer,setAnswer]=useState("");
+  var [emotion,setEmotion]=useState("");
+  var [report,setReport]=useState("");
+  var [result,setResult]=useState(null);
+
+  function commitFire(fire){
+    var ns=cloneS(p.game);
+    if(!ns.sentFires)ns.sentFires=[];
+    ns.sentFires=[fire].concat(ns.sentFires);
+    var add=fire.form==="certificate"?3:(fire.form==="placed"?2:1);
+    if(typeof grantToka==="function")grantToka(ns,add,"捨てずに、棚へ灯した。");
+    ns.lastSavedAt=nowISO();
+    p.onChange&&p.onChange(ns);
+  }
+  function proceedFromDeposit(){
+    if(!kindle.trim())return;
+    var danger=tooHard||jHasDanger(kindle)||jHasDanger(pain);
+    if(danger){
+      var keptFire={
+        id:"sf"+Date.now(),kindle:kindle.trim(),pain:noWords?null:(pain.trim()||null),noWords:noWords,danger:true,
+        dest:null,companion:null,retreated:false,form:"kept",meetings:[],voiceLine:null,
+        createdAt:nowISO(),lastTouch:nowISO()
+      };
+      commitFire(keptFire);
+      setResult(keptFire);setPhase("kept");return;
+    }
+    setPhase("send");
+  }
+  function sendOut(){if(!dest||!comp)return;setPhase("travel");}
+  function returnFire(didRetreat){
+    var pm=noWords||didRetreat;
+    setRetreated(didRetreat);setPlaceMode(pm);
+    setQ(pm?jPlaceQuestion(dest,comp):jDigQuestion(dest,comp));
+    setReport(jReturnReport(comp,pm,didRetreat));
+    setPhase("meet");
+  }
+  function finishMeet(deferred){
+    var pm=placeMode;
+    var form=(pm||deferred)?"placed":"certificate";
+    var ans=q&&q.picker?(emotion?(emotion+(answer.trim()?("／"+answer.trim()):"")):answer.trim()):answer.trim();
+    var meeting={dest:dest,companion:comp,question:q?q.text:"",mode:pm?"place":"dig",picker:!!(q&&q.picker),emotion:emotion||null,answer:deferred?null:(ans||null),deferred:deferred,at:nowISO()};
+    var fire={
+      id:"sf"+Date.now(),kindle:kindle.trim(),pain:noWords?null:(pain.trim()||null),noWords:noWords,danger:false,
+      dest:dest,companion:comp,retreated:retreated,form:form,meetings:[meeting],voiceLine:jVoiceLine(comp),
+      createdAt:nowISO(),lastTouch:nowISO()
+    };
+    commitFire(fire);
+    setResult({fire:fire,deferred:deferred,reply:jReply(comp,deferred,pm)});
+    setPhase("done");
+  }
+  var destObj=J_DESTS.find(function(d){return d.id===dest;});
+
+  return <div className="ov ej-ov" onClick={p.onClose}><div className="bsh ej-bsh" onClick={function(e){e.stopPropagation();}}>
+    <div className="sh-handle"/>
+
+    {phase==="deposit"&&<div className="ej-in">
+      <p className="ej-kicker">火を送り出す</p>
+      <h2 className="ej-title">残り火を、預ける</h2>
+      <label className="ej-field"><span>火種 ── 書いたあとに残ったもの</span>
+        <textarea rows={3} value={kindle} placeholder="例：もう誰にも読まれないなら、書く意味がない" onChange={function(e){setKindle(e.target.value);}}/>
+      </label>
+      <label className={"ej-field"+(noWords?" ej-dim":"")}><span>その奥にあるもの（任意）</span>
+        <input type="text" value={pain} disabled={noWords} placeholder="本当は…" onChange={function(e){setPain(e.target.value);}}/>
+      </label>
+      <button className={"ej-chip"+(noWords?" ej-chip-on":"")} onClick={function(){setNoWords(function(v){return !v;});}}>まだ言葉にできない</button>
+      <button className={"ej-chip ej-chip-soft"+(tooHard?" ej-chip-on":"")} onClick={function(){setTooHard(function(v){return !v;});}}>今夜は、これ以上ことばにしたくない（ただ預かってほしい）</button>
+      <button className="btn btn-p ej-go" disabled={!kindle.trim()} onClick={proceedFromDeposit}>{tooHard?"預ける":"送り先を選ぶ"}</button>
+      <button className="btn btn-g ej-cancel" onClick={p.onClose}>今日はやめておく</button>
+    </div>}
+
+    {phase==="send"&&<div className="ej-in">
+      <p className="ej-step">送り先 ＝ どんな問いに会うか</p>
+      <div className="ej-cards">{J_DESTS.map(function(d){return <button key={d.id} className={"ej-dest"+(dest===d.id?" ej-sel":"")} onClick={function(){setDest(d.id);}}>
+        <span className="ej-dest-label">{d.label}</span><span className="ej-dest-verb">{d.verb}</span><span className="ej-dest-desc">{d.desc}</span>
+      </button>;})}</div>
+      <p className="ej-step">同行者 ＝ どんな声で問うか</p>
+      <div className="ej-comps">{J_COMPS.map(function(c){return <button key={c.id} className={"ej-comp"+(comp===c.id?" ej-sel":"")} onClick={function(){setComp(c.id);}}>
+        <span className={"isc-dot cd-"+c.id+" ej-comp-dot"}/><span>{c.name}</span>
+      </button>;})}</div>
+      <button className="btn btn-p ej-go" disabled={!dest||!comp} onClick={sendOut}>旅に出す</button>
+      <button className="btn btn-g ej-cancel" onClick={p.onClose}>今日はやめておく</button>
+    </div>}
+
+    {phase==="travel"&&<div className="ej-in ej-travel">
+      <p className="ej-travel-line">{jName(comp)}が、{destObj&&destObj.label}へ向かった。</p>
+      <p className="ej-travel-sub">あなたが離れているあいだに、火は旅をする。</p>
+      <button className="btn btn-p ej-go" onClick={function(){returnFire(false);}}>このまま、奥まで探してもらう</button>
+      <button className="btn btn-g" onClick={function(){returnFire(true);}}>今夜は、ここまで探してもらう</button>
+    </div>}
+
+    {phase==="meet"&&<div className="ej-in">
+      <p className="ej-report">{report}</p>
+      <div className="ej-q-box"><p className="ej-q">{q&&q.text}</p></div>
+      {q&&q.picker&&<div className="ej-emos">{J_EMOTIONS.map(function(em){return <button key={em} className={"ej-emo"+(emotion===em?" ej-sel":"")} onClick={function(){setEmotion(em);}}>{em}</button>;})}</div>}
+      {(!q||!q.picker)&&<textarea className="ej-answer" rows={3} value={answer} placeholder={placeMode?"置いておく場所を、ひとことで（任意）":"思ったことだけ、書けたら（任意）"} onChange={function(e){setAnswer(e.target.value);}}/>}
+      {q&&q.picker&&emotion&&<textarea className="ej-answer" rows={2} value={answer} placeholder="ひとこと、添えるなら（任意）" onChange={function(e){setAnswer(e.target.value);}}/>}
+      <button className="btn btn-p ej-go" disabled={q&&q.picker&&!emotion} onClick={function(){finishMeet(false);}}>{placeMode?"今夜は、ここに置く":"受け取る"}</button>
+      <button className="btn btn-g" onClick={function(){finishMeet(true);}}>まだ答えない</button>
+    </div>}
+
+    {phase==="done"&&result&&<div className="ej-in ej-done">
+      <div className="ej-reply"><span className={"isc-dot cd-"+comp+" ej-comp-dot"}/><p>「{result.reply}」</p></div>
+      <div className={"ej-formed "+J_FORM_META[result.fire.form].cls}>
+        <span className="ej-formed-label">{J_FORM_META[result.fire.form].label}</span>
+        <span className="ej-formed-title">「{jTitleOf(result.fire)}」</span>
+        <span className="ej-formed-note">棚に灯った。</span>
+      </div>
+      <button className="btn btn-p ej-go" onClick={p.onClose}>棚へ戻る</button>
+    </div>}
+
+    {phase==="kept"&&result&&<div className="ej-in ej-kept">
+      <p className="ej-kept-title">この火は、今日は問いにしません。</p>
+      <p className="ej-kept-body">答えを探さず、ただ預かります。<br/>送り先は、落ち着いた日に選べます。</p>
+      <p className="ej-kept-safety">いま自分を傷つけてしまいそうなときは、アプリではなく、近くの人・緊急の窓口・医療機関につながってください。ここは、危険が去ったあとに、言葉を預けるための場所です。</p>
+      <div className="ej-formed jf-kept">
+        <span className="ej-formed-label">預かり札</span>
+        <span className="ej-formed-title">「{jTitleOf(result)}」</span>
+        <span className="ej-formed-note">この火は、答えを求めずに預かった。</span>
+      </div>
+      <button className="btn btn-g ej-go" onClick={p.onClose}>閉じる</button>
+    </div>}
+
+  </div></div>;
+}
+
+function JourneyShelf(p){
+  var fires=(p.game&&p.game.sentFires)||[];
+  if(!fires.length)return null;
+  return <section className="home-card jshelf">
+    <div className="lh">残り火の棚</div>
+    <p className="jshelf-sub">ここに灯っている火：{fires.length}つ。捨てなかったもの。</p>
+    <div className="jshelf-list">{fires.slice(0,12).map(function(f){
+      var meta=J_FORM_META[f.form]||J_FORM_META.placed;
+      var m=(f.meetings||[])[0];
+      return <div key={f.id} className={"jfire "+meta.cls}>
+        <div className="jfire-top"><span className="jfire-form">{meta.label}</span><span className="jfire-title">「{jTitleOf(f)}」</span></div>
+        {m&&m.question&&<div className="jfire-q">{m.question}</div>}
+        {m&&m.answer&&<div className="jfire-a">{m.answer}</div>}
+        {m&&m.deferred&&<div className="jfire-a jfire-defer">まだ答えていない。そばに置いてある。</div>}
+        {f.form==="kept"&&<div className="jfire-a jfire-defer">答えを求めずに預かった。</div>}
+        {f.voiceLine&&<div className="jfire-voice">{jName(f.companion)}：「{f.voiceLine}」</div>}
+      </div>;
+    })}</div>
+  </section>;
+}
+
 /* ── メインApp ── */
 function App(){
   var [screen,setScreen]=useState("loading");
@@ -3949,7 +4156,7 @@ function App(){
   var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [battleFrom,setBattleFrom]=useState("peek");var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
   var gameRef=useRef(null),toastRef=useRef(null);
   var [watchGauge,setWatchGauge]=useState(0);var wgRef=useRef({gauge:0,last:{}});var [returnConvId,setReturnConvId]=useState(null);var [witnessTargetId,setWitnessTargetId]=useState(null);var [sendGiftOpen,setSendGiftOpen]=useState(false);var [utsuroEventActive,setUtsuroEventActive]=useState(false);var [closingPreview,setClosingPreview]=useState(null);var [philAnswerOpen,setPhilAnswerOpen]=useState(false);var [kotaeStuck,setKotaeStuck]=useState(false);
-  var [saveError,setSaveError]=useState(false);var [showBadNight,setShowBadNight]=useState(false);
+  var [saveError,setSaveError]=useState(false);var [showBadNight,setShowBadNight]=useState(false);var [showJourney,setShowJourney]=useState(false);
   useEffect(function(){gameRef.current=game;},[game]);
 
   useEffect(function(){var saved=loadSave();if(saved){setGame(migrateGame(saved));setFirst(false);}else{var f=initGame();setGame(f);setFirst(true);persistSave(f);}setScreen("closed");},[]); // eslint-disable-line
@@ -4070,7 +4277,7 @@ function App(){
     {screen!=="closed"&&screen!=="ending"&&<>
       {screen==="home"&&<>
         <Header title="ホーム" day={game.world.day}/>
-        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onBadNight={function(){setShowBadNight(true);}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}}/>
+        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onBadNight={function(){setShowBadNight(true);}} onJourney={function(){setShowJourney(true);}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}}/>
       </>}
       {screen==="log"&&<>
         <Header title="記録" day={game.world.day}/>
@@ -4117,6 +4324,7 @@ function App(){
     {closingPreview&&<ClosingPreviewOverlay text={closingPreview} onClose={function(){setClosingPreview(null);closeWorld(true);}}/>}
     {philAnswerOpen&&<PhilAnswerModal question={getPhilosophicalQuestion(game).text} onClose={function(){setPhilAnswerOpen(false);}} onSave={function(a){savePhilAnswer(a);setPhilAnswerOpen(false);}}/>}
     {showCreate&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber}/>}
+    {showJourney&&<EmberJourney game={game} onClose={function(){setShowJourney(false);}} onChange={function(ns){setGame(ns);persistSave(ns);}}/>}
     {showBadNight&&<BadNightMode onClose={function(){setShowBadNight(false);}} onSubmit={function(card){addEmber(card);setShowBadNight(false);var ns=cloneS(game);ns.logs=[{hours:0,events:[{text:"今夜の判決を、問いとして保留した。",kind:"record",pri:5},{text:"審査官：「今夜は受理しない」",kind:"auditor",pri:5},{text:"うつろ：「明日まで、捨てない」",kind:"record",pri:4}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);}}/>}
     {departTargetId&&<DepartureOverlay card={(game.emberCards||[]).find(function(c){return c.id===departTargetId;})} onCancel={function(){setDepartTargetId(null);}} onConfirm={function(){confirmDepartCb(departTargetId);}}/>}
     {burnTargetId&&<BurnConfirmModal receipt={(game.receipts||[]).find(function(r){return r.id===burnTargetId;})} onCancel={function(){setBurnTargetId(null);}} onConfirm={function(){confirmBurnCb(burnTargetId);}}/>}
