@@ -3620,6 +3620,15 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 
 /* ── 受領証 追加要素 ── */
 .ev-receipt-days{font-size:11px;color:var(--faint);margin:-4px 0 10px;letter-spacing:.04em}
+.ev-cherish{margin:0 0 12px;padding:11px 13px;background:linear-gradient(180deg,rgba(219,164,94,.06),rgba(219,164,94,.02));border:1px solid rgba(219,164,94,.16);border-radius:10px}
+.ev-cherish.ec-stage-4{background:linear-gradient(180deg,rgba(219,164,94,.12),rgba(219,164,94,.04));border-color:rgba(232,192,128,.34)}
+.ev-cherish-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.ev-cherish-label{font-size:10.5px;color:var(--ember2);letter-spacing:.12em;font-family:var(--sans)}
+.ev-cherish-dots{display:inline-flex;gap:4px}
+.ec-dot{width:6px;height:6px;border-radius:50%;background:rgba(232,227,212,.12)}
+.ec-dot-on{background:var(--ember);box-shadow:0 0 4px rgba(219,164,94,.5)}
+.ev-cherish-text{font-family:var(--serif);font-size:14px;color:var(--ember2);line-height:1.85;letter-spacing:.04em;margin:0}
+.ev-cherish-hint{font-size:10.5px;color:var(--faint);margin:6px 0 0;line-height:1.5;letter-spacing:.02em}
 .ev-change-note{margin-top:12px;padding:10px 12px;background:rgba(255,255,255,.03);border-left:2px solid var(--line2);border-radius:0 8px 8px 0}
 .ev-change-label{display:block;font-size:10px;color:var(--faint);margin-bottom:4px;letter-spacing:.06em}
 .ev-change-note p{margin:0;font-size:13px;color:var(--dim);line-height:1.8;font-family:var(--serif)}

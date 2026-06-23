@@ -161,6 +161,86 @@ function getPhilosophicalQuestion(game){
   return{id:"q05",text:"つくり続けた先に、私は何を赦せるのか",depth:5};
 }
 
+/* ── 残り火の「汲み取られていく」過程 ──
+   主役は残り火（＝書いた人の思い）。一度受け取られて終わりではなく、
+   留守の間も大切にされ続け、戻るたびに、込めた思いがより深く読み取られていく。
+   放置（時間）で「まだ大切にされている」が進み、
+   問いに答えると「汲み取り」が一段深まる。
+   段階: 0 預かり / 1 まだ大切に / 2 汲み取り① / 3 汲み取り② / 4 尊重(汲み取り③)
+   文体は B（書かれていない奥の感情まで言葉にする）を基本、
+   段階4だけ C（核心を言い当てる）に寄せる。 */
+const FEELING_INSIGHTS={
+  "空っぽ":[
+    "「空っぽ」——でも、空になるほど、そこには確かに何かがあった。",
+    "空っぽさは、注いだものが大きかった証拠かもしれない。",
+    "本当は、空にしてでも、誰かに渡したかったんだ。"
+  ],
+  "悔しさ":[
+    "「悔しさ」——それは、まだ諦めていないということ。",
+    "悔しいのは、本当はできると、自分を信じていたから。",
+    "認めてほしかった。できる自分を、ちゃんと見てほしかったんだ。"
+  ],
+  "悲しさ":[
+    "「悲しさ」——失ったものが、確かにそこにあった。",
+    "悲しいのは、それをずっと大切に思っていたから。",
+    "本当は、まだ手放したくなんてなかったんだ。"
+  ],
+  "恥ずかしさ":[
+    "「恥ずかしさ」——人の目を、ちゃんと気にできるということ。",
+    "恥ずかしいのは、よく見られたいと願っていたから。",
+    "本当は、つくろわない自分のまま、受け入れてほしかったんだ。"
+  ],
+  "怒り":[
+    "「怒り」——大事にしたいものが、踏まれたということ。",
+    "怒っているのは、本当はその下で、傷ついていたから。",
+    "傷ついたと、誰かに気づいてほしかったんだ。"
+  ],
+  "寂しさ":[
+    "「寂しさ」——それは、つながりたかったということ。",
+    "寂しいのは、本当は、そばにいてほしかったから。",
+    "見てほしかった。ここにいると、誰かに気づいてほしかったんだ。"
+  ],
+  "まだ分からない":[
+    "「まだ分からない」——分からないまま、ここに置いていい。",
+    "分からないのは、簡単に名前をつけてしまいたくないから。",
+    "本当は、誰かに、一緒に分かってほしかったのかもしれない。"
+  ]
+};
+function getFeelingInsightStages(receipt){
+  var f=receipt&&receipt.feeling||"";
+  if(FEELING_INSIGHTS[f])return FEELING_INSIGHTS[f];
+  var w=receipt&&receipt.wanted||"";
+  if(f||w){
+    var core=f||w;
+    return [
+      "「"+core+"」——それは、なかったことにできないもの。",
+      "「"+core+"」の奥には、まだ言葉にしきれない思いがある。",
+      "本当は、その思いを、誰かにちゃんと受け取ってほしかったんだ。"
+    ];
+  }
+  return [
+    "書いたあとに残ったもの——それは、確かにここにある。",
+    "言葉にならなかったけれど、何かが残った。それを、消していない。",
+    "本当は、これを、なかったことにしたくなかったんだ。"
+  ];
+}
+function getReceiptCherishStage(receipt,game){
+  if(!receipt)return 0;
+  var base=receipt.receivedAt||receipt.depositedAt||null;
+  var ms=base?(Date.now()-new Date(base).getTime()):0;
+  var hours=ms/3600000;
+  var t=hours<1?0:hours<8?1:hours<24?2:hours<72?3:4;
+  var a=((game&&game.questionAnswers)||[]).length;/* 問いに答えると汲み取りが加速 */
+  return Math.min(4,t+a);
+}
+function getEmberInsight(receipt,game){
+  var stage=getReceiptCherishStage(receipt,game);
+  if(stage<=0)return{stage:0,label:"預かり",text:"預かった。まだ、ここに置いたばかり。"};
+  if(stage===1)return{stage:1,label:"まだ大切に",text:"あの残り火、まだ手元にある。忘れていない。"};
+  var stages=getFeelingInsightStages(receipt);
+  return{stage:stage,label:stage>=4?"尊重":"汲み取り",text:stages[Math.min(stages.length-1,stage-2)]};
+}
+
 /* ── 受け取り「見届ける」セリフ（残り火の内容に反応） ── */
 function getWitnessLines(card,game){
   var title=makeEmberTitle(card);
@@ -3771,7 +3851,7 @@ function App(){
   var addWatchGauge=useCallback(function(type,amount){var now2=Date.now();if((wgRef.current.last[type]||0)>now2-5000)return;wgRef.current.last[type]=now2;var ng=wgRef.current.gauge+amount;if(ng>=100){ng-=100;setGame(function(g){if(!g)return g;return Object.assign({},g,{ip:Object.assign({},g.ip,{cur:Math.min(g.ip.max,(g.ip.cur||0)+1)})});});showToast("見守り満タン — 干渉ポイント +1");}wgRef.current.gauge=ng;setWatchGauge(ng);},[showToast]);
   var withUnlock=useCallback(function(prev,next){var pu=getUnlockedConvIds(prev),nu=getUnlockedConvIds(next);var fresh=nu.filter(function(id){return pu.indexOf(id)===-1;});var s=Object.assign({},next,{unlockedConvs:nu});if(fresh.length>0)showToast("会話が解放された：「"+CBID[fresh[0]].title+"」");return s;},[showToast]);
 
-  var openWorld=useCallback(function(){if(!game)return;var el=(Date.now()-new Date(game.lastOpenedAt).getTime())/3600000;var hours=game.logs.length===0?Math.max(el,14):el;var preSnap0=captureSnap(game);var res=simulate(game,hours,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;res.newState.ip=calcIP(game,now);var pH=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH,res.newState,preSnap0);var checked=withUnlock(game,res.newState);if(!checked.dailyGoals||!checked.dailyGoals.date){checked.dailyGoals={date:now.slice(0,10),goals:makeGoals(checked)};}else{var prevGls=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(checked.dailyGoals.goals,checked,game);checked=checkGoalsAwardIP(prevGls,checked.dailyGoals.goals,checked);}setGame(checked);setDigest(res.summary);persistSave(checked);setFirst(false);setScreen("home");setTimeout(function(){var ev=genLiveEvent(checked);setLive([{text:ev.text,kind:ev.kind,time:nowISO()}]);},1800);if(el>1&&game.introSeen){var readIds=checked.readConvs||[];var availC=CONVS.filter(function(c){return(checked.characters[c.a].bonds[c.b]||0)>=c.th;});var unreadC=availC.filter(function(c){return readIds.indexOf(c.id)===-1;});var pool=unreadC.length>0?unreadC:availC;if(pool.length>0){var rConv=pool[Math.floor(Math.random()*pool.length)];setReturnConvId(rConv.id);}}if(el>48){setTimeout(function(){showToast("トイマン：「久しぶりだね。でも、置いていかなかった。」");},3200);}var exploringEmbers=(checked.emberCards||[]).filter(function(c){return c.unitState==="exploring";});if(exploringEmbers.length>0){var ec=exploringEmbers[0];setTimeout(function(){var p2=Math.round(ec.progress||0);var line=p2<40?"「まだ深い。でも、見失っていない。」":p2<80?"「触れた。もう少しだ。」":"「もう届く。帰る。」";showToast("トイマン："+line);},2400);}},[game,withUnlock,showToast]);
+  var openWorld=useCallback(function(){if(!game)return;var el=(Date.now()-new Date(game.lastOpenedAt).getTime())/3600000;var hours=game.logs.length===0?Math.max(el,14):el;var preSnap0=captureSnap(game);var res=simulate(game,hours,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;res.newState.ip=calcIP(game,now);var pH=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH,res.newState,preSnap0);var checked=withUnlock(game,res.newState);if(!checked.dailyGoals||!checked.dailyGoals.date){checked.dailyGoals={date:now.slice(0,10),goals:makeGoals(checked)};}else{var prevGls=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(checked.dailyGoals.goals,checked,game);checked=checkGoalsAwardIP(prevGls,checked.dailyGoals.goals,checked);}var advancedEmbers=[];if(checked.receipts&&checked.receipts.length){checked.receipts=checked.receipts.map(function(r){var st=getReceiptCherishStage(r,checked);var prev=(r.lastSeenCherish===undefined||r.lastSeenCherish===null)?st:r.lastSeenCherish;if(st>prev&&st>=2)advancedEmbers.push({title:r.title,stage:st});return Object.assign({},r,{lastSeenCherish:st});});}setGame(checked);setDigest(res.summary);persistSave(checked);setFirst(false);setScreen("home");setTimeout(function(){var ev=genLiveEvent(checked);setLive([{text:ev.text,kind:ev.kind,time:nowISO()}]);},1800);if(advancedEmbers.length>0){var ae=advancedEmbers[0];setTimeout(function(){showToast(advancedEmbers.length>1?("留守の間に、"+advancedEmbers.length+"つの残り火が、より深く汲み取られた。"):("「"+ae.title+"」が、より深く汲み取られた。"));},2800);}if(el>1&&game.introSeen){var readIds=checked.readConvs||[];var availC=CONVS.filter(function(c){return(checked.characters[c.a].bonds[c.b]||0)>=c.th;});var unreadC=availC.filter(function(c){return readIds.indexOf(c.id)===-1;});var pool=unreadC.length>0?unreadC:availC;if(pool.length>0){var rConv=pool[Math.floor(Math.random()*pool.length)];setReturnConvId(rConv.id);}}if(el>48){setTimeout(function(){showToast("トイマン：「久しぶりだね。でも、置いていかなかった。」");},3200);}var exploringEmbers=(checked.emberCards||[]).filter(function(c){return c.unitState==="exploring";});if(exploringEmbers.length>0){var ec=exploringEmbers[0];setTimeout(function(){var p2=Math.round(ec.progress||0);var line=p2<40?"「まだ深い。でも、見失っていない。」":p2<80?"「触れた。もう少しだ。」":"「もう届く。帰る。」";showToast("トイマン："+line);},2400);}},[game,withUnlock,showToast]);
   var advTime=useCallback(function(h){if(!game)return;var preSnap1=captureSnap(game);var res=simulate(game,h,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;var pH2=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH2,res.newState,preSnap1);var checked=withUnlock(game,res.newState);if(checked.dailyGoals&&checked.dailyGoals.goals){var pg3=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(pg3,checked,game);checked=checkGoalsAwardIP(pg3,checked.dailyGoals.goals,checked);}setGame(checked);setDigest(res.summary);persistSave(checked);setScreen("log");showToast("世界が"+h+"時間進んだ。");},[game,withUnlock,showToast]);
   var navigateTo=useCallback(function(screen,params){if(screen==="intv"&&params){setIntvConfig({target:params.target||"toyman",tier:params.tier||null,key:Date.now()});}setViewConv(null);setScreen(screen);},[]);
   var closeWorld=useCallback(function(skipPreview){
@@ -4507,7 +4587,7 @@ function EmberView(p){
     {receipts.length>0&&<div className="ev-section">
       <div className="lh">受領証</div>
       <p className="ev-receipt-guide">卒業した受領証は「心へ返す」ことができます。心へ返すと、その分だけ箱庭が静かになっていきます。卒業したものを全部返しきると、ひとつの区切りが訪れます。</p>
-      {receipts.map(function(r){var grad=r.receiptStatus==="graduated";return(<ReceiptCard key={r.id} r={r} grad={grad} onBurnReceipt={onBurnReceipt}/>);})}
+      {receipts.map(function(r){var grad=r.receiptStatus==="graduated";return(<ReceiptCard key={r.id} r={r} grad={grad} game={game} onBurnReceipt={onBurnReceipt}/>);})}
     </div>}
     {receipts.length>0&&<div className="ev-section">
       <div className="lh">問いの記録</div>
@@ -4557,6 +4637,7 @@ var NEXT_QUESTION_CHOICES={
 function ReceiptCard(p){
   var r=p.r,grad=p.grad;
   var [copied,setCopied]=useState(false);
+  var insight=getEmberInsight(r,p.game);
   var daysSince=null;
   if(r.depositedAt&&r.receivedAt){var ms=new Date(r.receivedAt)-new Date(r.depositedAt);daysSince=Math.max(0,Math.round(ms/86400000));};
   function copyPrompt(){
@@ -4573,6 +4654,14 @@ function ReceiptCard(p){
       <span className={"ev-receipt-badge "+(grad?"erb-grad":"erb-prov")}>{grad?"卒業":"仮"}</span>
     </div>
     {daysSince!==null&&<div className="ev-receipt-days">{daysSince===0?"預けた日に届いた":daysSince+"日後に届いた"}</div>}
+    <div className={"ev-cherish ec-stage-"+insight.stage}>
+      <div className="ev-cherish-head">
+        <span className="ev-cherish-label">{insight.label}</span>
+        <span className="ev-cherish-dots">{[0,1,2,3,4].map(function(i){return <span key={i} className={"ec-dot"+(i<=insight.stage?" ec-dot-on":"")}/>;})}</span>
+      </div>
+      <p className="ev-cherish-text">{insight.text}</p>
+      {insight.stage<4&&<p className="ev-cherish-hint">{insight.stage<2?"時間が経つほど、深く汲み取られていく。":"問いに答えると、さらに深く汲み取られる。"}</p>}
+    </div>
     <ReceiptWordsBox receipt={r}/><ReceiptMetricBox receipt={r}/><pre className="ev-receipt-text">{r.text}</pre>
     {r.changeNote&&r.changeNote.trim()&&<div className="ev-change-note"><span className="ev-change-label">変化の記録</span><p>{r.changeNote}</p></div>}
     {(r.shadowAnswers||[]).length>0&&<div className="ev-shadow-answers">
