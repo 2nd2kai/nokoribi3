@@ -1114,6 +1114,38 @@ function peekBattleEncounter(game){
   if(b.encounter&&!b.encounter.done&&b.encounter.turns<BATTLE_CFG.encounterMaxTurns)return b.encounter;
   return{enemy:battleEnemyName(game),turns:0,maxTurns:BATTLE_CFG.encounterMaxTurns,voiceIndex:0,done:false};
 }
+function getPersonalShadowVoices(card){
+  var feeling=card&&card.feeling||"";
+  var ws=card&&card.writeState||"";
+  var wanted=card&&card.wanted||"";
+  var voices=[];
+  var wsV={
+    "書いたけど届いていない":["届けたつもりで、ただ置いただけじゃないの？","届かなかったのは、届ける力がなかったから。","あなたが書いたもの、本当に誰かに向けて書いた？"],
+    "投稿したけど反応がない":["反応がないって、つまりそういうことだよ。","もし本当に響くものなら、誰かが気づくはず。","投稿したけど、誰の心にも届かなかった。"],
+    "終わったのに虚しい":["書き終わっても虚しいのは、最初から意味がなかったから。","何かを得られると思って書いたの？","虚しさが残るなら、何のために書いたの？"],
+    "何にもならない気がした":["「気がした」じゃなくて、本当に何にもならなかった。","何かになると思って書き始めたの？それが間違いだったんじゃ。","書いたことで、何かが変わった？"],
+    "誰にも見せていない":["見せられないなら、書かなかったも同然じゃないの？","誰にも見せられないものを書いた意味は？","隠すために書いたの？"],
+    "消したいけど消せない":["消せないのは、ただの未練。","消したいと思ってるなら、それが答えだよ。","消せないのは、あなたが弱いから。"]
+  };
+  if(wsV[ws])voices=voices.concat(wsV[ws]);
+  var feV={
+    "悔しさ":["悔しいなら、なぜ変えられなかったの？","悔しさって、ただの負け惜しみじゃないの？","次は違うって思ってる？また同じだよ。"],
+    "空っぽ":["空っぽになったのは、もともと中身がなかったから。","注いだって言うけど、受け取る人はいた？","空っぽになるほどのものが、本当にあったの？"],
+    "悲しさ":["悲しくても、誰も気づいてくれないじゃない。","悲しいって感じても、それが変わるわけじゃない。","悲しさを書いても、何も解決しない。"],
+    "恥ずかしさ":["恥ずかしいと思う理由、自分でも分かってるよね？","恥ずかしいものを出した責任は、自分にある。","見せなければよかったって、思ってるでしょ。"],
+    "怒り":["怒ってても、誰にも届かないよ。","怒りで書いたもの、後から恥ずかしくなるやつじゃない？","怒りだけで書いたなら、それだけのものだよ。"],
+    "寂しさ":["寂しいなら、なぜ一人で書いてるの？","つながりたかったなら、なぜ届けなかったの？","寂しさを紛らわすために書いたの？"],
+    "まだ分からない":["分からないなら、なぜここに置いたの？","分からないものに意味はあるの？","分からないままにしておけば、いつか消えるよ。"]
+  };
+  if(feV[feeling])voices=voices.concat(feV[feeling]);
+  if(wanted&&wanted!=="まだ分からない")voices.push("「"+wanted+"」なんて、本当に受け取ってもらえると思ってた？");
+  if(voices.length===0)voices=["どうせ届いてない。","見られていないものは、なかったのと同じだ。","その火、誰が受け取るの？"];
+  return voices;
+}
+function getShadowVoiceForCard(card,index){
+  var voices=card?getPersonalShadowVoices(card):SHADOW_VOICES["未受領の影"];
+  return voices[Math.abs(index||0)%voices.length];
+}
 function getShadowVoice(enemy,index){var voices=SHADOW_VOICES[enemy]||SHADOW_VOICES["未受領の影"];return voices[Math.abs(index||0)%voices.length];}
 function makeBattlePreview(game){
   var t=game.characters.toyman;
@@ -1125,7 +1157,7 @@ function makeBattlePreview(game){
   var mod=getBattleFatigueMod(fatigue);
   var b=game.battle||{watch:0,lastManualBattleAt:0};
   var left=Math.max(0,BATTLE_CFG.manualCooldown-(Date.now()-(b.lastManualBattleAt||0)));
-  return{enemy:enc.enemy,hp:hp,hpMax:hpMax,fatigue:fatigue,progress:pct,mod:mod,watch:Math.round(b.watch||0),cooldownMs:left,turns:enc.turns||0,maxTurns:enc.maxTurns||BATTLE_CFG.encounterMaxTurns,voice:getShadowVoice(enc.enemy,enc.voiceIndex||0),card:card};
+  return{enemy:enc.enemy,hp:hp,hpMax:hpMax,fatigue:fatigue,progress:pct,mod:mod,watch:Math.round(b.watch||0),cooldownMs:left,turns:enc.turns||0,maxTurns:enc.maxTurns||BATTLE_CFG.encounterMaxTurns,voice:getShadowVoiceForCard(card,enc.voiceIndex||0),card:card};
 }
 function grantBattleWatch(s,amount){
   if(!s.battle)s.battle={watch:0,lastManualBattleAt:0,manualCount:0,lastLines:[],encounter:null};
@@ -1144,7 +1176,7 @@ function runToymanBattleIntervention(game,actionId,selfAnswer){
   if(!ns.battle)ns.battle={watch:0,lastManualBattleAt:0,manualCount:0,lastLines:[],encounter:null};
   var t=ns.characters.toyman;
   var card=getToymanBattleEmber(ns);
-  if(!t||!card||t.lastAction!=="exploring"){return{ok:false,state:game,msg:"戦闘中ではありません",lines:["トイマンが未受領の森で残り火を回収中で、まだ問い札が出ていない時だけ、戦闘に介入できます。"]};}
+  if(!t||!card||t.lastAction!=="exploring"){return{ok:false,state:game,msg:"向き合える状態ではありません",lines:["トイマンが未受領の森で残り火を回収中のときだけ、影と向き合えます。"]};}
   var nowT=Date.now();
   var cd=Math.max(0,BATTLE_CFG.manualCooldown-(nowT-(ns.battle.lastManualBattleAt||0)));
   if(cd>0){return{ok:false,state:game,msg:"まだ介入できません",cooldownMs:cd,lines:["連打では問いは深まりません。あと "+Math.ceil(cd/1000)+"秒、見守ってください。"]};}
@@ -1185,7 +1217,7 @@ function runToymanBattleIntervention(game,actionId,selfAnswer){
   var afterProg=Math.min(100,Math.round(card.progress||0));
   var toymanLine=pick(TOYMAN_BATTLE_LINES[action.kind]||TOYMAN_BATTLE_LINES.hold);
   var reached100=card.progress>=100;
-  var lines=["影に遭遇 — "+action.label,"影「"+enemy+"」：「"+voice+"」"];
+  var lines=["影と向き合った — "+action.label,"影の声：「"+voice+"」"];
   if(action.kind==="hold"){
     lines.push("トイマンは前に進んだ。");
     lines.push("トイマン：「"+toymanLine+"」");
@@ -1204,15 +1236,15 @@ function runToymanBattleIntervention(game,actionId,selfAnswer){
   }
   lines.push("見守り +"+watch+"（"+Math.round(ns.battle.watch||0)+" / 100）");
   if(ipGain>0)lines.push("見守りが届いた：干渉ポイント +"+ipGain);
-  if(selfAnswer)lines.push("あなたの言葉：「"+selfAnswer+"」— 回収率 +3〜5% ボーナス");
+  if(selfAnswer)lines.push("あなたの言葉：「"+selfAnswer+"」— この言葉は残り火に刻まれた");
   var ended=false;
   if(reached100){lines.push("── 道が開いた ──");lines.push("問いが届いた。「残り火」タブで確認してください。");}
   if(events.length>0){ended=true;events.forEach(function(e){lines.push(e.text);});ns.battle.encounter=null;}
   else if(enc.turns>=BATTLE_CFG.encounterMaxTurns){
     ended=true;enc.done=true;
-    lines.push(action.kind==="retreat"?"トイマンは今日の分を終えた。またいつでも来られる。":"影が薄くなった。道が少し開いた。");
+    lines.push(action.kind==="retreat"?"トイマンは今日の分を終えた。またいつでも来られる。":"影と向き合った。道が少し開いた。");
     ns.ip.cur=Math.min(ns.ip.max,(ns.ip.cur||0)+1);
-    lines.push("影との遭遇を越えた：干渉ポイント +1");
+    lines.push("向き合いを越えた：干渉ポイント +1");
     ns.battle.encounter=null;
   }
   if(t.stats.fatigue>=100){t.location="starting_room";t.lastAction="resting";ns.battle.encounter=null;lines.push("トイマンは疲れきって、はじまりの部屋へ戻った。かなのケアが必要です。");}
@@ -3040,22 +3072,17 @@ function BattleEntryPanel(p){
   var pv=makeBattlePreview(game);
   var card=getToymanBattleEmber(game);
   if(!card)return null;
+  var voice=getShadowVoiceForCard(card,pv.turns||0);
   return(
     <div className="battle-entry-panel">
       <div className="battle-entry-head">
-        <span>未受領の森：影との遭遇</span>
-        <b>見守り {pv.watch} / 100</b>
+        <span>「{makeEmberTitle(card)}」に、影の声が届いている</span>
       </div>
-      <div className="battle-entry-body">
-        <div className="battle-shadow-mini"><i/></div>
-        <div className="battle-entry-text">
-          <strong>トイマンが黒い影と遭遇しています。</strong>
-          <p>回収中：「{makeEmberTitle(card)}」</p>
-          <small>押さなくても自動で進みます。介入すると、残り火を落とさないように手を添えられます。</small>
-        </div>
+      <div className="shadow-voice-box svb-inline">
+        <p className="svb-voice">「{voice}」</p>
       </div>
-      <div className="battle-entry-foot"><span>回収率 {Math.round(card.progress||0)}%</span><span>疲労 {pv.fatigue}/100</span></div>
-      <button className="btn btn-p battle-open-btn" onClick={p.onOpen}>戦闘に介入する</button>
+      <small className="battle-entry-sub">押さなくても自動で進みます。向き合うと、あなたの言葉が残り火に刻まれます。</small>
+      <button className="btn btn-p battle-open-btn" onClick={p.onOpen}>この声と向き合う</button>
     </div>
   );
 }
@@ -3073,48 +3100,46 @@ function BattleEncounterModal(p){
   var [selfAnswer,setSelfAnswer]=useState("");
   var cdSec=Math.ceil((pv.cooldownMs||0)/1000);
   var disabled=pv.mod.blocked||pv.cooldownMs>0||!card||game.characters.toyman.lastAction!=="exploring";
-  var actions=[
-    {id:"hold",label:"前に進ませる",sub:"道を切り拓くよう力を貸す",hint:"回収率 +4〜7% / 疲労 +2〜4 / 見守り +12"},
-    {id:"read",label:"影の声を聞く",sub:"判決ではなく声として記録する",hint:"回収率 +1〜3% / 疲労 +1〜2 / 見守り +8"},
-    {id:"retreat",label:"今日は引き返す",sub:"無理に進まず、また来る",hint:"疲労 -4〜6 / 見守り +4 / 回収率は進まない"}
-  ];
-  var QUICK_REPLIES=["今日は保留する","それは本当かもしれない","わからない、でも忘れない"];
-  function doAction(id){p.onManualBattle&&p.onManualBattle(id,selfAnswer);setSelfAnswer("");}
+  var pastAnswers=(card&&card.shadowAnswers)||[];
+  function doSubmit(){p.onManualBattle&&p.onManualBattle("hold",selfAnswer);setSelfAnswer("");}
+  function doRetreat(){p.onManualBattle&&p.onManualBattle("retreat","");setSelfAnswer("");}
   return(
     <div className="ov battle-ov" onClick={p.onClose}>
       <div className="battle-modal" onClick={function(e){e.stopPropagation();}}>
         <div className="sh-handle"/>
         <div className="battle-title-row">
-          <div><div className="battle-k">問いへの道</div><h2>トイマンが問いに近づいている途中、影に遭遇した</h2></div>
+          <div><div className="battle-k">影と向き合う</div>{card&&<p className="battle-card-name">「{makeEmberTitle(card)}」</p>}</div>
           <button className="care-x" onClick={p.onClose}>×</button>
         </div>
-        <div className="battle-meaning">問いはまだ届いていない。トイマンが取りに向かっている途中です。影がその道をふさいでいる。一緒に、前へ進みます。</div>
-        <div className="battle-field">
-          <div className="battle-toyman"><span className="nd cd-toyman"/><b>トイマン</b><small>{pv.mod.label}</small></div>
-          <div className="battle-vs">VS</div>
-          <div className="battle-shadow"><i/><span>{pv.enemy}</span></div>
+        <div className="shadow-voice-box">
+          <p className="svb-label">影の声</p>
+          <p className="svb-voice">「{pv.voice}」</p>
+          <p className="svb-context">書いたあとに浮かぶ内なる声。判決ではなく、声として聞く。</p>
         </div>
-        <div className="shadow-voice-box"><span className="svb-label">影の声</span><p className="svb-context">書いたあとに浮かぶ内なる声。判決ではなく、声として聞く。</p><p className="svb-voice">「{pv.voice}」</p></div>
         <div className="battle-self-answer-box">
-          <label className="bsa-label">この声を、どう受け取りますか（任意）</label>
-          <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className="bsa-quick" onClick={function(){setSelfAnswer(q);}}>{q}</button>;})}</div>
-          <textarea className="bsa-input" rows={2} placeholder="自由に書く、または上のボタンで選ぶ" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
-          {selfAnswer.trim()&&<div className="bsa-bonus">回収率 +3〜5% ボーナス / この言葉は残り火に記録されます</div>}
+          <label className="bsa-label">この声に、あなたの言葉を返す</label>
+          <textarea className="bsa-input" rows={3} placeholder={"自由に書いてください。\nこの声に対して思うこと、\nあなたが書いたものについての本音、何でも。"} value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
+          {selfAnswer.trim()&&<p className="bsa-bonus">この言葉は残り火に刻まれます。受領証に残ります。</p>}
         </div>
-        {card&&<div className="battle-ember-box"><span>目指している残り火</span><b>「{makeEmberTitle(card)}」</b>{card.bodyText&&<small>{card.bodyText}</small>}</div>}
-        <div className="battle-stats">
-          <div><span>影の濃さ</span><b>{pv.hp} / {pv.hpMax}</b><Bar value={pv.hp/pv.hpMax*100} color="var(--ct)" h={5}/></div>
-          <div><span>回収率</span><b>{pv.progress}%</b><Bar value={pv.progress} color="var(--ember)" h={5}/></div>
-          <div><span>疲労</span><b>{pv.fatigue} / 100</b><Bar value={pv.fatigue} color={pv.fatigue>=80?"var(--limit)":pv.fatigue>=50?"var(--tired)":"var(--ck)"} h={5}/></div>
-          <div><span>見守り</span><b>{pv.watch} / 100</b><Bar value={pv.watch} color="var(--calm)" h={5}/></div>
+        <div className="battle-face-actions">
+          <button className="btn btn-p" disabled={disabled||!selfAnswer.trim()} onClick={doSubmit}>言葉を渡して前へ進む</button>
+          <button className="btn btn-g" disabled={disabled} onClick={function(){doSubmit();}}>言葉なしで前へ進む</button>
+          <button className="btn btn-g battle-retreat-btn" onClick={doRetreat}>今日はここまでにする</button>
         </div>
-        <div className="battle-turns"><span>この遭遇の介入 {pv.turns} / {pv.maxTurns}</span>{pv.cooldownMs>0&&<b>あと {cdSec} 秒</b>}</div>
-        <div className="battle-note">{pv.mod.note}</div>
-        <div className="battle-actions">{actions.map(function(a){return <BattleActionButton key={a.id} action={a} disabled={disabled} onClick={doAction}/>;})}</div>
-        {pv.mod.blocked&&<button className="btn btn-g battle-care-btn" onClick={p.onCare}>かなに水を持ってきてもらう</button>}
+        {pv.cooldownMs>0&&<p className="battle-cd">次に向き合えるまで あと {cdSec} 秒</p>}
+        {pv.mod.blocked&&<p className="battle-note">{pv.mod.note}</p>}
+        <div className="battle-progress-row">
+          <span>回収率</span><b>{pv.progress}%</b>
+          <Bar value={pv.progress} color="var(--ember)" h={4}/>
+        </div>
+        {pastAnswers.length>0&&<div className="bsa-log">
+          <div className="bsa-log-title">これまでの向き合い（{pastAnswers.length}回）</div>
+          {pastAnswers.slice(-2).map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">「{a.shadow}」</span>{a.answer&&<span className="bsa-ans">→「{a.answer}」</span>}</div>;})}
+        </div>}
         {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")+(result.reached100?" battle-result-reached":"")}>
-          {result.reached100&&<div className="battle-reached-banner">✨ 問いが届いた</div>}
-          <b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}
+          {result.reached100&&<div className="battle-reached-banner">問いが届いた</div>}
+          <b>{result.msg||"結果"}</b>
+          {result.ok&&<p className="br-progress">回収率 {pv.progress}%</p>}
         </div>}
       </div>
     </div>
@@ -3129,66 +3154,51 @@ function BattleEncounterScreen(p){
   var card=getToymanBattleEmber(game);
   var cdSec=Math.ceil((pv.cooldownMs||0)/1000);
   var disabled=pv.mod.blocked||pv.cooldownMs>0||!card||game.characters.toyman.lastAction!=="exploring";
-  var actions=[
-    {id:"hold",label:"前に進ませる",sub:"道を切り拓くよう力を貸す",hint:"回収率 +4〜7% / 疲労 +2〜4 / 見守り +12"},
-    {id:"read",label:"影の声を聞く",sub:"判決ではなく声として記録する",hint:"回収率 +1〜3% / 疲労 +1〜2 / 見守り +8"},
-    {id:"retreat",label:"今日は引き返す",sub:"無理に進まず、また来る",hint:"疲労 -4〜6 / 見守り +4 / 回収率は進まない"}
-  ];
-  var QUICK_REPLIES=["今日は保留する","それは本当かもしれない","わからない、でも忘れない"];
-  function doAction(id){var r=p.onManualBattle&&p.onManualBattle(id,selfAnswer);if(r)setResult(r);setSelfAnswer("");}
+  function doSubmit(){var r=p.onManualBattle&&p.onManualBattle("hold",selfAnswer);if(r)setResult(r);setSelfAnswer("");}
+  function doRetreat(){var r=p.onManualBattle&&p.onManualBattle("retreat","");if(r)setResult(r);}
   return(
     <div className="battle-screen scroll">
-      <button className="battle-back-btn" onClick={p.onBack}>← 影との遭遇を中断して戻る</button>
+      <button className="battle-back-btn" onClick={p.onBack}>← 戻る</button>
       <div className="battle-full-hero">
-        <div className="battle-k">問いへの道</div>
-        <h2>影が道をふさいでいる。トイマンと一緒に前へ進みます。</h2>
-        <p>問いはまだ届いていない。トイマンが取りに向かっている途中です。</p>
+        <div className="battle-k">影と向き合う</div>
+        {card?<h2>「{makeEmberTitle(card)}」に届いた、内なる声</h2>:<h2>回収中の残り火がありません</h2>}
+        <p>残り火を取り戻すトイマンの道に、影の声が現れた。<br/>あなたが書いたものへの問い。向き合うと、言葉が残り火に刻まれます。</p>
       </div>
-      {card?<div className="battle-ember-full">
-        <span>守っている残り火</span>
-        <b>「{makeEmberTitle(card)}」</b>
-        <div className="battle-ember-lines">
-          {card.writeState&&<small>状態：{card.writeState}</small>}
-          {card.feeling&&<small>感情：{card.feeling}</small>}
-          {card.wanted&&<small>本当は：{card.wanted}</small>}
-          {card.bodyText&&<small>あなたの言葉：{card.bodyText}</small>}
+      {card&&<div className="battle-ember-full">
+        <div className="battle-ember-meta">
+          {card.writeState&&<span>{card.writeState}</span>}
+          {card.feeling&&<span>{card.feeling}</span>}
+          {card.wanted&&<span>本当は：{card.wanted}</span>}
         </div>
         {(card.shadowAnswers||[]).length>0&&<div className="bsa-log">
           <div className="bsa-log-title">これまでの向き合い（{card.shadowAnswers.length}回）</div>
-          {card.shadowAnswers.slice(-3).map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">影：「{a.shadow}」</span><span className="bsa-ans">あなた：「{a.answer}」</span></div>;})}
+          {card.shadowAnswers.slice(-3).map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">「{a.shadow}」</span>{a.answer&&<span className="bsa-ans">→「{a.answer}」</span>}</div>;})}
         </div>}
-      </div>:<div className="battle-ember-full"><b>今は回収中の残り火がありません。</b></div>}
-      <div className="battle-field battle-field-full">
-        <div className="battle-toyman"><span className="nd cd-toyman"/><b>トイマン</b><small>{pv.mod.label}</small></div>
-        <div className="battle-vs">VS</div>
-        <div className="battle-shadow"><i/><span>{pv.enemy}</span></div>
+      </div>}
+      <div className="shadow-voice-box shadow-voice-full">
+        <p className="svb-label">影の声</p>
+        <p className="svb-voice">「{pv.voice}」</p>
       </div>
-      <div className="shadow-voice-box shadow-voice-full"><span>影の声</span><p>「{pv.voice}」</p></div>
       <div className="battle-self-answer-box">
-        <label className="bsa-label">影の声に、あなたの言葉で返す（任意）</label>
-        <div className="bsa-quick-row">{QUICK_REPLIES.map(function(q){return <button key={q} type="button" className={"bsa-quick"+(selfAnswer===q?" bsa-quick-on":"")} onClick={function(){setSelfAnswer(selfAnswer===q?"":q);}}>{q}</button>;})}</div>
-        {selfAnswer.trim()&&<>
-          <div className="bsa-selected-preview">「{selfAnswer.trim()}」</div>
-          <button className={"btn bsa-confirm-btn"+(disabled?" bsa-confirm-disabled":"")} disabled={disabled} onClick={function(){doAction("hold");}}>この言葉で前に進む →</button>
-        </>}
-        {!selfAnswer.trim()&&<textarea className="bsa-input" rows={2} placeholder="自由に書く…（または上のボタンで選ぶ）" value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>}
+        <label className="bsa-label">この声に、あなたの言葉を返す</label>
+        <textarea className="bsa-input" rows={4} placeholder={"自由に書いてください。\nこの声に対して思うこと、\nあなたが書いたものについての本音、何でも。\n（書かなくても前へ進めます）"} value={selfAnswer} onChange={function(e){setSelfAnswer(e.target.value);}}/>
+        {selfAnswer.trim()&&<p className="bsa-bonus">この言葉は残り火に刻まれます。受領証に残ります。</p>}
       </div>
-      <div className="battle-stats battle-stats-full">
-        <div><span>影の濃さ</span><b>{pv.hp} / {pv.hpMax}</b><Bar value={pv.hp/pv.hpMax*100} color="var(--ct)" h={5}/></div>
-        <div><span>回収率</span><b>{pv.progress}%</b><Bar value={pv.progress} color="var(--ember)" h={5}/></div>
-        <div><span>疲労</span><b>{pv.fatigue} / 100</b><Bar value={pv.fatigue} color={pv.fatigue>=80?"var(--limit)":pv.fatigue>=50?"var(--tired)":"var(--ck)"} h={5}/></div>
-        <div><span>見守り</span><b>{pv.watch} / 100</b><Bar value={pv.watch} color="var(--calm)" h={5}/></div>
+      <div className="battle-face-actions">
+        <button className="btn btn-p" disabled={disabled} onClick={doSubmit}>{selfAnswer.trim()?"言葉を渡して前へ進む":"言葉なしで前へ進む"}</button>
+        <button className="btn btn-g battle-retreat-btn" onClick={doRetreat}>今日はここまでにする</button>
       </div>
-      <div className="battle-turns battle-turns-full"><span>この遭遇の介入 {pv.turns} / {pv.maxTurns}</span>{pv.cooldownMs>0&&<b>あと {cdSec} 秒</b>}</div>
-      <div className="battle-note">{pv.mod.note}</div>
-      <div className="battle-actions battle-actions-full">{actions.map(function(a){return <BattleActionButton key={a.id} action={a} disabled={disabled} onClick={doAction}/>;})}</div>
-      {pv.mod.blocked&&<button className="btn btn-g battle-care-btn" onClick={p.onCare}>かなに水を持ってきてもらう</button>}
+      {pv.cooldownMs>0&&<p className="battle-cd">次に向き合えるまで あと {cdSec} 秒</p>}
+      <div className="battle-progress-row">
+        <span>回収率</span><b>{pv.progress}%</b>
+        <Bar value={pv.progress} color="var(--ember)" h={4}/>
+      </div>
       {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")+(result.reached100?" battle-result-reached":"")}>
-        {result.reached100&&<div className="battle-reached-banner">✨ 問いが届いた</div>}
-        <b>{result.msg||"結果"}</b>{(result.lines||[]).map(function(l,i){return <p key={i}>{l}</p>;})}
+        {result.reached100&&<div className="battle-reached-banner">問いが届いた</div>}
+        <b>{result.msg||"結果"}</b>
         <div className="battle-result-toyman">
-          <span className="isc-dot cd-toyman"/>
-          <span>{result.reached100?"「届いた。持ち帰る」":result.ok?"「まだ落としていない」":"「今日は、引き返す。また来る」"}</span>
+          <div className="home-cv-namerow"><span className="isc-dot cd-toyman"/><span className="home-cv-name">トイマン</span></div>
+          <span className="home-cv-say">{result.reached100?"「届いた。持ち帰る」":result.ok?"「まだ落としていない」":"「今日は、引き返す。また来る」"}</span>
         </div>
       </div>}
     </div>
@@ -3844,7 +3854,7 @@ function App(){
   var charCareCb=useCallback(function(id,mode){if(!game)return{ok:false,msg:"まだ世界がありません。",sub:""};var r=applyCharacterCareAction(game,id,mode);if(!r.ok){showToast(r.msg);return r;}var ns=r.state;var uc=addUnitProgressForCharacter(ns,id,mode==="support"?10:6);setGame(ns);persistSave(ns);var cv=getWatchCharVoice(id,uc);var charName=NAMES[id]||id;showToast(charName+"："+cv+(uc?" — 問いに触れた":""));addWatchGauge("care_"+id+"_"+mode,8);return r;},[game,showToast,addWatchGauge]);// eslint-disable-line
   var pressureActionCb=useCallback(function(mode){if(!game)return{ok:false,msg:"まだ世界がありません。",sub:""};var r=applyPressureAction(game,mode);if(!r.ok){showToast(r.msg);return r;}setGame(r.state);persistSave(r.state);showToast(r.msg+" — "+r.sub);addWatchGauge("pressure_"+mode,6);return r;},[game,showToast,addWatchGauge]);// eslint-disable-line
   var toymanMoveCb=useCallback(function(dest){if(!game)return{ok:false,msg:"まだ世界がありません。",sub:""};var r=applyToymanMove(game,dest);if(!r.ok){showToast(r.msg);return r;}setGame(r.state);persistSave(r.state);showToast(r.msg+" — "+r.sub);return r;},[game,showToast]);// eslint-disable-line
-  var manualBattleCb=useCallback(function(actionId,selfAnswer){if(!game)return{ok:false,msg:"まだ世界がありません。",lines:["まだ世界がありません。"]};var r=runToymanBattleIntervention(game,actionId,selfAnswer);if(!r.ok){showToast(r.msg);return r;}setGame(r.state);persistSave(r.state);setLive(function(prev){return [{text:(r.lines||[]).join("\n"),kind:"explore_detail",time:nowISO()}].concat(prev).slice(0,40);});showToast(r.ipGain>0?"見守りが届いた — 干渉ポイント +"+r.ipGain:(r.ended?"影との遭遇が終わりました。問いを落とさなかった。":"戦闘に介入しました。問いを落とさなかった。"));return r;},[game,showToast]);
+  var manualBattleCb=useCallback(function(actionId,selfAnswer){if(!game)return{ok:false,msg:"まだ世界がありません。",lines:["まだ世界がありません。"]};var r=runToymanBattleIntervention(game,actionId,selfAnswer);if(!r.ok){showToast(r.msg);return r;}setGame(r.state);persistSave(r.state);setLive(function(prev){return [{text:(r.lines||[]).join("\n"),kind:"explore_detail",time:nowISO()}].concat(prev).slice(0,40);});showToast(r.ipGain>0?"見守りが届いた — 干渉ポイント +"+r.ipGain:(r.ended?"影と向き合い終えた。言葉を落とさなかった。":"言葉を渡した。問いはまだある。"));return r;},[game,showToast]);
   var addWatchGauge=useCallback(function(type,amount){var now2=Date.now();if((wgRef.current.last[type]||0)>now2-5000)return;wgRef.current.last[type]=now2;var ng=wgRef.current.gauge+amount;if(ng>=100){ng-=100;setGame(function(g){if(!g)return g;return Object.assign({},g,{ip:Object.assign({},g.ip,{cur:Math.min(g.ip.max,(g.ip.cur||0)+1)})});});showToast("見守り満タン — 干渉ポイント +1");}wgRef.current.gauge=ng;setWatchGauge(ng);},[showToast]);
   var withUnlock=useCallback(function(prev,next){var pu=getUnlockedConvIds(prev),nu=getUnlockedConvIds(next);var fresh=nu.filter(function(id){return pu.indexOf(id)===-1;});var s=Object.assign({},next,{unlockedConvs:nu});if(fresh.length>0)showToast("会話が解放された：「"+CBID[fresh[0]].title+"」");return s;},[showToast]);
 
@@ -3929,7 +3939,7 @@ function App(){
         <Header title="みんな" day={game.world.day}/>
         <div className="scroll"><div className="cg">{getMetCharIds(game).map(function(id){return <CharCard key={id} id={id} c={game.characters[id]} prog={prog[id]} game={game} expanded={expanded===id} onToggle={function(){setExpanded(function(v){return v===id?null:id;});}}/>;})} </div></div>
       </>}
-      {screen==="ember"&&<><Header title="残り火" day={game.world.day}/><ProcessingLine game={game}/><EmberView game={game} onReceive={receiveEmberCb} onDepart={departEmberCb} onDelete={deleteEmberCb} onAdvance={advanceEmberCb} onBurnReceipt={burnReceiptCb} onEditEmber={editEmberCb} onOpenCreate={function(){setShowCreate(true);}}/></>}
+      {screen==="ember"&&<><Header title="残り火" day={game.world.day}/><ProcessingLine game={game}/><EmberView game={game} onReceive={receiveEmberCb} onDepart={departEmberCb} onDelete={deleteEmberCb} onAdvance={advanceEmberCb} onBurnReceipt={burnReceiptCb} onEditEmber={editEmberCb} onOpenCreate={function(){setShowCreate(true);}} onOpenBattle={function(){setScreen("battle");}}/></>}
       {screen==="titles"&&<>
         <Header title="称号帳" day={game.world.day}/>
         <TitlesView game={game}/>
@@ -4398,7 +4408,7 @@ function ProcessingLine(p){
   );
 }
 function EmberView(p){
-  var game=p.game,onReceive=p.onReceive,onOpenCreate=p.onOpenCreate,onDepart=p.onDepart,onDelete=p.onDelete,onAdvance=p.onAdvance,onBurnReceipt=p.onBurnReceipt,onEditEmber=p.onEditEmber;
+  var game=p.game,onReceive=p.onReceive,onOpenCreate=p.onOpenCreate,onDepart=p.onDepart,onDelete=p.onDelete,onAdvance=p.onAdvance,onBurnReceipt=p.onBurnReceipt,onEditEmber=p.onEditEmber,onOpenBattle=p.onOpenBattle;
   var next=getNextAction(game);
   var [editingId,setEditingId]=useState(null);
   var [editTitle,setEditTitle]=useState("");
@@ -4474,7 +4484,10 @@ function EmberView(p){
             <span className="eeb-label">{pct<20?"まだ入口付近":pct<50?"森の中ほど":pct<80?"かなり深く":"届きそう"}</span>
             <span className="eeb-pct">回収率 {pct}%</span>
           </div>
-          <div className="eeb-watch-hint">箱庭タブで「見守る」と、少しだけ近づきます</div>
+          <div className="eeb-face-row">
+            <button className="btn btn-p eeb-face-btn touchable" onClick={function(){onOpenBattle&&onOpenBattle();}}>影と向き合う</button>
+            <span className="eeb-watch-hint">向き合うと、あなたの言葉が残り火に刻まれます</span>
+          </div>
         </div>;
       })()}
       <div className="ev-unit-progress">
@@ -4659,8 +4672,12 @@ function ReceiptCard(p){
     <ReceiptWordsBox receipt={r}/><ReceiptMetricBox receipt={r}/><pre className="ev-receipt-text">{r.text}</pre>
     {r.changeNote&&r.changeNote.trim()&&<div className="ev-change-note"><span className="ev-change-label">変化の記録</span><p>{r.changeNote}</p></div>}
     {(r.shadowAnswers||[]).length>0&&<div className="ev-shadow-answers">
-      <div className="bsa-log-title">影と向き合った記録（{r.shadowAnswers.length}回）</div>
-      {r.shadowAnswers.map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">「{a.shadow}」</span><span className="bsa-ans">→「{a.answer}」</span></div>;})}
+      <div className="bsa-log-title">向き合いの記録（{r.shadowAnswers.length}回）</div>
+      {r.shadowAnswers.map(function(a,i){return <div key={i} className="bsa-log-item">
+        <span className="bsa-shadow">「{a.shadow}」</span>
+        {a.answer&&<span className="bsa-ans">→「{a.answer}」</span>}
+        {!a.answer&&<span className="bsa-ans bsa-ans-silent">— 言葉なしで前に進んだ</span>}
+      </div>;})}
     </div>}
     <div className="receipt-ai-block">
       <div className="receipt-ai-title">AIで深く読む</div>
