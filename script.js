@@ -152,18 +152,23 @@ function getPhilosophicalQuestion(game){
   return{id:"q03",text:"痛みは、創作の素材になるのか",depth:3};
 }
 
-/* ── 受け取り「見届ける」セリフ ── */
+/* ── 受け取り「見届ける」セリフ（残り火の内容に反応） ── */
 function getWitnessLines(card,game){
   var title=makeEmberTitle(card);
+  var feeling=card.feeling||"";
+  var wanted=card.wanted||"";
   var audBond=(game.characters.auditor&&game.characters.auditor.bonds&&game.characters.auditor.bonds.kana)||0;
   var audLine=audBond>=8?"保留ではなく、受領だ。":"……確かに、届いている。";
+  var kanaLine=feeling?"「"+feeling+"」……受け取った。":"受け取った。";
+  var utsuroLine=wanted?"「"+wanted+"」——預かる。消さない。":"預かる。消さない。";
+  var kotaeLine=(feeling||wanted)?"記録した。……これは、ただのデータじゃない。":"記録した。";
   return[
     {s:"toyman",t:"持ち帰った。「"+title+"」を。"},
     {s:"kana",  t:"……受け取っていい？"},
     {s:"toyman",t:"頼む。"},
-    {s:"kana",  t:"受け取った。"},
-    {s:"utsuro",t:"預かる。消さない。"},
-    {s:"kotae", t:"記録した。"},
+    {s:"kana",  t:kanaLine},
+    {s:"utsuro",t:utsuroLine},
+    {s:"kotae", t:kotaeLine},
     {s:"auditor",t:audLine},
   ];
 }
@@ -3609,10 +3614,22 @@ function HomeView(p){
       }
       return <><div className="lh">トイマンのひとこと</div><p className="home-line">「まだ落としてない。」</p></>;
     })()}</section>
-    <section className="home-card home-q-card">
+    {p.utsuroEvent&&<section className="home-card home-utsuro-event" onClick={p.onUtsuroFound}>
+      <div className="lh">うつろより</div>
+      <div className="uev-line"><span className="isc-dot cd-utsuro uev-dot"/>
+        <p className="uev-say">「一通、見当たらない……」</p></div>
+      <p className="uev-hint">タップして探す</p>
+    </section>}
+    {p.kotaeStuck&&<section className="home-card home-kotae-stuck" onClick={p.onKotaeResume}>
+      <div className="lh">コタエより</div>
+      <div className="uev-line"><span className="isc-dot cd-kotae uev-dot"/>
+        <p className="uev-say">「……これは、すぐには記録できない。」</p></div>
+      <p className="uev-hint">タップして続ける</p>
+    </section>}
+    <section className="home-card home-q-card" onClick={p.onPhilAnswer} style={{cursor:"pointer"}}>
       <div className="lh">今の問い <span className="home-q-depth">深度 {philQ.depth}</span></div>
       <p className="home-q-text">「{philQ.text}」</p>
-      <p className="home-q-note">{philQ.depth<3?"受け取りが増えると、問いが深まります。":"問いは、ここまで深まりました。"}</p>
+      <p className="home-q-note">タップして、自分の言葉を残せます。</p>
     </section>
     {isExploringNow&&<section className="home-card home-send-card">
       <div className="lh">トイマンへ送る</div>
@@ -3658,7 +3675,7 @@ function App(){
   var [viewConv,setViewConv]=useState(null);
   var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
   var gameRef=useRef(null),toastRef=useRef(null);
-  var [watchGauge,setWatchGauge]=useState(0);var wgRef=useRef({gauge:0,last:{}});var [returnConvId,setReturnConvId]=useState(null);var [witnessTargetId,setWitnessTargetId]=useState(null);var [sendGiftOpen,setSendGiftOpen]=useState(false);
+  var [watchGauge,setWatchGauge]=useState(0);var wgRef=useRef({gauge:0,last:{}});var [returnConvId,setReturnConvId]=useState(null);var [witnessTargetId,setWitnessTargetId]=useState(null);var [sendGiftOpen,setSendGiftOpen]=useState(false);var [utsuroEventActive,setUtsuroEventActive]=useState(false);var [closingPreview,setClosingPreview]=useState(null);var [philAnswerOpen,setPhilAnswerOpen]=useState(false);var [kotaeStuck,setKotaeStuck]=useState(false);
   var [saveError,setSaveError]=useState(false);
   useEffect(function(){gameRef.current=game;},[game]);
 
@@ -3748,13 +3765,45 @@ function App(){
   var openWorld=useCallback(function(){if(!game)return;var el=(Date.now()-new Date(game.lastOpenedAt).getTime())/3600000;var hours=game.logs.length===0?Math.max(el,14):el;var preSnap0=captureSnap(game);var res=simulate(game,hours,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;res.newState.ip=calcIP(game,now);var pH=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH,res.newState,preSnap0);var checked=withUnlock(game,res.newState);if(!checked.dailyGoals||!checked.dailyGoals.date){checked.dailyGoals={date:now.slice(0,10),goals:makeGoals(checked)};}else{var prevGls=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(checked.dailyGoals.goals,checked,game);checked=checkGoalsAwardIP(prevGls,checked.dailyGoals.goals,checked);}setGame(checked);setDigest(res.summary);persistSave(checked);setFirst(false);setScreen("home");setTimeout(function(){var ev=genLiveEvent(checked);setLive([{text:ev.text,kind:ev.kind,time:nowISO()}]);},1800);if(el>1&&game.introSeen){var readIds=checked.readConvs||[];var availC=CONVS.filter(function(c){return(checked.characters[c.a].bonds[c.b]||0)>=c.th;});var unreadC=availC.filter(function(c){return readIds.indexOf(c.id)===-1;});var pool=unreadC.length>0?unreadC:availC;if(pool.length>0){var rConv=pool[Math.floor(Math.random()*pool.length)];setReturnConvId(rConv.id);}}if(el>48){setTimeout(function(){showToast("トイマン：「久しぶりだね。でも、置いていかなかった。」");},3200);}var exploringEmbers=(checked.emberCards||[]).filter(function(c){return c.unitState==="exploring";});if(exploringEmbers.length>0){var ec=exploringEmbers[0];setTimeout(function(){var p2=Math.round(ec.progress||0);var line=p2<40?"「まだ深い。でも、見失っていない。」":p2<80?"「触れた。もう少しだ。」":"「もう届く。帰る。」";showToast("トイマン："+line);},2400);}},[game,withUnlock,showToast]);
   var advTime=useCallback(function(h){if(!game)return;var preSnap1=captureSnap(game);var res=simulate(game,h,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;var pH2=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH2,res.newState,preSnap1);var checked=withUnlock(game,res.newState);if(checked.dailyGoals&&checked.dailyGoals.goals){var pg3=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(pg3,checked,game);checked=checkGoalsAwardIP(pg3,checked.dailyGoals.goals,checked);}setGame(checked);setDigest(res.summary);persistSave(checked);setScreen("log");showToast("世界が"+h+"時間進んだ。");},[game,withUnlock,showToast]);
   var navigateTo=useCallback(function(screen,params){if(screen==="intv"&&params){setIntvConfig({target:params.target||"toyman",tier:params.tier||null,key:Date.now()});}setViewConv(null);setScreen(screen);},[]);
-  var closeWorld=useCallback(function(){if(!game)return;var ns=Object.assign({},game,{lastOpenedAt:nowISO(),lastSavedAt:nowISO()});setGame(ns);persistSave(ns);setScreen("closed");},[game]);
+  var closeWorld=useCallback(function(skipPreview){
+    if(!game)return;
+    if(!skipPreview){
+      var previews=[];
+      var exploring=(game.emberCards||[]).find(function(c){return c.unitState==="exploring";});
+      var ready=(game.emberCards||[]).find(function(c){return c.status==="ready";});
+      if(ready)previews.push("トイマンが、持ち帰っています。次に来たとき、受け取れます。");
+      else if(exploring)previews.push("トイマンは、まだ探しています。次に来たとき、近づいています。");
+      var uBond=(game.characters&&game.characters.utsuro&&game.characters.utsuro.bonds&&game.characters.utsuro.bonds.kana)||0;
+      if(uBond>0)previews.push("うつろが、何かを整理しています。");
+      var unread=CONVS.filter(function(c){return(game.characters[c.a].bonds[c.b]||0)>=c.th&&(game.readConvs||[]).indexOf(c.id)===-1;});
+      if(unread.length>0)previews.push("「"+unread[0].title+"」という場面が、読まれるのを待っています。");
+      if(previews.length>0){setClosingPreview(previews[Math.floor(Math.random()*previews.length)]);return;}
+    }
+    var ns=Object.assign({},game,{lastOpenedAt:nowISO(),lastSavedAt:nowISO()});setGame(ns);persistSave(ns);setScreen("closed");
+  },[game]);
   var resetWorld=useCallback(function(){clearSave();var f=initGame();setGame(f);setDigest(null);setFirst(true);setLive([]);setProg({toyman:0,kana:0,utsuro:0,kotae:0});persistSave(f);setScreen("closed");showToast("世界を最初に戻した。");},[showToast]);
   var handleTieredIntv=useCallback(function(newState){if(!newState)return;newState.lastSavedAt=nowISO();var checked=withUnlock(game,newState);if(checked.dailyGoals&&checked.dailyGoals.goals){var pg2=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(pg2,checked,game);checked=checkGoalsAwardIP(pg2,checked.dailyGoals.goals,checked);}setGame(checked);persistSave(checked);},[game,withUnlock]);
   var quickGoalAction=useCallback(function(action){if(!game||!action)return;if(action.screen&&action.screen!=="quick"){navigateTo(action.screen,action);return;}var r=runGoalAction(game,action);if(r.blocked){showToast((r.lines&&r.lines[0])||"実行できません。");return;}var ns=r.newState;ns.lastSavedAt=nowISO();var checked=withUnlock(game,ns);if(checked.dailyGoals&&checked.dailyGoals.goals){var pg=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(pg,checked,game);checked=checkGoalsAwardIP(pg,checked.dailyGoals.goals,checked);}setGame(checked);persistSave(checked);setLive(function(prev){return [{text:(r.lines||[]).join("\n"),kind:"goal",time:nowISO()}].concat(prev).slice(0,40);});showToast(r.ipUsed?((r.lines&&r.lines[0])||"干渉しました。"):"実行しました。");},[game,withUnlock,navigateTo,showToast]);
   var addEmber=useCallback(function(card){if(!game)return;var res=addNewEmberToState(game,card);var ns=res.state;ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};setGame(ns);persistSave(ns);setShowCreate(false);var pu=(ns.recentPlaceUnlocks||[])[0];showToast(pu?("新しい場所が開きました：「"+pu.name+"」"):(res.converted?"判決を問いとして保管しました。":"「"+makeEmberTitle(res.card)+"」を預けました。"));},[game,showToast]);
   var readConv=useCallback(function(id){setViewConv(id);if(!game)return;if(game.readConvs.indexOf(id)===-1){var ns=Object.assign({},game,{readConvs:[id].concat(game.readConvs)});setGame(ns);persistSave(ns);}},[game]);
   var receiveConv=useCallback(function(id){if(!game)return;var conv=CBID[id];if(!conv)return;if(game.receivedScenes&&game.receivedScenes.indexOf(id)!==-1)return;var ns=applySceneFx(game,conv);ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);showToast("「"+conv.title+"」を受領した。");},[game,showToast]);
+  var savePhilAnswer=useCallback(function(ans){if(!game||!ans.trim())return;var ns=Object.assign({},game,{questionAnswers:([{q:getPhilosophicalQuestion(game).text,a:ans,at:nowISO()}]).concat(game.questionAnswers||[]).slice(0,30),lastSavedAt:nowISO()});setGame(ns);persistSave(ns);showToast("コタエ：「記録した。あなたの言葉を。」");},[game,showToast]);
+
+  /* B: うつろイベント — ホーム初表示時に低確率で発火 */
+  useEffect(function(){
+    if(!game||!game.introSeen)return;
+    if((game.receipts||[]).length===0)return;
+    var today=nowISO().slice(0,10);
+    if(game.lastUtsuroEvent===today)return;
+    if(Math.random()<0.25){setUtsuroEventActive(true);}
+  },[game&&game.introSeen,game&&(game.receipts||[]).length]);// eslint-disable-line
+
+  /* E: コタエが止まる瞬間 — ホーム初表示時に低確率 */
+  useEffect(function(){
+    if(!game||!game.introSeen)return;
+    if((game.receipts||[]).length===0)return;
+    if(Math.random()<0.12){setKotaeStuck(true);}
+  },[game&&game.introSeen]);// eslint-disable-line
 
   if(screen==="loading"||!game)return(<div className="root"><div className="frame center"><p className="loading">世界をたどっています…</p></div></div>);
   var ipCur=game.ip?game.ip.cur:0,ipMax=game.ip?game.ip.max:20;
@@ -3768,7 +3817,7 @@ function App(){
     {screen!=="closed"&&screen!=="ending"&&<>
       {screen==="home"&&<>
         <Header title="ホーム" day={game.world.day}/>
-        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています。」");setTimeout(function(){closeWorld();},800);}}/>
+        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています。」");setTimeout(function(){closeWorld(false);},800);}}/>
       </>}
       {screen==="log"&&<>
         <Header title="記録" day={game.world.day}/>
@@ -3812,6 +3861,8 @@ function App(){
       </nav>}
     </>}
     
+    {closingPreview&&<ClosingPreviewOverlay text={closingPreview} onClose={function(){setClosingPreview(null);closeWorld(true);}}/>}
+    {philAnswerOpen&&<PhilAnswerModal question={getPhilosophicalQuestion(game).text} onClose={function(){setPhilAnswerOpen(false);}} onSave={function(a){savePhilAnswer(a);setPhilAnswerOpen(false);}}/>}
     {showCreate&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber} onSubmitFast={addAndReceiveEmber}/>}
     {departTargetId&&<DepartureOverlay card={(game.emberCards||[]).find(function(c){return c.id===departTargetId;})} onCancel={function(){setDepartTargetId(null);}} onConfirm={function(){confirmDepartCb(departTargetId);}}/>}
     {burnTargetId&&<BurnConfirmModal receipt={(game.receipts||[]).find(function(r){return r.id===burnTargetId;})} onCancel={function(){setBurnTargetId(null);}} onConfirm={function(){confirmBurnCb(burnTargetId);}}/>}
@@ -4763,6 +4814,33 @@ function EmberCreate(p){
     </div>
     <button className="btn btn-g" style={{marginTop:4}} onClick={p.onClose}>閉じる</button>
   </div></div>);
+}
+function ClosingPreviewOverlay(p){
+  return <div className="cpo-overlay" onClick={p.onClose}>
+    <div className="cpo-inner">
+      <div className="cpo-eyebrow">次に来たとき</div>
+      <p className="cpo-text">{p.text}</p>
+      <p className="cpo-hint">タップして閉じる</p>
+    </div>
+  </div>;
+}
+function PhilAnswerModal(p){
+  var [answer,setAnswer]=useState("");
+  return <div className="ov" onClick={p.onClose}><div className="bsh pam-bsh" onClick={function(e){e.stopPropagation();}}>
+    <div className="sh-handle"/>
+    <p className="sh-title">問いへの言葉</p>
+    <div className="pam-q-box">
+      <span className="isc-dot cd-kotae pam-dot"/>
+      <p className="pam-q">「{p.question}」</p>
+    </div>
+    <p className="pam-note">答えなくていい。思ったことだけ、書けたら。</p>
+    <textarea className="pam-input" rows={4} placeholder="例：虚しいというより、寂しかったのかもしれない" value={answer} onChange={function(e){setAnswer(e.target.value);}}/>
+    <p className="pam-kotae"><span className="isc-dot cd-kotae"/>コタエが記録します。</p>
+    <div className="receive-actions">
+      <button className="btn btn-g" onClick={p.onClose}>閉じる</button>
+      <button className="btn btn-p" onClick={function(){p.onSave(answer);}} style={{opacity:answer.trim()?1:.45}}>記録する</button>
+    </div>
+  </div></div>;
 }
 function WitnessOverlay(p){
   var card=p.card,game=p.game,onComplete=p.onComplete,onClose=p.onClose;
