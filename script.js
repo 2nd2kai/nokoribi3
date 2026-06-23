@@ -2262,6 +2262,9 @@ function advanceEmberUnit(game,emberId,choice,isCustom){
   if(isCustom&&choice&&choice.trim()){
     /* 自分の言葉で答えると、この残り火に魂が入る */
     card.soul=true;
+    /* 問いの一本化：自分の言葉での回答は、ひとつの流れに集約する。
+       哲学的問いの深化（getQuestionProgress）と、全残り火の汲み取り加速に効く。 */
+    s.questionAnswers=[{q:q,a:choice.trim(),at:nowISO(),from:"ember"}].concat(s.questionAnswers||[]).slice(0,30);
   }
   if(card.unitState==="exploring"){
     completeToymanExploration(s,card,"問い札を受け取った："+ans);
@@ -3720,6 +3723,20 @@ function HomeView(p){
       <p className="home-q-text">「{philQ.text}」</p>
       <p className="home-q-note">{(game.questionAnswers||[]).length>0?"答えると、問いはさらに深くなる。":"答えなくても、世界は進む。答えれば、問いが深まる。"}</p>
     </section>
+    {(function(){
+      var rs=game.receipts||[];
+      if(rs.length===0)return null;
+      /* 最も深く汲み取られた残り火（同率なら最新）を、ホームの前面に */
+      var top=rs[0],topStage=getReceiptCherishStage(rs[0],game);
+      rs.forEach(function(r){var st=getReceiptCherishStage(r,game);if(st>topStage){topStage=st;top=r;}});
+      var ins=getEmberInsight(top,game);
+      return <section className="home-card home-cherish-card" onClick={function(){p.onNav&&p.onNav("ember");}} style={{cursor:"pointer"}}>
+        <div className="lh">大切にされている残り火 <span className="home-cherish-tag">{ins.label}</span></div>
+        <div className="home-fire-title">「{top.title}」</div>
+        <p className="home-cherish-line">{ins.text}</p>
+        <span className="home-cherish-dots">{[0,1,2,3,4].map(function(i){return <span key={i} className={"ec-dot"+(i<=ins.stage?" ec-dot-on":"")}/>;})}</span>
+      </section>;
+    })()}
     {isExploringNow&&<section className="home-card home-send-card">
       <div className="lh">トイマンへ送る</div>
       <p className="home-send-note">探索中のトイマンに、何かを届けられます。</p>
@@ -3737,7 +3754,7 @@ function HomeView(p){
       <p>無理に続けなくていい。今日見た分は、ちゃんと残ります。</p>
       <button className="btn btn-g home-today-btn" onClick={function(){p.onTodayEnd&&p.onTodayEnd();}}>今日はここで閉じる</button>
     </section>
-    <div className="home-version">MVP確認版 v0.2</div>
+    <div className="home-version">残り火の箱庭</div>
   </div>;
 }
 function ClosedPlacesPreview(p){
@@ -3792,26 +3809,6 @@ function App(){
   },[showToast]);
   var receiveEmberCb=useCallback(function(id){if(!game)return;setWitnessTargetId(id);},[game]);
   var sendGiftCb=useCallback(function(gift){if(!game)return;var ns=cloneS(game);var t=ns.characters.toyman;if(gift.type==="water"){t.stats.fatigue=Math.max(0,(t.stats.fatigue||0)-10);showToast("トイマン：「助かる。行く。」");}else if(gift.type==="words"){var ec=(ns.emberCards||[]).find(function(c){return c.unitState==="exploring";});if(ec)ec.progress=Math.min(100,(ec.progress||0)+3);showToast("トイマン：「読んだ。行く。」");}else if(gift.type==="light"){ns.watchGaugeBonus=(ns.watchGaugeBonus||0)+20;showToast("トイマン：「見えた。」");}ns.lastSavedAt=nowISO();ns.logs=[{hours:0,events:[{text:"「"+gift.label+"」をトイマンに送った。",kind:"record",pri:3}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);setSendGiftOpen(false);},[game,showToast]);
-  /* 「何にもならない気がした」専用：預けた瞬間に受領まで完了させる */
-  var addAndReceiveEmber=useCallback(function(card){
-    if(!game)return;
-    var res=addNewEmberToState(game,card);
-    var ns=res.state;
-    /* 即時受領 */
-    var emberCard=(ns.emberCards||[]).find(function(c){return c.id===card.id;});
-    if(emberCard){
-      var ns2=receiveEmberCard(ns,emberCard.id,{});
-      ns2.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns2)};
-      ns2.lastSavedAt=nowISO();
-      setGame(ns2);persistSave(ns2);
-      var acc=ACCEPTANCE_TEXTS[card.writeState]||{};
-      setReceiptAcceptance({text:acc.text||"あなたが書いたものは、なかったことにはなりません。",holdText:acc.holdText||null,nextQuestion:acc.nextQuestion||"次は、どんな問いを持ち帰る？",writeState:card.writeState||"",feeling:card.feeling||"",wanted:card.wanted||"",bodyText:card.bodyText||""});
-    }else{
-      ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};
-      setGame(ns);persistSave(ns);
-    }
-    setShowCreate(false);
-  },[game]);
   var departEmberCb=useCallback(function(id){if(!game)return;var card=(game.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;setDepartTargetId(id);},[game]);// eslint-disable-line
   var confirmDepartCb=useCallback(function(id){if(!game)return;var ns=cloneS(game);var card=(ns.emberCards||[]).find(function(c){return c.id===id;});if(!card||card.status!=="awaiting")return;card=normalizeEmberUnitCard(card);card.unitState="exploring";card.status="unreceived";card.currentQuestion=EMBER_UNIT_FLOW.exploring.question;card.progress=0;
     /* 出発時は探索0%スタート。問いは戦闘・放置で progress=100% に達してから自然発生する */
@@ -3952,7 +3949,7 @@ function App(){
     
     {closingPreview&&<ClosingPreviewOverlay text={closingPreview} onClose={function(){setClosingPreview(null);closeWorld(true);}}/>}
     {philAnswerOpen&&<PhilAnswerModal question={getPhilosophicalQuestion(game).text} onClose={function(){setPhilAnswerOpen(false);}} onSave={function(a){savePhilAnswer(a);setPhilAnswerOpen(false);}}/>}
-    {showCreate&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber} onSubmitFast={addAndReceiveEmber}/>}
+    {showCreate&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber}/>}
     {departTargetId&&<DepartureOverlay card={(game.emberCards||[]).find(function(c){return c.id===departTargetId;})} onCancel={function(){setDepartTargetId(null);}} onConfirm={function(){confirmDepartCb(departTargetId);}}/>}
     {burnTargetId&&<BurnConfirmModal receipt={(game.receipts||[]).find(function(r){return r.id===burnTargetId;})} onCancel={function(){setBurnTargetId(null);}} onConfirm={function(){confirmBurnCb(burnTargetId);}}/>}
     {(game.introQueue||[]).length>0&&<IntroSceneOverlay scene={INTRO_SCENES[(game.introQueue||[])[0]]} onClose={function(){dismissIntroSceneCb((game.introQueue||[])[0]);}}/>}
@@ -4436,7 +4433,6 @@ function EmberView(p){
   function unitCard(card){
     var flow=getUnitFlow(card)||EMBER_UNIT_FLOW.completed;
     var place=getEmberPlace(card);
-    var answeredToday=!MVP_MODE&&card.lastAdvancedDay===("day_"+(game.world&&game.world.day||1))&&card.unitState!=="completed";
     var pending=!!card.questionPending;
     var isCompleted=card.unitState==="completed"||card.status==="ready";
     return(<div key={card.id} className={"ev-card ev-unit ev-unit-"+card.unitState+(pending?" ev-question-pending":"")}>
@@ -4489,7 +4485,7 @@ function EmberView(p){
       {pending&&<div className="ev-pending-ticket">
         <div className="ept-k">問い札が出ています</div>
         <div className="ept-q">「{(card.pendingQuestion&&card.pendingQuestion.question)||flow.question}」</div>
-        <p>次へ進むには、この問い札を受け取ります。答えは必須ではありません。</p>
+        <p>答えても、答えなくても、先へ進めます。答えれば、この火はより深く汲み取られます。</p>
       </div>}
       {!pending&&!isCompleted&&card.unitState!=="exploring"&&card.unitState!=="waiting"&&<div className="ev-unit-question ev-unit-question-wait">
         <div className="euq-label">次に生まれる問い</div>
@@ -4515,19 +4511,18 @@ function EmberView(p){
         {card.answers.slice(-3).map(function(a,i){return <span key={i}>「{a.answer}」</span>;})}
       </div>}
       {card.unitState!=="waiting"&&flow.choices&&flow.choices.length>0&&!isCompleted?<div className="ev-choice-grid">
-        {pending?flow.choices.map(function(ch,ci){return <button key={ch} className={"ev-choice-btn"+(next&&next.action==="answer"&&next.cardId===card.id&&ci===0?" btn-next-action":"")} disabled={answeredToday} onClick={function(){onAdvance&&onAdvance(card.id,ch,false);}}>{ch}</button>;}):<button className="ev-choice-btn ev-choice-wait" disabled>ゲージ100%で問い札が出ます</button>}
-        {pending&&customAnswerId!==card.id&&<button className="ev-choice-btn ev-choice-custom" disabled={answeredToday} onClick={function(){setCustomAnswerId(card.id);setCustomAnswerText("");}}>この他に、答えを入力する</button>}
+        {pending&&<button className="ev-choice-btn ev-choice-skip" onClick={function(){onAdvance&&onAdvance(card.id,"",false);}}>答えずに、このまま進む</button>}
+        {pending?flow.choices.map(function(ch,ci){return <button key={ch} className={"ev-choice-btn"+(next&&next.action==="answer"&&next.cardId===card.id&&ci===0?" btn-next-action":"")} onClick={function(){onAdvance&&onAdvance(card.id,ch,false);}}>{ch}</button>;}):<button className="ev-choice-btn ev-choice-wait" disabled>ゲージ100%で問い札が出ます</button>}
+        {pending&&customAnswerId!==card.id&&<button className="ev-choice-btn ev-choice-custom" onClick={function(){setCustomAnswerId(card.id);setCustomAnswerText("");}}>自分の言葉で答える</button>}
         {pending&&customAnswerId===card.id&&<div className="ev-custom-answer">
           <textarea value={customAnswerText} placeholder="自分の言葉で答えてください。" onChange={function(e){setCustomAnswerText(e.target.value);}}/>
-          <div className="ev-custom-note">答えを入力すると、あなたの魂が入ります。</div>
+          <div className="ev-custom-note">答えると、この火に魂が入り、より深く汲み取られます。</div>
           <div className="ev-custom-actions">
             <button className="btn btn-g" onClick={function(){setCustomAnswerId(null);}}>やめる</button>
             <button className="btn btn-p" disabled={!customAnswerText.trim()} onClick={function(){onAdvance&&onAdvance(card.id,customAnswerText.trim(),true);setCustomAnswerId(null);}}>この言葉で受け取る</button>
           </div>
         </div>}
-        {pending&&<button className="ev-choice-btn ev-choice-blank" disabled={answeredToday} onClick={function(){onAdvance&&onAdvance(card.id,"空欄で受け取る",false);}}>空欄で受け取る</button>}
       </div>:!isCompleted&&<div className="ev-completed-msg">この残り火は、今日は休息に入りました。消えたわけではありません。</div>}
-      {answeredToday&&<div className="ev-day-lock">今日はここまで。続きは明日。掘りすぎ防止、人間には必要な制限。</div>}
       {card.changeLog&&card.changeLog.length>0&&<div className="ev-change-log">
         <div className="ev-change-title">変化ログ</div>
         {card.changeLog.slice(-4).map(function(l,i){return <div key={i} className="ev-change-line">{l}</div>;})}
@@ -4836,6 +4831,7 @@ function ReceiptReceiveModal(p){
       <button className="btn btn-g" onClick={p.onClose}>戻る</button>
       <button className="btn btn-p" onClick={function(){p.onSubmit&&p.onSubmit({currentMetrics:current,receivedFeeling:feeling,receiptMemo:memo,changeNote:changeNote});}}>{growth.canGraduate?"受領証を作る":"仮受領証を作る"}</button>
     </div>
+    <button className="btn btn-quiet receive-skip" onClick={function(){p.onSubmit&&p.onSubmit({currentMetrics:initial,receivedFeeling:feeling,receiptMemo:memo,changeNote:""});}}>記録せず、そのまま受け取る</button>
   </div></div>;
 }
 

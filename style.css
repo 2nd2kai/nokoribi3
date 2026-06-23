@@ -4083,6 +4083,19 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 /* ── 哲学的問い ── */
 .home-q-depth{font-family:var(--mono);font-size:9px;color:var(--faint);letter-spacing:.1em;margin-left:8px;vertical-align:middle}
 
+/* ── ホーム：大切にされている残り火（汲み取り前面化） ── */
+.home-cherish-card{border-color:rgba(219,164,94,.18)}
+.home-cherish-tag{font-family:var(--mono);font-size:9px;color:var(--ember2);letter-spacing:.1em;margin-left:8px;vertical-align:middle;opacity:.85}
+.home-cherish-line{font-family:var(--serif);font-size:14px;color:var(--ember2);line-height:1.85;letter-spacing:.04em;margin:6px 0 10px}
+.home-cherish-dots{display:inline-flex;gap:4px}
+.home-cherish-dots .ec-dot{width:6px;height:6px;border-radius:50%;background:rgba(232,227,212,.12)}
+.home-cherish-dots .ec-dot-on{background:var(--ember);box-shadow:0 0 4px rgba(219,164,94,.5)}
+
+/* ── 答えずに進む／そのまま受け取る（任意性の前面化） ── */
+.ev-choice-skip{border-style:dashed!important;color:var(--dim)!important;opacity:.9}
+.btn-quiet{background:none;border:none;color:var(--faint);font-size:12px;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-family:var(--sans)}
+.receive-skip{display:block;width:100%;margin-top:10px;padding:8px;letter-spacing:.04em}
+
 /* ── 送るカード ── */
 .home-send-card{}
 .home-send-note{font-family:var(--serif);font-size:12.5px;color:var(--dim);margin:2px 0 10px;line-height:1.6}
