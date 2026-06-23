@@ -1183,8 +1183,9 @@ function runToymanBattleIntervention(game,actionId,selfAnswer){
   var mod=getBattleFatigueMod(t.stats.fatigue||0);
   if(mod.blocked){return{ok:false,state:game,msg:"トイマンは限界です",lines:[mod.note,"かなに水を持ってきてもらう必要があります。"]};}
   var enc=getOrCreateBattleEncounter(ns);
-  var enemy=enc.enemy;
-  var voice=getShadowVoice(enemy,enc.voiceIndex||0);
+  /* 表示・記録ともに、残り火の内容から生成した「個人的な影の声」を使う。
+     画面に出た声と、受領証に刻まれる声を一致させる。 */
+  var voice=getShadowVoiceForCard(card,enc.voiceIndex||0);
   var rawProg=randBetween(action.progressMin,action.progressMax);
   var prog=Math.max(0,Math.round(rawProg*mod.progress));
   var rawFat=randBetween(action.fatigueMin,action.fatigueMax);
@@ -1195,8 +1196,7 @@ function runToymanBattleIntervention(game,actionId,selfAnswer){
   /* 自己回答を蓄積 */
   if(selfAnswer){
     if(!card.shadowAnswers)card.shadowAnswers=[];
-    var voice0=getShadowVoice(enc.enemy,enc.voiceIndex||0);
-    card.shadowAnswers=card.shadowAnswers.concat([{shadow:voice0,answer:selfAnswer,at:nowISO(),action:actionId}]).slice(-20);
+    card.shadowAnswers=card.shadowAnswers.concat([{shadow:voice,answer:selfAnswer,at:nowISO(),action:actionId}]).slice(-20);
     prog=prog+randBetween(3,5);
   }
   if(prog>0){
@@ -3102,6 +3102,7 @@ function BattleEncounterModal(p){
   var disabled=pv.mod.blocked||pv.cooldownMs>0||!card||game.characters.toyman.lastAction!=="exploring";
   var pastAnswers=(card&&card.shadowAnswers)||[];
   function doSubmit(){p.onManualBattle&&p.onManualBattle("hold",selfAnswer);setSelfAnswer("");}
+  function doSilent(){p.onManualBattle&&p.onManualBattle("hold","");setSelfAnswer("");}
   function doRetreat(){p.onManualBattle&&p.onManualBattle("retreat","");setSelfAnswer("");}
   return(
     <div className="ov battle-ov" onClick={p.onClose}>
@@ -3123,7 +3124,7 @@ function BattleEncounterModal(p){
         </div>
         <div className="battle-face-actions">
           <button className="btn btn-p" disabled={disabled||!selfAnswer.trim()} onClick={doSubmit}>言葉を渡して前へ進む</button>
-          <button className="btn btn-g" disabled={disabled} onClick={function(){doSubmit();}}>言葉なしで前へ進む</button>
+          <button className="btn btn-g" disabled={disabled} onClick={doSilent}>言葉なしで前へ進む</button>
           <button className="btn btn-g battle-retreat-btn" onClick={doRetreat}>今日はここまでにする</button>
         </div>
         {pv.cooldownMs>0&&<p className="battle-cd">次に向き合えるまで あと {cdSec} 秒</p>}
@@ -3134,7 +3135,7 @@ function BattleEncounterModal(p){
         </div>
         {pastAnswers.length>0&&<div className="bsa-log">
           <div className="bsa-log-title">これまでの向き合い（{pastAnswers.length}回）</div>
-          {pastAnswers.slice(-2).map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">「{a.shadow}」</span>{a.answer&&<span className="bsa-ans">→「{a.answer}」</span>}</div>;})}
+          {pastAnswers.slice(-3).map(function(a,i){return <div key={i} className="bsa-log-item"><span className="bsa-shadow">「{a.shadow}」</span>{a.answer&&<span className="bsa-ans">→「{a.answer}」</span>}</div>;})}
         </div>}
         {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")+(result.reached100?" battle-result-reached":"")}>
           {result.reached100&&<div className="battle-reached-banner">問いが届いた</div>}
@@ -3789,7 +3790,7 @@ function App(){
   var nextAction=game?getNextAction(game):null;
   var [expanded,setExpanded]=useState(null);
   var [viewConv,setViewConv]=useState(null);
-  var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
+  var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [battleFrom,setBattleFrom]=useState("peek");var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
   var gameRef=useRef(null),toastRef=useRef(null);
   var [watchGauge,setWatchGauge]=useState(0);var wgRef=useRef({gauge:0,last:{}});var [returnConvId,setReturnConvId]=useState(null);var [witnessTargetId,setWitnessTargetId]=useState(null);var [sendGiftOpen,setSendGiftOpen]=useState(false);var [utsuroEventActive,setUtsuroEventActive]=useState(false);var [closingPreview,setClosingPreview]=useState(null);var [philAnswerOpen,setPhilAnswerOpen]=useState(false);var [kotaeStuck,setKotaeStuck]=useState(false);
   var [saveError,setSaveError]=useState(false);
@@ -3928,18 +3929,18 @@ function App(){
             <button className={"ptb"+(peekMode==="map"?" ptb-on":"")} onClick={function(){setPeekMode("map");}}>世界地図</button>
           </div>
         }/>
-        {peekMode==="scene"&&<NowSceneView game={game} targetLoc={peekTargetLoc} watchGauge={watchGauge} onWatch={stageWatchCb} onCharCare={charCareCb} onPressureAction={pressureActionCb} onToymanMove={toymanMoveCb} onManualBattle={manualBattleCb} onOpenBattle={function(){setPeekTargetLoc("unexplored_forest");setPeekMode("scene");setScreen("battle");}} onClickLetter={clickLetterCb}/>}
+        {peekMode==="scene"&&<NowSceneView game={game} targetLoc={peekTargetLoc} watchGauge={watchGauge} onWatch={stageWatchCb} onCharCare={charCareCb} onPressureAction={pressureActionCb} onToymanMove={toymanMoveCb} onManualBattle={manualBattleCb} onOpenBattle={function(){setBattleFrom("peek");setPeekTargetLoc("unexplored_forest");setPeekMode("scene");setScreen("battle");}} onClickLetter={clickLetterCb}/>}
         {peekMode==="map"&&<div className="peek-wrap peek-wrap-readable"><CardWorldMap game={game} onPlaceSelect={function(k){setPeekTargetLoc(k);setPeekMode("scene");}}/><div className="peek-sec"><span className="sec-lbl">次に起きそうな変化</span><NextChangesPanel game={game}/></div></div>}
       </>}
       {screen==="battle"&&<>
-        <Header title="影との遭遇" day={game.world.day}/>
-        <BattleEncounterScreen game={game} onBack={function(){setPeekTargetLoc("unexplored_forest");setPeekMode("scene");setScreen("peek");}} onManualBattle={manualBattleCb} onCare={function(){setPeekTargetLoc("unexplored_forest");setPeekMode("scene");setScreen("peek");showToast("トイマンをタップして、かなのケア導線から休ませてください。");}}/>
+        <Header title="影と向き合う" day={game.world.day}/>
+        <BattleEncounterScreen game={game} onBack={function(){if(battleFrom==="ember"){setScreen("ember");}else{setPeekTargetLoc("unexplored_forest");setPeekMode("scene");setScreen("peek");}}} onManualBattle={manualBattleCb} onCare={function(){setPeekTargetLoc("unexplored_forest");setPeekMode("scene");setScreen("peek");showToast("トイマンをタップして、かなのケア導線から休ませてください。");}}/>
       </>}
       {screen==="chars"&&<>
         <Header title="みんな" day={game.world.day}/>
         <div className="scroll"><div className="cg">{getMetCharIds(game).map(function(id){return <CharCard key={id} id={id} c={game.characters[id]} prog={prog[id]} game={game} expanded={expanded===id} onToggle={function(){setExpanded(function(v){return v===id?null:id;});}}/>;})} </div></div>
       </>}
-      {screen==="ember"&&<><Header title="残り火" day={game.world.day}/><ProcessingLine game={game}/><EmberView game={game} onReceive={receiveEmberCb} onDepart={departEmberCb} onDelete={deleteEmberCb} onAdvance={advanceEmberCb} onBurnReceipt={burnReceiptCb} onEditEmber={editEmberCb} onOpenCreate={function(){setShowCreate(true);}} onOpenBattle={function(){setScreen("battle");}}/></>}
+      {screen==="ember"&&<><Header title="残り火" day={game.world.day}/><ProcessingLine game={game}/><EmberView game={game} onReceive={receiveEmberCb} onDepart={departEmberCb} onDelete={deleteEmberCb} onAdvance={advanceEmberCb} onBurnReceipt={burnReceiptCb} onEditEmber={editEmberCb} onOpenCreate={function(){setShowCreate(true);}} onOpenBattle={function(){setBattleFrom("ember");setScreen("battle");}}/></>}
       {screen==="titles"&&<>
         <Header title="称号帳" day={game.world.day}/>
         <TitlesView game={game}/>
