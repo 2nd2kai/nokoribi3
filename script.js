@@ -3894,6 +3894,7 @@ function IntroScreen(p){
   ];
   var [step,setStep]=useState(0);
   var [skipped,setSkipped]=useState(false);
+  var [phase,setPhase]=useState("open"); // "open" | "question" | "farewell"
   useEffect(function(){
     if(skipped)return;
     var delays=[0,1200,2600,3900,5200,6200,7400];
@@ -3901,6 +3902,44 @@ function IntroScreen(p){
     return function(){timers.forEach(clearTimeout);};
   },[skipped]);
   function skip(){setSkipped(true);setStep(STEPS.length-1);}
+  function goQuestion(){setPhase("question");}
+  function goFarewell(){setPhase("farewell");}
+
+  if(phase==="farewell"){
+    return(
+      <div className="op-wrap">
+        <div className="op-inner">
+          <div className="op-ember-glow" style={{opacity:0.4}}/>
+          <div className="op-farewell">
+            <div className="op-farewell-line"><span className="isc-dot cd-utsuro op-dot"/><span className="op-say">「残り火ができたとき、またきてください」</span></div>
+            <div className="op-farewell-line"><span className="isc-dot cd-utsuro op-dot"/><span className="op-say">「うつろが、待っています」</span></div>
+          </div>
+          <div className="op-btn-wrap op-fade-up" style={{marginTop:32}}>
+            <button className="btn btn-g op-btn" onClick={p.onComplete}>閉じる</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if(phase==="question"){
+    return(
+      <div className="op-wrap">
+        <div className="op-inner op-question-inner">
+          <div className="op-question-body">
+            <p className="op-q-lead">書いたあと</p>
+            <p className="op-q-main">誰かに届いたか<br/>気になったことは<br/>ありますか？</p>
+            <p className="op-q-sub">通知を確認した。反応が気になった。<br/>そういう感覚が、残り火です。</p>
+          </div>
+          <div className="op-q-choices">
+            <button className="btn btn-p big touchable op-q-yes" onClick={p.onComplete}>ある・あった</button>
+            <button className="btn btn-g op-q-no" onClick={goFarewell}>今はない</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   var visibleSteps=STEPS.slice(0,step+1);
   return(
     <div className="op-wrap" onClick={skip}>
@@ -3917,7 +3956,7 @@ function IntroScreen(p){
           if(s.type==="title")return <h1 key={i} className="op-title op-fade-up">{s.text}</h1>;
           if(s.type==="button")return(
             <div key={i} className="op-btn-wrap op-fade-up">
-              <button className="btn btn-p big touchable op-btn" onClick={p.onComplete}>ひらく</button>
+              <button className="btn btn-p big touchable op-btn" onClick={goQuestion}>ひらく</button>
               <p className="op-note">誰も、あなたを責めていません。</p>
             </div>
           );
