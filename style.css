@@ -4405,10 +4405,20 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .cert-voice-dot{width:12px;height:12px;flex-shrink:0;margin-top:4px}
 .cert-voice-text{font-size:13px;font-family:var(--serif);color:var(--dim);line-height:1.65;margin:0}
 .cert-voice-name{font-size:11px;color:var(--faint);margin-left:6px}
-.cert-foot{display:flex;flex-direction:column;align-items:center;gap:5px;padding-top:10px;border-top:1px dashed rgba(219,164,94,.3)}
+.cert-foot{display:flex;flex-direction:column;align-items:center;gap:7px;padding-top:10px;border-top:1px dashed rgba(219,164,94,.3)}
 .cert-confirm{font-size:12px;color:var(--ember2);letter-spacing:.06em}
-.cert-date{font-size:11px;color:var(--faint)}
+.cert-dates{display:flex;flex-direction:column;gap:2px;margin:0;width:100%;max-width:220px}
+.cert-date-row{display:flex;justify-content:space-between;font-size:10.5px;color:var(--faint)}
+.cert-date-row dt{margin:0}
+.cert-date-row dd{margin:0;color:var(--dim)}
 .cert-seal{font-size:18px;color:rgba(219,164,94,.6)}
+/* 棚：もっと見る・奥・しまう注記 */
+.jshelf-more-btn{margin-top:8px;width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:9px;font-size:12px;color:var(--dim);font-family:inherit;cursor:pointer}
+.jshelf-shelved .jshelf-inner-h{color:var(--faint)}
+.jshelf-fold{width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;padding:0;cursor:pointer;font-family:inherit}
+.jshelf-fold-icon{font-size:10px;color:var(--faint)}
+.jfv-shelf-note{font-size:11px;color:var(--faint);text-align:center;margin:6px 0 0;line-height:1.5}
+.htc-uses-note{font-size:11.5px;color:var(--faint);line-height:1.6;margin:4px 0 0}
 /* 棚 */
 .jshelf-sub{font-size:12px;color:var(--faint);margin:2px 0 10px}
 .jshelf-list{display:flex;flex-direction:column;gap:8px}

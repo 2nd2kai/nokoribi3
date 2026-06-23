@@ -836,6 +836,11 @@ function migrateGame(g){
   if(g.battle.encounter===undefined)g.battle.encounter=null;
   if(!g.toka)g.toka={total:0,log:[]};
   if(!g.sentFires)g.sentFires=[];
+  g.sentFires=g.sentFires.map(function(f){
+    if(f.shelved===undefined)f.shelved=false;
+    if(!f.dates)f.dates={deposited:f.createdAt||null,received:f.form==="certificate"?(f.lastTouch||f.createdAt||null):null,returned:f.returnedAt||null};
+    return f;
+  });
   if(!g.inventory)g.inventory={ash_fragment:0,nameless_envelope:0,water_drop:0,unread_paper:0,small_light:0,pending_tag:0,red_stamp_mark:0,lost_voice:0,dried_tear:0,old_ink:0,question_ticket:0};
   if(!g.achievements)g.achievements={};
   if(!g.unlocks)g.unlocks={scene_book:false,intervention:false,world_record:false,title_book:false,item_book:false};
@@ -3917,13 +3922,8 @@ function HomeView(p){
         <div className="htc-tagline">捨てなかった証</div>
       </div>
       <div className="htc-uses">
-        <div className="htc-uses-label">灯貨でできること（近日実装）</div>
-        <div className="htc-use-list">
-          <div className="htc-use-item"><span className="htc-cost">1枚</span><span className="htc-use-desc">今夜の判決を、明日の朝まで閉廷する</span></div>
-          <div className="htc-use-item"><span className="htc-cost">2枚</span><span className="htc-use-desc">判決を問いに変換する</span></div>
-          <div className="htc-use-item"><span className="htc-cost">3枚</span><span className="htc-use-desc">残り火に宛先をつける（誰かへ届ける形にする）</span></div>
-          <div className="htc-use-item"><span className="htc-cost">5枚</span><span className="htc-use-desc">うつろの箱に三日間預ける</span></div>
-        </div>
+        <div className="htc-uses-label">灯貨はまだ使いません</div>
+        <p className="htc-uses-note">これは「捨てなかった」という記録です。使い道は、棚が落ち着いてから増えていきます。</p>
       </div>
       {game.toka.log&&game.toka.log[0]&&<div className="htc-latest">
         <span className="htc-latest-label">直近の発行</span>
@@ -3964,13 +3964,42 @@ const J_FORM_META={
 };
 function jName(c){return ({toyman:"トイマン",kana:"かな",utsuro:"うつろ"})[c]||c;}
 function jHasDanger(s){s=s||"";return J_DANGER_WORDS.some(function(w){return s.indexOf(w)>=0;});}
-function jDigQuestion(dest,comp){
-  if(dest==="spring")return {text:({toyman:"この痛みは、どれから見る？",kana:"どれを、いちばん分かってほしい？",utsuro:"どれが、終わっても残ってる？"})[comp],picker:true};
-  return {text:({toyman:"これ、まだ何を探してた？",kana:"本当は、何て言ってほしかった？",utsuro:"これが終わったあと、何が残ってた？"})[comp],picker:false};
+// 問いは (送り先 × 同行者 × 深さ) の決定論プール。深さ＝この火の過去 meeting 数（上限クランプ）。ランダムにしない。
+const J_DIG_Q={
+  forest:{
+    toyman:["これ、まだ何を探してた？","前に探したものの奥に、まだ残ってるものはある？","それでも手放せなかったのは、どこに理由がある？"],
+    kana:  ["本当は、何て言ってほしかった？","あのとき言ってほしかった言葉は、今も同じ？","誰に言ってほしかったのか、見えてきた？"],
+    utsuro:["これが終わったあと、何が残ってた？","残ったものは、あれから形を変えた？","それは、捨てるものだった？残すものだった？"]
+  },
+  spring:{
+    toyman:["この痛みは、どれから見る？","前に選んだ感情の、すぐ隣にあるのは？","いちばん奥にある感情は、どれ？"],
+    kana:  ["どれを、いちばん分かってほしい？","それを分かってほしい相手は、見えてきた？","分かってもらえたら、どうなると思う？"],
+    utsuro:["どれが、終わっても残ってる？","残っている感情は、まだ同じ名前？","それは、もう終わらせていい？"]
+  }
+};
+const J_PLACE_Q={
+  forest:{
+    toyman:["今は、どこまで探さずに置いておく？","まだ探さないでおく、でいい？","置いたまま、しばらく持っていられそう？"],
+    kana:  ["今は、どの気持ちを名前にせず置いておく？","名前をつけずに、もう少し持っていていい？","急がず置いておく場所は、決まった？"],
+    utsuro:["今は、終わったことにせず、どこに置いておく？","終わらせずに置く、で落ち着く？","しまう場所は、棚の手前？奥？"]
+  },
+  spring:{
+    toyman:["この気持ちは、今どこまで見ずに置いておく？","見ないでおく、でまだ大丈夫？","置いたままにしておく場所はある？"],
+    kana:  ["この気持ちを、今は名前にせず置いておく？","名前にしないまま、そばに置ける？","置いておくなら、どこがいい？"],
+    utsuro:["この気持ちを、終わったことにせず、どこに置いておく？","終わらせずに、置いておけそう？","しまうとしたら、どこに？"]
+  }
+};
+function jPickQ(pool,dest,comp,depth){
+  var arr=(pool[dest]&&pool[dest][comp])||[];
+  if(!arr.length)return "";
+  var i=depth<0?0:(depth>=arr.length?arr.length-1:depth);
+  return arr[i];
 }
-function jPlaceQuestion(dest,comp){
-  if(dest==="spring")return {text:({toyman:"この気持ちは、今どこまで見ずに置いておく？",kana:"この気持ちを、今は名前にせず置いておく？",utsuro:"この気持ちを、終わったことにせず、どこに置いておく？"})[comp],picker:false};
-  return {text:({toyman:"今は、どこまで探さずに置いておく？",kana:"今は、どの気持ちを名前にせず置いておく？",utsuro:"今は、終わったことにせず、どこに置いておく？"})[comp],picker:false};
+function jDigQuestion(dest,comp,depth){
+  return {text:jPickQ(J_DIG_Q,dest,comp,depth||0),picker:dest==="spring"};
+}
+function jPlaceQuestion(dest,comp,depth){
+  return {text:jPickQ(J_PLACE_Q,dest,comp,depth||0),picker:false};
 }
 function jReturnReport(comp,placeMode,retreated){
   var n=jName(comp);
@@ -4003,7 +4032,10 @@ function CertificateView(p){
   if(!f||f.form!=="certificate")return null;
   var meetings=(f.meetings||[]).filter(function(m){return !m.deferred;});
   var dest=J_DESTS.find(function(d){return d.id===f.dest;})||{label:f.dest,desc:""};
-  var date=jDateLabel(f.lastTouch||f.createdAt);
+  var dts=f.dates||{};
+  var depositedD=jDateLabel(dts.deposited||f.createdAt);
+  var receivedD=jDateLabel(dts.received);
+  var returnedD=jDateLabel(dts.returned);
   var layers=f.meetings||[];
   return <div className={"cert"+(p.inline?" cert-inline":"")}>
     <div className="cert-head">
@@ -4041,7 +4073,11 @@ function CertificateView(p){
 
     <div className="cert-foot">
       <div className="cert-confirm">この火は、捨てられなかった。</div>
-      <div className="cert-date">{date}　発行</div>
+      <dl className="cert-dates">
+        {depositedD&&<div className="cert-date-row"><dt>預けた日</dt><dd>{depositedD}</dd></div>}
+        {receivedD&&<div className="cert-date-row"><dt>受け取った日</dt><dd>{receivedD}</dd></div>}
+        {returnedD&&<div className="cert-date-row"><dt>心へ返した日</dt><dd>{returnedD}</dd></div>}
+      </dl>
       <div className="cert-seal">✦</div>
     </div>
   </div>;
@@ -4085,7 +4121,8 @@ function EmberJourney(p){
       var keptFire={
         id:"sf"+Date.now(),kindle:kindle.trim(),pain:noWords?null:(pain.trim()||null),noWords:noWords,danger:true,
         dest:null,companion:null,retreated:false,form:"kept",meetings:[],voiceLine:null,
-        createdAt:nowISO(),lastTouch:nowISO()
+        createdAt:nowISO(),lastTouch:nowISO(),
+        dates:{deposited:nowISO(),received:null,returned:null}
       };
       commitFire(keptFire);
       setResult(keptFire);setPhase("kept");return;
@@ -4095,8 +4132,9 @@ function EmberJourney(p){
   function sendOut(){if(!dest||!comp)return;setPhase("travel");}
   function returnFire(didRetreat){
     var pm=noWords||didRetreat;
+    var depth=ex?((ex.meetings||[]).length):0; // 会い直すほど深い問いになる
     setRetreated(didRetreat);setPlaceMode(pm);
-    setQ(pm?jPlaceQuestion(dest,comp):jDigQuestion(dest,comp));
+    setQ(pm?jPlaceQuestion(dest,comp,depth):jDigQuestion(dest,comp,depth));
     setReport(jReturnReport(comp,pm,didRetreat));
     setPhase("meet");
   }
@@ -4108,13 +4146,16 @@ function EmberJourney(p){
     if(ex){
       // 会い直し／送り直す：地層として積む。受領証になったら戻らない（昇格）。
       var newForm=thisForm==="certificate"?"certificate":(ex.form==="certificate"?"certificate":"placed");
+      var upgraded=ex.form!=="certificate"&&newForm==="certificate";
+      var exDates=Object.assign({deposited:ex.createdAt},ex.dates||{});
+      if(newForm==="certificate"&&!exDates.received)exDates.received=nowISO();
       var updated=Object.assign({},ex,{
         dest:dest,companion:comp,form:newForm,
         meetings:[meeting].concat(ex.meetings||[]),
-        voiceLine:jVoiceLine(comp),lastTouch:nowISO()
+        voiceLine:jVoiceLine(comp),lastTouch:nowISO(),dates:exDates
       });
       commitFire(updated,true);
-      setResult({fire:updated,deferred:deferred,reply:jReply(comp,deferred,pm),upgraded:ex.form!=="certificate"&&newForm==="certificate"});
+      setResult({fire:updated,deferred:deferred,reply:jReply(comp,deferred,pm),upgraded:upgraded});
       setPhase("done");
       return;
     }
@@ -4122,7 +4163,8 @@ function EmberJourney(p){
     var fire={
       id:"sf"+Date.now(),kindle:kindle.trim(),pain:noWords?null:(pain.trim()||null),noWords:noWords,danger:false,
       dest:dest,companion:comp,retreated:retreated,form:form,meetings:[meeting],voiceLine:jVoiceLine(comp),
-      createdAt:nowISO(),lastTouch:nowISO()
+      createdAt:nowISO(),lastTouch:nowISO(),
+      dates:{deposited:nowISO(),received:form==="certificate"?nowISO():null,returned:null}
     };
     commitFire(fire);
     setResult({fire:fire,deferred:deferred,reply:jReply(comp,deferred,pm)});
@@ -4207,8 +4249,12 @@ function EmberJourney(p){
 
 function JourneyShelf(p){
   var all=(p.game&&p.game.sentFires)||[];
-  var fires=all.filter(function(f){return !f.returnedAt;});
+  var front=all.filter(function(f){return !f.returnedAt&&!f.shelved;});
+  var shelved=all.filter(function(f){return !f.returnedAt&&f.shelved;});
   var returned=all.filter(function(f){return !!f.returnedAt;});
+  var [showAllFront,setShowAllFront]=useState(false);
+  var [openShelved,setOpenShelved]=useState(false);
+  var [showAllReturned,setShowAllReturned]=useState(false);
   if(!all.length)return null;
   function card(f){
     var meta=J_FORM_META[f.form]||J_FORM_META.placed;
@@ -4227,14 +4273,29 @@ function JourneyShelf(p){
       </div>
     </button>;
   }
+  var FRONT_CAP=8,RET_CAP=8;
+  var frontShown=showAllFront?front:front.slice(0,FRONT_CAP);
+  var returnedShown=showAllReturned?returned:returned.slice(0,RET_CAP);
   return <section className="home-card jshelf">
     <div className="lh">残り火の棚</div>
-    <p className="jshelf-sub">ここに灯っている火：{fires.length}つ。捨てなかったもの。</p>
-    <div className="jshelf-list">{fires.slice(0,12).map(card)}</div>
+    <p className="jshelf-sub">ここに灯っている火：{front.length}つ。捨てなかったもの。</p>
+    <div className="jshelf-list">{frontShown.map(card)}</div>
+    {front.length>FRONT_CAP&&<button className="jshelf-more-btn" onClick={function(){setShowAllFront(function(v){return !v;});}}>{showAllFront?"とじる":"もっと見る（残り "+(front.length-FRONT_CAP)+"つ）"}</button>}
+
+    {shelved.length>0&&<div className="jshelf-inner jshelf-shelved">
+      <button className="jshelf-fold" onClick={function(){setOpenShelved(function(v){return !v;});}}>
+        <span className="jshelf-inner-h">奥へしまった火 ── {shelved.length}つ</span>
+        <span className="jshelf-fold-icon">{openShelved?"▲":"▼"}</span>
+      </button>
+      {openShelved&&<><p className="jshelf-inner-sub">消えたのではなく、棚の奥に置いた。また必要になったら開けます。</p>
+      <div className="jshelf-list">{shelved.map(card)}</div></>}
+    </div>}
+
     {returned.length>0&&<div className="jshelf-inner">
       <div className="jshelf-inner-h">心へ返した火 ── {returned.length}つ</div>
       <p className="jshelf-inner-sub">消したのではなく、内側に置いた。いつでも、また会える。</p>
-      <div className="jshelf-list">{returned.slice(0,12).map(card)}</div>
+      <div className="jshelf-list">{returnedShown.map(card)}</div>
+      {returned.length>RET_CAP&&<button className="jshelf-more-btn" onClick={function(){setShowAllReturned(function(v){return !v;});}}>{showAllReturned?"とじる":"もっと見る（残り "+(returned.length-RET_CAP)+"つ）"}</button>}
     </div>}
   </section>;
 }
@@ -4247,8 +4308,22 @@ function JourneyFireView(p){
   var meetings=f.meetings||[];
   function graduate(){
     var ns=cloneS(p.game);
-    ns.sentFires=(ns.sentFires||[]).map(function(x){return x.id===f.id?Object.assign({},x,{returnedAt:nowISO(),lastTouch:nowISO()}):x;});
+    ns.sentFires=(ns.sentFires||[]).map(function(x){if(x.id!==f.id)return x;var dt=Object.assign({deposited:x.createdAt},x.dates||{},{returned:nowISO()});return Object.assign({},x,{returnedAt:nowISO(),lastTouch:nowISO(),dates:dt});});
     if(typeof grantToka==="function")grantToka(ns,2,"火を、心へ返した。");
+    ns.lastSavedAt=nowISO();
+    p.onChange&&p.onChange(ns);
+    p.onClose&&p.onClose();
+  }
+  function shelve(){
+    var ns=cloneS(p.game);
+    ns.sentFires=(ns.sentFires||[]).map(function(x){return x.id===f.id?Object.assign({},x,{shelved:true,lastTouch:nowISO()}):x;});
+    ns.lastSavedAt=nowISO();
+    p.onChange&&p.onChange(ns);
+    p.onClose&&p.onClose();
+  }
+  function unshelve(){
+    var ns=cloneS(p.game);
+    ns.sentFires=(ns.sentFires||[]).map(function(x){return x.id===f.id?Object.assign({},x,{shelved:false,lastTouch:nowISO()}):x;});
     ns.lastSavedAt=nowISO();
     p.onChange&&p.onChange(ns);
     p.onClose&&p.onClose();
@@ -4283,14 +4358,23 @@ function JourneyFireView(p){
       </div>:<div className="jfv-actions">
         {f.returnedAt
           ?<button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"remeet");}}>もう一度、この火に会う</button>
+          :f.form==="certificate"
+            ?<>
+              <button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"remeet");}}>{jName(f.companion)}と、もう一度会う</button>
+              <button className="btn btn-g ej-go" onClick={function(){p.onRevisit(f,"resend");}}>送り先を選び直して、旅に出す</button>
+              <button className="btn btn-g ej-go" onClick={graduate}>心へ返す（卒業）</button>
+            </>
+          :f.form==="kept"
+            ?<>
+              <button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"resend");}}>送り先を選ぶ</button>
+              {f.shelved?<button className="btn btn-g ej-go" onClick={unshelve}>棚の正面に戻す</button>:<button className="btn btn-g ej-go" onClick={shelve}>奥へしまう</button>}
+            </>
           :<>
-            {f.form==="kept"
-              ?<button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"resend");}}>送り先を選ぶ</button>
-              :<button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"remeet");}}>この火に、もう一度会う</button>}
-            {f.form==="placed"&&<button className="btn btn-g ej-go" onClick={function(){p.onRevisit(f,"resend");}}>別の同行者へ、送り直す</button>}
-            {f.form==="certificate"&&<button className="btn btn-g ej-go" onClick={graduate}>心へ返す（卒業）</button>}
+            <button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"resend");}}>もう一度送る</button>
+            {f.shelved?<button className="btn btn-g ej-go" onClick={unshelve}>棚の正面に戻す</button>:<button className="btn btn-g ej-go" onClick={shelve}>奥へしまう</button>}
           </>}
       </div>}
+      {!locked&&!f.returnedAt&&!f.shelved&&f.form==="placed"&&<p className="jfv-shelf-note">「奥へしまう」は卒業ではありません。消えず、また開けます。</p>}
       <button className="btn btn-g ej-cancel" onClick={p.onClose}>棚へ戻る</button>
     </div>
   </div></div>;
