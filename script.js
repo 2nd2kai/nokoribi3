@@ -4284,7 +4284,7 @@ function JourneyShelf(p){
 
     {shelved.length>0&&<div className="jshelf-inner jshelf-shelved">
       <button className="jshelf-fold" onClick={function(){setOpenShelved(function(v){return !v;});}}>
-        <span className="jshelf-inner-h">奥へしまった火 ── {shelved.length}つ</span>
+        <span className="jshelf-inner-h">棚の奥</span>
         <span className="jshelf-fold-icon">{openShelved?"▲":"▼"}</span>
       </button>
       {openShelved&&<><p className="jshelf-inner-sub">消えたのではなく、棚の奥に置いた。また必要になったら開けます。</p>
@@ -4306,6 +4306,8 @@ function JourneyFireView(p){
   var meta=J_FORM_META[f.form]||J_FORM_META.placed;
   var locked=jLockedToday(f);
   var meetings=f.meetings||[];
+  // 心へ返すのは「翌日以降の明示的な会い直し後のみ」。受領＝1層目、会い直し＝2層目以降。
+  var canGraduate=f.form==="certificate"&&meetings.length>=2;
   function graduate(){
     var ns=cloneS(p.game);
     ns.sentFires=(ns.sentFires||[]).map(function(x){if(x.id!==f.id)return x;var dt=Object.assign({deposited:x.createdAt},x.dates||{},{returned:nowISO()});return Object.assign({},x,{returnedAt:nowISO(),lastTouch:nowISO(),dates:dt});});
@@ -4353,8 +4355,8 @@ function JourneyFireView(p){
         </>}
 
       {locked?<div className="jfv-lock">
-        <p className="jfv-lock-line">この火には、今日はもう触れません。</p>
-        <p className="jfv-lock-sub">明日また、会いに来てください。急がなくていい。</p>
+        <p className="jfv-lock-line">今夜は、ここに置いておきます。</p>
+        <p className="jfv-lock-sub">同じ火にもう一度会えるのは、日が変わってから。急がなくていい。</p>
       </div>:<div className="jfv-actions">
         {f.returnedAt
           ?<button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"remeet");}}>もう一度、この火に会う</button>
@@ -4362,7 +4364,9 @@ function JourneyFireView(p){
             ?<>
               <button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"remeet");}}>{jName(f.companion)}と、もう一度会う</button>
               <button className="btn btn-g ej-go" onClick={function(){p.onRevisit(f,"resend");}}>送り先を選び直して、旅に出す</button>
-              <button className="btn btn-g ej-go" onClick={graduate}>心へ返す（卒業）</button>
+              {canGraduate
+                ?<button className="btn btn-g ej-go" onClick={graduate}>心へ返す（卒業）</button>
+                :<p className="jfv-shelf-note">心へ返せるのは、もう一度会いに来たあとです。</p>}
             </>
           :f.form==="kept"
             ?<>
@@ -4374,7 +4378,7 @@ function JourneyFireView(p){
             {f.shelved?<button className="btn btn-g ej-go" onClick={unshelve}>棚の正面に戻す</button>:<button className="btn btn-g ej-go" onClick={shelve}>奥へしまう</button>}
           </>}
       </div>}
-      {!locked&&!f.returnedAt&&!f.shelved&&f.form==="placed"&&<p className="jfv-shelf-note">「奥へしまう」は卒業ではありません。消えず、また開けます。</p>}
+      {!locked&&!f.returnedAt&&!f.shelved&&(f.form==="placed"||f.form==="kept")&&<p className="jfv-shelf-note">「奥へしまう」は片付けでも卒業でもありません。消えるのではなく、必要になったらまた開けます。</p>}
       <button className="btn btn-g ej-cancel" onClick={p.onClose}>棚へ戻る</button>
     </div>
   </div></div>;
