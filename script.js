@@ -3898,7 +3898,7 @@ function HomeView(p){
       <p className="bne-desc">残り火を旅に出す。送り先で問いの種類が、同行者で問いの声が変わる。帰ってきた問いに、会う。</p>
       <button className="btn btn-p" onClick={function(){p.onJourney&&p.onJourney();}}>残り火を送り出す</button>
     </section>
-    <JourneyShelf game={game}/>
+    <JourneyShelf game={game} onOpen={function(id){p.onOpenFire&&p.onOpenFire(id);}}/>
     <section className="home-card bad-night-entry">
       <div className="lh">判決保留</div>
       <h3 className="bne-title">書くのをやめようとしている、あなたへ</h3>
@@ -3985,15 +3985,20 @@ function jReply(comp,deferred,placeMode){
 }
 function jVoiceLine(comp){return ({toyman:"森で見つけた。捨てられてなかった。",kana:"つらい夜だったね、って言った。",utsuro:"終わったあとも、残ってた。"})[comp];}
 function jTitleOf(fire){var k=(fire.kindle||"").trim();return k.length>22?k.slice(0,22)+"…":(k||"名もない火");}
+function jCalDay(iso){var d=iso?new Date(iso):new Date();return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();}
+function jLockedToday(fire){if(!fire||!fire.lastTouch)return false;return jCalDay(fire.lastTouch)===jCalDay();}
+function jStrataLabel(m){if(m.deferred)return "まだ答えなかった";if(m.mode==="place")return "置いた";return "掘って、答えた";}
 
 function EmberJourney(p){
-  var [phase,setPhase]=useState("deposit");
-  var [kindle,setKindle]=useState("");
-  var [pain,setPain]=useState("");
-  var [noWords,setNoWords]=useState(false);
+  var ex=p.existing||null;
+  var intent=p.intent||"new"; // "new" | "remeet" | "resend"
+  var [phase,setPhase]=useState(intent==="remeet"?"travel":(intent==="resend"?"send":"deposit"));
+  var [kindle,setKindle]=useState(ex?ex.kindle:"");
+  var [pain,setPain]=useState(ex&&ex.pain?ex.pain:"");
+  var [noWords,setNoWords]=useState(ex?!!ex.noWords:false);
   var [tooHard,setTooHard]=useState(false);
-  var [dest,setDest]=useState("");
-  var [comp,setComp]=useState("");
+  var [dest,setDest]=useState(intent==="remeet"&&ex?ex.dest:"");
+  var [comp,setComp]=useState(intent==="remeet"&&ex?ex.companion:"");
   var [retreated,setRetreated]=useState(false);
   var [q,setQ]=useState(null);
   var [placeMode,setPlaceMode]=useState(false);
@@ -4002,12 +4007,16 @@ function EmberJourney(p){
   var [report,setReport]=useState("");
   var [result,setResult]=useState(null);
 
-  function commitFire(fire){
+  function commitFire(fire,isUpdate){
     var ns=cloneS(p.game);
     if(!ns.sentFires)ns.sentFires=[];
-    ns.sentFires=[fire].concat(ns.sentFires);
+    if(isUpdate){
+      ns.sentFires=ns.sentFires.map(function(f){return f.id===fire.id?fire:f;});
+    }else{
+      ns.sentFires=[fire].concat(ns.sentFires);
+    }
     var add=fire.form==="certificate"?3:(fire.form==="placed"?2:1);
-    if(typeof grantToka==="function")grantToka(ns,add,"捨てずに、棚へ灯した。");
+    if(typeof grantToka==="function")grantToka(ns,isUpdate?1:add,isUpdate?"もう一度、会いに行った。":"捨てずに、棚へ灯した。");
     ns.lastSavedAt=nowISO();
     p.onChange&&p.onChange(ns);
   }
@@ -4035,9 +4044,23 @@ function EmberJourney(p){
   }
   function finishMeet(deferred){
     var pm=placeMode;
-    var form=(pm||deferred)?"placed":"certificate";
+    var thisForm=(pm||deferred)?"placed":"certificate";
     var ans=q&&q.picker?(emotion?(emotion+(answer.trim()?("／"+answer.trim()):"")):answer.trim()):answer.trim();
     var meeting={dest:dest,companion:comp,question:q?q.text:"",mode:pm?"place":"dig",picker:!!(q&&q.picker),emotion:emotion||null,answer:deferred?null:(ans||null),deferred:deferred,at:nowISO()};
+    if(ex){
+      // 会い直し／送り直す：地層として積む。受領証になったら戻らない（昇格）。
+      var newForm=thisForm==="certificate"?"certificate":(ex.form==="certificate"?"certificate":"placed");
+      var updated=Object.assign({},ex,{
+        dest:dest,companion:comp,form:newForm,
+        meetings:[meeting].concat(ex.meetings||[]),
+        voiceLine:jVoiceLine(comp),lastTouch:nowISO()
+      });
+      commitFire(updated,true);
+      setResult({fire:updated,deferred:deferred,reply:jReply(comp,deferred,pm),upgraded:ex.form!=="certificate"&&newForm==="certificate"});
+      setPhase("done");
+      return;
+    }
+    var form=thisForm;
     var fire={
       id:"sf"+Date.now(),kindle:kindle.trim(),pain:noWords?null:(pain.trim()||null),noWords:noWords,danger:false,
       dest:dest,companion:comp,retreated:retreated,form:form,meetings:[meeting],voiceLine:jVoiceLine(comp),
@@ -4102,7 +4125,7 @@ function EmberJourney(p){
       <div className={"ej-formed "+J_FORM_META[result.fire.form].cls}>
         <span className="ej-formed-label">{J_FORM_META[result.fire.form].label}</span>
         <span className="ej-formed-title">「{jTitleOf(result.fire)}」</span>
-        <span className="ej-formed-note">棚に灯った。</span>
+        <span className="ej-formed-note">{result.upgraded?"置き札が、受領証になった。":(ex?"もう一層、積まれた。":"棚に灯った。")}</span>
       </div>
       <button className="btn btn-p ej-go" onClick={p.onClose}>棚へ戻る</button>
     </div>}
@@ -4123,24 +4146,91 @@ function EmberJourney(p){
 }
 
 function JourneyShelf(p){
-  var fires=(p.game&&p.game.sentFires)||[];
-  if(!fires.length)return null;
+  var all=(p.game&&p.game.sentFires)||[];
+  var fires=all.filter(function(f){return !f.returnedAt;});
+  var returned=all.filter(function(f){return !!f.returnedAt;});
+  if(!all.length)return null;
+  function card(f){
+    var meta=J_FORM_META[f.form]||J_FORM_META.placed;
+    var m=(f.meetings||[])[0];
+    var layers=(f.meetings||[]).length;
+    return <button key={f.id} className={"jfire jfire-tap "+meta.cls} onClick={function(){p.onOpen&&p.onOpen(f.id);}}>
+      <div className="jfire-top"><span className="jfire-form">{meta.label}</span><span className="jfire-title">「{jTitleOf(f)}」</span></div>
+      {m&&m.question&&<div className="jfire-q">{m.question}</div>}
+      {m&&m.answer&&<div className="jfire-a">{m.answer}</div>}
+      {m&&m.deferred&&<div className="jfire-a jfire-defer">まだ答えていない。そばに置いてある。</div>}
+      {f.form==="kept"&&<div className="jfire-a jfire-defer">答えを求めずに預かった。</div>}
+      <div className="jfire-foot">
+        {layers>1&&<span className="jfire-layers">{layers}層</span>}
+        {f.returnedAt&&<span className="jfire-returned">心へ返した</span>}
+        <span className="jfire-more">ひらく ›</span>
+      </div>
+    </button>;
+  }
   return <section className="home-card jshelf">
     <div className="lh">残り火の棚</div>
     <p className="jshelf-sub">ここに灯っている火：{fires.length}つ。捨てなかったもの。</p>
-    <div className="jshelf-list">{fires.slice(0,12).map(function(f){
-      var meta=J_FORM_META[f.form]||J_FORM_META.placed;
-      var m=(f.meetings||[])[0];
-      return <div key={f.id} className={"jfire "+meta.cls}>
-        <div className="jfire-top"><span className="jfire-form">{meta.label}</span><span className="jfire-title">「{jTitleOf(f)}」</span></div>
-        {m&&m.question&&<div className="jfire-q">{m.question}</div>}
-        {m&&m.answer&&<div className="jfire-a">{m.answer}</div>}
-        {m&&m.deferred&&<div className="jfire-a jfire-defer">まだ答えていない。そばに置いてある。</div>}
-        {f.form==="kept"&&<div className="jfire-a jfire-defer">答えを求めずに預かった。</div>}
-        {f.voiceLine&&<div className="jfire-voice">{jName(f.companion)}：「{f.voiceLine}」</div>}
-      </div>;
-    })}</div>
+    <div className="jshelf-list">{fires.slice(0,12).map(card)}</div>
+    {returned.length>0&&<div className="jshelf-inner">
+      <div className="jshelf-inner-h">心へ返した火 ── {returned.length}つ</div>
+      <p className="jshelf-inner-sub">消したのではなく、内側に置いた。いつでも、また会える。</p>
+      <div className="jshelf-list">{returned.slice(0,12).map(card)}</div>
+    </div>}
   </section>;
+}
+
+function JourneyFireView(p){
+  var f=p.fire;
+  if(!f)return null;
+  var meta=J_FORM_META[f.form]||J_FORM_META.placed;
+  var locked=jLockedToday(f);
+  var meetings=f.meetings||[];
+  function graduate(){
+    var ns=cloneS(p.game);
+    ns.sentFires=(ns.sentFires||[]).map(function(x){return x.id===f.id?Object.assign({},x,{returnedAt:nowISO(),lastTouch:nowISO()}):x;});
+    if(typeof grantToka==="function")grantToka(ns,2,"火を、心へ返した。");
+    ns.lastSavedAt=nowISO();
+    p.onChange&&p.onChange(ns);
+    p.onClose&&p.onClose();
+  }
+  return <div className="ov ej-ov" onClick={p.onClose}><div className="bsh ej-bsh" onClick={function(e){e.stopPropagation();}}>
+    <div className="sh-handle"/>
+    <div className="ej-in jfv">
+      <div className={"jfv-head "+meta.cls}>
+        <span className="ej-formed-label">{meta.label}</span>
+        <span className="jfv-title">「{jTitleOf(f)}」</span>
+        {f.returnedAt&&<span className="jfv-returned">心へ返した火</span>}
+      </div>
+      {f.pain&&<p className="jfv-pain">その奥にあったもの：{f.pain}</p>}
+
+      <div className="jfv-strata">
+        <p className="jfv-strata-h">これまで会った層</p>
+        {meetings.map(function(m,i){return <div key={i} className="jfv-layer">
+          <div className="jfv-layer-top"><span className="jfv-layer-tag">{jStrataLabel(m)}</span><span className="jfv-layer-by">{jName(m.companion)}と</span></div>
+          {m.question&&<div className="jfv-layer-q">{m.question}</div>}
+          {m.answer&&<div className="jfv-layer-a">{m.answer}</div>}
+          {m.deferred&&<div className="jfv-layer-a jfv-defer">まだ答えなかった。</div>}
+        </div>;})}
+        {f.form==="kept"&&!meetings.length&&<div className="jfv-layer"><div className="jfv-layer-a jfv-defer">答えを求めずに預かった。落ち着いた日に、送り先を選べます。</div></div>}
+      </div>
+
+      {locked?<div className="jfv-lock">
+        <p className="jfv-lock-line">この火には、今日はもう触れません。</p>
+        <p className="jfv-lock-sub">明日また、会いに来てください。急がなくていい。</p>
+      </div>:<div className="jfv-actions">
+        {f.returnedAt
+          ?<button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"remeet");}}>もう一度、この火に会う</button>
+          :<>
+            {f.form==="kept"
+              ?<button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"resend");}}>送り先を選ぶ</button>
+              :<button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"remeet");}}>この火に、もう一度会う</button>}
+            {f.form==="placed"&&<button className="btn btn-g ej-go" onClick={function(){p.onRevisit(f,"resend");}}>別の同行者へ、送り直す</button>}
+            {f.form==="certificate"&&<button className="btn btn-g ej-go" onClick={graduate}>心へ返す（卒業）</button>}
+          </>}
+      </div>}
+      <button className="btn btn-g ej-cancel" onClick={p.onClose}>棚へ戻る</button>
+    </div>
+  </div></div>;
 }
 
 /* ── メインApp ── */
@@ -4160,7 +4250,7 @@ function App(){
   var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [battleFrom,setBattleFrom]=useState("peek");var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
   var gameRef=useRef(null),toastRef=useRef(null);
   var [watchGauge,setWatchGauge]=useState(0);var wgRef=useRef({gauge:0,last:{}});var [returnConvId,setReturnConvId]=useState(null);var [witnessTargetId,setWitnessTargetId]=useState(null);var [sendGiftOpen,setSendGiftOpen]=useState(false);var [utsuroEventActive,setUtsuroEventActive]=useState(false);var [closingPreview,setClosingPreview]=useState(null);var [philAnswerOpen,setPhilAnswerOpen]=useState(false);var [kotaeStuck,setKotaeStuck]=useState(false);
-  var [saveError,setSaveError]=useState(false);var [showBadNight,setShowBadNight]=useState(false);var [showJourney,setShowJourney]=useState(false);
+  var [saveError,setSaveError]=useState(false);var [showBadNight,setShowBadNight]=useState(false);var [showJourney,setShowJourney]=useState(false);var [fireDetailId,setFireDetailId]=useState(null);var [journeyRevisit,setJourneyRevisit]=useState(null);
   useEffect(function(){gameRef.current=game;},[game]);
 
   useEffect(function(){var saved=loadSave();if(saved){setGame(migrateGame(saved));setFirst(false);}else{var f=initGame();setGame(f);setFirst(true);persistSave(f);}setScreen("closed");},[]); // eslint-disable-line
@@ -4281,7 +4371,7 @@ function App(){
     {screen!=="closed"&&screen!=="ending"&&<>
       {screen==="home"&&<>
         <Header title="ホーム" day={game.world.day}/>
-        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onBadNight={function(){setShowBadNight(true);}} onJourney={function(){setShowJourney(true);}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}}/>
+        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onBadNight={function(){setShowBadNight(true);}} onJourney={function(){setShowJourney(true);}} onOpenFire={function(id){setFireDetailId(id);}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}}/>
       </>}
       {screen==="log"&&<>
         <Header title="記録" day={game.world.day}/>
@@ -4329,6 +4419,8 @@ function App(){
     {philAnswerOpen&&<PhilAnswerModal question={getPhilosophicalQuestion(game).text} onClose={function(){setPhilAnswerOpen(false);}} onSave={function(a){savePhilAnswer(a);setPhilAnswerOpen(false);}}/>}
     {showCreate&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber}/>}
     {showJourney&&<EmberJourney game={game} onClose={function(){setShowJourney(false);}} onChange={function(ns){setGame(ns);persistSave(ns);}}/>}
+    {journeyRevisit&&<EmberJourney key={journeyRevisit.fire.id+journeyRevisit.intent} game={game} existing={journeyRevisit.fire} intent={journeyRevisit.intent} onClose={function(){setJourneyRevisit(null);}} onChange={function(ns){setGame(ns);persistSave(ns);}}/>}
+    {fireDetailId&&!journeyRevisit&&(function(){var f=((game&&game.sentFires)||[]).find(function(x){return x.id===fireDetailId;});if(!f)return null;return <JourneyFireView game={game} fire={f} onClose={function(){setFireDetailId(null);}} onChange={function(ns){setGame(ns);persistSave(ns);}} onRevisit={function(fire,intent){setFireDetailId(null);setJourneyRevisit({fire:fire,intent:intent});}}/>;})()}
     {showBadNight&&<BadNightMode onClose={function(){setShowBadNight(false);}} onSubmit={function(card){addEmber(card);setShowBadNight(false);var ns=cloneS(game);ns.logs=[{hours:0,events:[{text:"今夜の判決を、問いとして保留した。",kind:"record",pri:5},{text:"審査官：「今夜は受理しない」",kind:"auditor",pri:5},{text:"うつろ：「明日まで、捨てない」",kind:"record",pri:4}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);}}/>}
     {departTargetId&&<DepartureOverlay card={(game.emberCards||[]).find(function(c){return c.id===departTargetId;})} onCancel={function(){setDepartTargetId(null);}} onConfirm={function(){confirmDepartCb(departTargetId);}}/>}
     {burnTargetId&&<BurnConfirmModal receipt={(game.receipts||[]).find(function(r){return r.id===burnTargetId;})} onCancel={function(){setBurnTargetId(null);}} onConfirm={function(){confirmBurnCb(burnTargetId);}}/>}
