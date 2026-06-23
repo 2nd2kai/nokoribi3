@@ -4351,8 +4351,10 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .ej-dest-verb{font-size:12px;color:var(--ember2)}
 .ej-dest-desc{font-size:12px;color:var(--faint)}
 .ej-comps{display:flex;gap:8px}
-.ej-comp{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px 6px;cursor:pointer;font-size:13px;color:var(--p)}
+.ej-comp{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px 8px;cursor:pointer;font-size:13px;color:var(--p)}
 .ej-comp-dot{width:12px;height:12px}
+.ej-comp-name{font-size:13px;font-weight:600}
+.ej-comp-desc{font-size:11px;color:var(--dim);line-height:1.4;text-align:center}
 .ej-sel{background:rgba(180,100,40,.2);border-color:rgba(180,100,40,.55)}
 .ej-travel{align-items:center;text-align:center;padding:24px 2px}
 .ej-travel-line{font-size:16px;font-family:var(--serif);color:var(--p);margin:0}
@@ -4360,9 +4362,11 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .ej-report{font-size:13px;color:var(--dim);font-family:var(--serif);margin:2px 0 4px;line-height:1.6}
 .ej-q-box{background:rgba(180,100,40,.1);border-radius:12px;padding:16px 14px}
 .ej-q{font-size:16px;font-family:var(--serif);color:var(--ember2);margin:0;line-height:1.6}
+.ej-picker-hint{font-size:12px;color:var(--faint);margin:0 0 2px;text-align:center;min-height:1.4em}
 .ej-emos{display:flex;flex-wrap:wrap;gap:8px}
 .ej-emo{font-size:13px;color:var(--p);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:9px 16px;cursor:pointer}
 .ej-answer{font-family:var(--sans);font-size:14px;color:var(--p);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:10px;resize:none}
+.ej-answer:disabled{opacity:.35;cursor:default}
 .ej-done{align-items:stretch;text-align:center}
 .ej-reply{display:flex;align-items:center;gap:8px;justify-content:center}
 .ej-reply p{font-size:14px;font-family:var(--serif);color:var(--dim);margin:0}

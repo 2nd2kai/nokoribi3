@@ -3950,7 +3950,11 @@ const J_DESTS=[
   {id:"forest",label:"未受領の森",verb:"さがす",desc:"何を、まだ求めていたか"},
   {id:"spring",label:"涙の泉",verb:"わける",desc:"これは、どの感情だったか"}
 ];
-const J_COMPS=[{id:"toyman",name:"トイマン"},{id:"kana",name:"かな"},{id:"utsuro",name:"うつろ"}];
+const J_COMPS=[
+  {id:"toyman",name:"トイマン",desc:"まだ探していないものを、一緒に探す"},
+  {id:"kana",name:"かな",desc:"どんな気持ちだったかを、そばで静かに聞く"},
+  {id:"utsuro",name:"うつろ",desc:"終わったあとに残ったものを、そっと形にする"}
+];
 const J_EMOTIONS=["悔しさ","寂しさ","情けなさ","まだわからない"];
 const J_DANGER_WORDS=["死にたい","しにたい","消えたい","きえたい","いなくなりたい","終わりにしたい","死んだ方"];
 const J_FORM_META={
@@ -4070,7 +4074,7 @@ function EmberJourney(p){
       </button>;})}</div>
       <p className="ej-step">同行者 ＝ どんな声で問うか</p>
       <div className="ej-comps">{J_COMPS.map(function(c){return <button key={c.id} className={"ej-comp"+(comp===c.id?" ej-sel":"")} onClick={function(){setComp(c.id);}}>
-        <span className={"isc-dot cd-"+c.id+" ej-comp-dot"}/><span>{c.name}</span>
+        <span className={"isc-dot cd-"+c.id+" ej-comp-dot"}/><span className="ej-comp-name">{c.name}</span><span className="ej-comp-desc">{c.desc}</span>
       </button>;})}</div>
       <button className="btn btn-p ej-go" disabled={!dest||!comp} onClick={sendOut}>旅に出す</button>
       <button className="btn btn-g ej-cancel" onClick={p.onClose}>今日はやめておく</button>
@@ -4086,9 +4090,9 @@ function EmberJourney(p){
     {phase==="meet"&&<div className="ej-in">
       <p className="ej-report">{report}</p>
       <div className="ej-q-box"><p className="ej-q">{q&&q.text}</p></div>
+      {q&&q.picker&&<p className="ej-picker-hint">{emotion?"":"ひとつ、選んでください"}</p>}
       {q&&q.picker&&<div className="ej-emos">{J_EMOTIONS.map(function(em){return <button key={em} className={"ej-emo"+(emotion===em?" ej-sel":"")} onClick={function(){setEmotion(em);}}>{em}</button>;})}</div>}
-      {(!q||!q.picker)&&<textarea className="ej-answer" rows={3} value={answer} placeholder={placeMode?"置いておく場所を、ひとことで（任意）":"思ったことだけ、書けたら（任意）"} onChange={function(e){setAnswer(e.target.value);}}/>}
-      {q&&q.picker&&emotion&&<textarea className="ej-answer" rows={2} value={answer} placeholder="ひとこと、添えるなら（任意）" onChange={function(e){setAnswer(e.target.value);}}/>}
+      <textarea className="ej-answer" rows={3} value={answer} placeholder={q&&q.picker?(emotion?"ひとこと、添えるなら（任意）":"選んだあと、言葉を添えることもできます（任意）"):(placeMode?"置いておく場所を、ひとことで（任意）":"思ったことだけ、書けたら（任意）")} onChange={function(e){setAnswer(e.target.value);}} disabled={q&&q.picker&&!emotion}/>
       <button className="btn btn-p ej-go" disabled={q&&q.picker&&!emotion} onClick={function(){finishMeet(false);}}>{placeMode?"今夜は、ここに置く":"受け取る"}</button>
       <button className="btn btn-g" onClick={function(){finishMeet(true);}}>まだ答えない</button>
     </div>}
