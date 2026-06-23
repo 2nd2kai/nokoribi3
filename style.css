@@ -4457,4 +4457,5 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .jfv-lock{background:rgba(80,90,120,.12);border:1px dashed rgba(255,255,255,.18);border-radius:12px;padding:14px;text-align:center}
 .jfv-lock-line{font-size:14px;font-family:var(--serif);color:var(--p);margin:0 0 4px}
 .jfv-lock-sub{font-size:12px;color:var(--faint);margin:0;line-height:1.5}
+.jfv-debug-btn{margin-top:12px;font-size:11px;opacity:.7;border:1px dashed #f90 !important;color:#f90 !important;background:transparent !important}
 .jfv-actions{display:flex;flex-direction:column;gap:8px}

@@ -4308,6 +4308,14 @@ function JourneyFireView(p){
   var meetings=f.meetings||[];
   // 心へ返すのは「翌日以降の明示的な会い直し後のみ」。受領＝1層目、会い直し＝2層目以降。
   var canGraduate=f.form==="certificate"&&meetings.length>=2;
+  var debugMode=typeof window!=="undefined"&&window.location&&window.location.search.indexOf("debug=1")>=0;
+  function debugYesterday(){
+    var y=new Date();y.setDate(y.getDate()-1);
+    var ns=cloneS(p.game);
+    ns.sentFires=(ns.sentFires||[]).map(function(x){return x.id===f.id?Object.assign({},x,{lastTouch:y.toISOString()}):x;});
+    ns.lastSavedAt=nowISO();
+    p.onChange&&p.onChange(ns);
+  }
   function graduate(){
     var ns=cloneS(p.game);
     ns.sentFires=(ns.sentFires||[]).map(function(x){if(x.id!==f.id)return x;var dt=Object.assign({deposited:x.createdAt},x.dates||{},{returned:nowISO()});return Object.assign({},x,{returnedAt:nowISO(),lastTouch:nowISO(),dates:dt});});
@@ -4355,8 +4363,10 @@ function JourneyFireView(p){
         </>}
 
       {locked?<div className="jfv-lock">
-        <p className="jfv-lock-line">今夜は、ここに置いておきます。</p>
-        <p className="jfv-lock-sub">同じ火にもう一度会えるのは、日が変わってから。急がなくていい。</p>
+        {canGraduate
+          ?<><p className="jfv-lock-line">この火は、返せるところまで来たかもしれない。</p><p className="jfv-lock-sub">今日は、ここに置いておく。日が変わったら、心へ返せます。</p></>
+          :<><p className="jfv-lock-line">今夜は、ここに置いておきます。</p><p className="jfv-lock-sub">同じ火にもう一度会えるのは、日が変わってから。急がなくていい。</p></>}
+        {debugMode&&<button className="btn btn-g ej-go jfv-debug-btn" onClick={debugYesterday}>【debug】この火を昨日扱いにする</button>}
       </div>:<div className="jfv-actions">
         {f.returnedAt
           ?<button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"remeet");}}>もう一度、この火に会う</button>
