@@ -1120,27 +1120,108 @@ function getPersonalShadowVoices(card){
   var wanted=card&&card.wanted||"";
   var voices=[];
   var wsV={
-    "書いたけど届いていない":["届けたつもりで、ただ置いただけじゃないの？","届かなかったのは、届ける力がなかったから。","あなたが書いたもの、本当に誰かに向けて書いた？"],
-    "投稿したけど反応がない":["反応がないって、つまりそういうことだよ。","もし本当に響くものなら、誰かが気づくはず。","投稿したけど、誰の心にも届かなかった。"],
-    "終わったのに虚しい":["書き終わっても虚しいのは、最初から意味がなかったから。","何かを得られると思って書いたの？","虚しさが残るなら、何のために書いたの？"],
-    "何にもならない気がした":["「気がした」じゃなくて、本当に何にもならなかった。","何かになると思って書き始めたの？それが間違いだったんじゃ。","書いたことで、何かが変わった？"],
-    "誰にも見せていない":["見せられないなら、書かなかったも同然じゃないの？","誰にも見せられないものを書いた意味は？","隠すために書いたの？"],
-    "消したいけど消せない":["消せないのは、ただの未練。","消したいと思ってるなら、それが答えだよ。","消せないのは、あなたが弱いから。"]
+    "書いたけど届いていない":[
+      "届けたかった相手の顔、思い浮かぶ？",
+      "届かなかったって、どうして分かるの？",
+      "もし届いていたとしたら、相手は何を感じたと思う？",
+      "それを書いたとき、誰かのことを考えてた？"
+    ],
+    "投稿したけど反応がない":[
+      "反応を待ってたとき、何を期待してた？",
+      "もし誰か一人だけ読んでいたとしたら、誰だったと思う？",
+      "あなたが一番見てほしかったのは、誰？",
+      "反応がないことと、届いていないことは、同じ？"
+    ],
+    "終わったのに虚しい":[
+      "書く前の自分と、書いた後の自分、何が変わった？",
+      "その虚しさに、名前をつけるとしたら？",
+      "虚しさが残るということは、何かを期待してた、ってこと？",
+      "書き終えた瞬間、何を感じた？"
+    ],
+    "何にもならない気がした":[
+      "「何にもならない」と思いながら、なぜ書いたの？",
+      "もし何かになったとしたら、それはどんなことだと思う？",
+      "書いた時間の中で、一瞬でも意味があると感じた瞬間はあった？",
+      "書く前の自分に、今のあなたは何と言う？"
+    ],
+    "誰にも見せていない":[
+      "見せていないのに、なぜまだ持っているの？",
+      "誰かに見せるとしたら、その人に何を期待してた？",
+      "これを書いたとき、誰かの顔が浮かんでた？",
+      "いつか誰かに見せる日が来ると思ってる？"
+    ],
+    "消したいけど消せない":[
+      "消せないでいる理由、自分でも分かる？",
+      "消せないのは、それがまだ大事だから？",
+      "消したい気持ちと、消せない気持ち、どっちが本当に強い？",
+      "消したいと思ったのは、いつから？"
+    ]
   };
   if(wsV[ws])voices=voices.concat(wsV[ws]);
   var feV={
-    "悔しさ":["悔しいなら、なぜ変えられなかったの？","悔しさって、ただの負け惜しみじゃないの？","次は違うって思ってる？また同じだよ。"],
-    "空っぽ":["空っぽになったのは、もともと中身がなかったから。","注いだって言うけど、受け取る人はいた？","空っぽになるほどのものが、本当にあったの？"],
-    "悲しさ":["悲しくても、誰も気づいてくれないじゃない。","悲しいって感じても、それが変わるわけじゃない。","悲しさを書いても、何も解決しない。"],
-    "恥ずかしさ":["恥ずかしいと思う理由、自分でも分かってるよね？","恥ずかしいものを出した責任は、自分にある。","見せなければよかったって、思ってるでしょ。"],
-    "怒り":["怒ってても、誰にも届かないよ。","怒りで書いたもの、後から恥ずかしくなるやつじゃない？","怒りだけで書いたなら、それだけのものだよ。"],
-    "寂しさ":["寂しいなら、なぜ一人で書いてるの？","つながりたかったなら、なぜ届けなかったの？","寂しさを紛らわすために書いたの？"],
-    "まだ分からない":["分からないなら、なぜここに置いたの？","分からないものに意味はあるの？","分からないままにしておけば、いつか消えるよ。"]
+    "悔しさ":[
+      "悔しいってことは、大事にしてたってこと。何を？",
+      "もし悔しくなかったとしたら、そのほうが寂しかった？",
+      "その悔しさ、誰かに聞いてほしかった？",
+      "悔しさの奥に、誇りはある？"
+    ],
+    "空っぽ":[
+      "注いだ後の空っぽと、注ぐ前の空っぽ、同じ形をしてる？",
+      "空っぽになるほど注いだ、ってことは？",
+      "空っぽに気づいたとき、最初に思い浮かんだのは？",
+      "空っぽでいる自分を、誰かに見せたかった？"
+    ],
+    "悲しさ":[
+      "その悲しさ、誰かに分かってほしかった？",
+      "悲しいと感じられるということは、何かを大切にしてたから？",
+      "書くことで、悲しさの形が少し見えた？",
+      "悲しさの中に、あなたが大事にしてるものがある？"
+    ],
+    "恥ずかしさ":[
+      "恥ずかしいと思いながら、なぜ出したの？",
+      "恥ずかしさの奥に、本当に見てほしかった気持ちはある？",
+      "その恥ずかしさ、誰かに分かってほしかった？",
+      "恥ずかしいと感じるということは、それだけ本気だったってこと？"
+    ],
+    "怒り":[
+      "その怒り、何に向かっていた？",
+      "怒りを言葉にすることで、少し楽になった？",
+      "怒りの奥に、悲しさはあった？",
+      "怒りながら書いたとき、誰かに聞かせたかった？"
+    ],
+    "寂しさ":[
+      "寂しいとき、書くことを選んだ。なぜ書く方を選んだの？",
+      "読んでほしかった誰か、いた？",
+      "寂しさを書くことで、少し一緒にいられた気がした？",
+      "寂しさの中に、つながりたかった誰かがいる？"
+    ],
+    "まだ分からない":[
+      "分からないまま書いたとき、何を頼りに書き始めた？",
+      "もし誰かがそばにいたら、最初に何を聞いてほしかった？",
+      "分からないけど書いた。それだけで、十分だったかも？",
+      "分からないままでいることを、誰かに許してほしかった？"
+    ]
   };
   if(feV[feeling])voices=voices.concat(feV[feeling]);
-  if(wanted&&wanted!=="まだ分からない")voices.push("「"+wanted+"」なんて、本当に受け取ってもらえると思ってた？");
-  if(voices.length===0)voices=["どうせ届いてない。","見られていないものは、なかったのと同じだ。","その火、誰が受け取るの？"];
+  if(wanted&&wanted!=="まだ分からない")voices.push("「"+wanted+"」を求めていた。それを一番分かってほしかったのは、誰？");
+  if(voices.length===0)voices=["この火を預けたとき、何を期待してた？","書いた後、何が変わると思ってた？","もし誰かが受け取ったとしたら、その人に何を伝えたかった？"];
   return voices;
+}
+function getReceiptReflectionQuestion(receiptOrCard){
+  var ws=receiptOrCard&&receiptOrCard.writeState||"";
+  var feeling=receiptOrCard&&receiptOrCard.feeling||"";
+  var answered=((receiptOrCard&&receiptOrCard.shadowAnswers)||[]).filter(function(a){return a&&a.answer&&String(a.answer).trim();});
+  var count=answered.length;
+  if(count>=3)return "この火に何度も言葉を返した。並べてみると、あなた自身について気づくことはありますか？";
+  if(count>=1)return "影に返した言葉を振り返って、自分でも気づかなかったことはありましたか？";
+  if(ws==="終わったのに虚しい")return "受け取った今、その虚しさに名前をつけるとしたら、何と呼びますか？";
+  if(ws==="誰にも見せていない")return "誰にも見せなかったのに、まだここにある。それはなぜだと思いますか？";
+  if(ws==="消したいけど消せない")return "消せなかった理由が、受け取った今なら分かりますか？";
+  if(feeling==="悔しさ")return "悔しさを感じるほど大事にしていたもの、名前をつけるとしたら？";
+  if(feeling==="寂しさ")return "書くことで一緒にいようとしていた誰か、いましたか？";
+  if(feeling==="怒り")return "怒りの奥に、本当に言いたかったことがあった？";
+  if(feeling==="悲しさ")return "その悲しさ、誰かに分かってほしかった？";
+  return "この火を預けた時のあなたと、今のあなた。何か、変わりましたか？";
 }
 /* 向き合った回数（言葉を残した回数）から、影の「濃さ」を求める。
    何度も言葉をぶつけた影は、薄れていく。戦闘数値ではなく、声と見た目だけが変わる。 */
@@ -3979,7 +4060,22 @@ function App(){
     {departTargetId&&<DepartureOverlay card={(game.emberCards||[]).find(function(c){return c.id===departTargetId;})} onCancel={function(){setDepartTargetId(null);}} onConfirm={function(){confirmDepartCb(departTargetId);}}/>}
     {burnTargetId&&<BurnConfirmModal receipt={(game.receipts||[]).find(function(r){return r.id===burnTargetId;})} onCancel={function(){setBurnTargetId(null);}} onConfirm={function(){confirmBurnCb(burnTargetId);}}/>}
     {(game.introQueue||[]).length>0&&<IntroSceneOverlay scene={INTRO_SCENES[(game.introQueue||[])[0]]} onClose={function(){dismissIntroSceneCb((game.introQueue||[])[0]);}}/>}
-    {receiptAcceptance&&<AcceptanceModal text={receiptAcceptance.text} holdText={receiptAcceptance.holdText} nextQuestion={receiptAcceptance.nextQuestion} writeState={receiptAcceptance.writeState} feeling={receiptAcceptance.feeling} wanted={receiptAcceptance.wanted} bodyText={receiptAcceptance.bodyText} shadowAnswers={receiptAcceptance.shadowAnswers} onClose={function(){setReceiptAcceptance(null);}}/>}
+    {receiptAcceptance&&<AcceptanceModal text={receiptAcceptance.text} holdText={receiptAcceptance.holdText} nextQuestion={receiptAcceptance.nextQuestion} writeState={receiptAcceptance.writeState} feeling={receiptAcceptance.feeling} wanted={receiptAcceptance.wanted} bodyText={receiptAcceptance.bodyText} shadowAnswers={receiptAcceptance.shadowAnswers} reflectionQuestion={receiptAcceptance.reflectionQuestion} onClose={function(reflAns){
+      if(reflAns){
+        setGame(function(g){
+          var ns=cloneS(g);
+          var r=ns.receipts&&ns.receipts[0];
+          if(r){
+            r.reflectionAnswer=reflAns;
+            r.reflectionQuestion=receiptAcceptance.reflectionQuestion||"";
+            r.text=(r.text||"")+"\n\n── 受け取りながら、気づいたこと ──\n問い："+receiptAcceptance.reflectionQuestion+"\n答え："+reflAns;
+          }
+          persistSave(ns);
+          return ns;
+        });
+      }
+      setReceiptAcceptance(null);
+    }}/>}
     {witnessTargetId&&(function(){var wc=(game.emberCards||[]).find(function(c){return c.id===witnessTargetId;});return wc?<WitnessOverlay card={wc} game={game} onComplete={function(){setReceiveTargetId(witnessTargetId);setWitnessTargetId(null);}} onClose={function(){setWitnessTargetId(null);}}/>:null;})()}
     {sendGiftOpen&&<SendGiftModal onClose={function(){setSendGiftOpen(false);}} onSend={sendGiftCb}/>}
     {receiveTarget&&<ReceiptReceiveModal card={receiveTarget} onClose={function(){setReceiveTargetId(null);}} onSubmit={function(input){
@@ -3989,7 +4085,7 @@ function App(){
       addWatchGauge("receive_ember",25);
       var latest=(ns.receipts||[])[0];
       if(latest){
-        setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",holdText:latest.holdText||null,nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？",writeState:latest.writeState||"",feeling:latest.feeling||"",wanted:latest.wanted||"",bodyText:latest.bodyText||"",shadowAnswers:latest.shadowAnswers||[]});
+        setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",holdText:latest.holdText||null,nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？",writeState:latest.writeState||"",feeling:latest.feeling||"",wanted:latest.wanted||"",bodyText:latest.bodyText||"",shadowAnswers:latest.shadowAnswers||[],reflectionQuestion:getReceiptReflectionQuestion(latest)});
       }
     }}/>}
     {toast&&<div className="toast">{toast}</div>}
@@ -4783,10 +4879,12 @@ function buildGeminiPrompt(receipt){
 function AcceptanceModal(p){
   var [answer,setAnswer]=useState("");
   var [chosen,setChosen]=useState("");
+  var [reflAns,setReflAns]=useState("");
   var choices=p.nextQuestion?(NEXT_QUESTION_CHOICES[p.nextQuestion]||[]):[];
   var hasChosen=chosen==="未回答"||chosen!==""||answer.trim()!=="";
   function selectChoice(c){setChosen(c);if(c!=="自由に書く")setAnswer("");}
-  return <div className="ov" onClick={p.onClose}><div className="bsh acc-modal" onClick={function(e){e.stopPropagation();}}>
+  function handleClose(){p.onClose&&p.onClose(reflAns.trim());}
+  return <div className="ov" onClick={handleClose}><div className="bsh acc-modal" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
     <div className="acc-inner">
       {(function(){
@@ -4813,9 +4911,14 @@ function AcceptanceModal(p){
               <span className="awt-ans">→「{String(a.answer).trim()}」</span>
             </div>;})}
           </div>
-          <p className="awt-foot">この言葉は、受領証にそのまま刻まれました。</p>
         </div>;
       })()}
+      {p.reflectionQuestion&&<div className="acc-reflection-box">
+        <div className="acc-ref-label">受領の問い</div>
+        <p className="acc-ref-q">{p.reflectionQuestion}</p>
+        <textarea className="acc-ref-input" rows={3} placeholder="答えなくてもいい。書けたら、受領証に刻まれます。" value={reflAns} onChange={function(e){setReflAns(e.target.value);}} onClick={function(e){e.stopPropagation();}}/>
+        {reflAns.trim()&&<p className="acc-ref-hint">この言葉は受領証に刻まれます。</p>}
+      </div>}
       {p.holdText&&<div className="acc-hold-block">
         <span className="isc-dot cd-utsuro acc-hold-dot"/>
         <span className="acc-hold-utsuro">うつろ：</span>
@@ -4834,7 +4937,7 @@ function AcceptanceModal(p){
         </div>}
         {(chosen==="自由に書く"||choices.length===0)&&<textarea className="acc-answer-input" rows={3} placeholder="答えなくてもいい。書けたら書く。" value={answer} onChange={function(e){setAnswer(e.target.value);}}/>}
       </div>}
-      <button className="btn btn-p" style={{width:"100%"}} onClick={p.onClose}>ここに置いておく</button>
+      <button className="btn btn-p" style={{width:"100%"}} onClick={handleClose}>ここに置いておく</button>
     </div>
   </div></div>;
 }
