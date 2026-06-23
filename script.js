@@ -3984,10 +3984,68 @@ function jReply(comp,deferred,placeMode){
   return ({toyman:"読んだ。探した火は、ここにあった。",kana:"うん。そう言ってほしかったんだね。",utsuro:"終わっても、残ってたんだね。"})[comp];
 }
 function jVoiceLine(comp){return ({toyman:"森で見つけた。捨てられてなかった。",kana:"つらい夜だったね、って言った。",utsuro:"終わったあとも、残ってた。"})[comp];}
+function jCertVoice(comp,destId){
+  var tbl={
+    toyman:{forest:"探した。まだここに、あった。",spring:"痛みの名前が、見つかった。"},
+    kana:  {forest:"そばで、最後まで聞いた。",spring:"これが、いちばん分かってほしかったんだね。"},
+    utsuro:{forest:"終わったあとに残ったものを、封筒にした。",spring:"感情に、かたちができた。"}
+  };
+  return (tbl[comp]&&tbl[comp][destId])||jVoiceLine(comp);
+}
 function jTitleOf(fire){var k=(fire.kindle||"").trim();return k.length>22?k.slice(0,22)+"…":(k||"名もない火");}
 function jCalDay(iso){var d=iso?new Date(iso):new Date();return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();}
 function jLockedToday(fire){if(!fire||!fire.lastTouch)return false;return jCalDay(fire.lastTouch)===jCalDay();}
 function jStrataLabel(m){if(m.deferred)return "まだ答えなかった";if(m.mode==="place")return "置いた";return "掘って、答えた";}
+function jDateLabel(iso){if(!iso)return "";var d=new Date(iso);return d.getFullYear()+"年"+(d.getMonth()+1)+"月"+d.getDate()+"日";}
+
+function CertificateView(p){
+  var f=p.fire;
+  if(!f||f.form!=="certificate")return null;
+  var meetings=(f.meetings||[]).filter(function(m){return !m.deferred;});
+  var dest=J_DESTS.find(function(d){return d.id===f.dest;})||{label:f.dest,desc:""};
+  var date=jDateLabel(f.lastTouch||f.createdAt);
+  var layers=f.meetings||[];
+  return <div className={"cert"+(p.inline?" cert-inline":"")}>
+    <div className="cert-head">
+      <div className="cert-flame">🔥</div>
+      <div className="cert-badge">受　領　証</div>
+      <div className="cert-dest-line">{dest.label}　——　{dest.desc}</div>
+    </div>
+
+    <div className="cert-kindle-block">
+      <div className="cert-kindle-label">火種</div>
+      <blockquote className="cert-kindle">「{f.kindle}」</blockquote>
+      {f.pain&&<p className="cert-pain">その奥：{f.pain}</p>}
+    </div>
+
+    {meetings.length>0&&<div className="cert-strata">
+      <div className="cert-strata-label">会いの地層</div>
+      {layers.map(function(m,i){
+        var ans=m.emotion?(m.emotion+(m.answer?("　"+m.answer):"")):(m.answer||"");
+        if(m.deferred)return <div key={i} className="cert-layer cert-layer-defer">
+          <div className="cert-layer-q">——　まだ答えなかった</div>
+          <div className="cert-layer-by">{jName(m.companion)}と　{m.mode==="place"?"置いた":"問いを持った"}</div>
+        </div>;
+        return <div key={i} className="cert-layer">
+          <div className="cert-layer-q">問：{m.question}</div>
+          {ans&&<div className="cert-layer-a">答：{ans}</div>}
+          <div className="cert-layer-by">{jName(m.companion)}と　{jStrataLabel(m)}</div>
+        </div>;
+      })}
+    </div>}
+
+    <div className="cert-voice">
+      <span className={"isc-dot cd-"+f.companion+" cert-voice-dot"}/>
+      <p className="cert-voice-text">「{jCertVoice(f.companion,f.dest)}」<span className="cert-voice-name">— {jName(f.companion)}</span></p>
+    </div>
+
+    <div className="cert-foot">
+      <div className="cert-confirm">この火は、捨てられなかった。</div>
+      <div className="cert-date">{date}　発行</div>
+      <div className="cert-seal">✦</div>
+    </div>
+  </div>;
+}
 
 function EmberJourney(p){
   var ex=p.existing||null;
@@ -4120,13 +4178,15 @@ function EmberJourney(p){
       <button className="btn btn-g" onClick={function(){finishMeet(true);}}>まだ答えない</button>
     </div>}
 
-    {phase==="done"&&result&&<div className="ej-in ej-done">
+    {phase==="done"&&result&&<div className={"ej-in ej-done"+(result.fire.form==="certificate"?" ej-done-cert":"")}>
       <div className="ej-reply"><span className={"isc-dot cd-"+comp+" ej-comp-dot"}/><p>「{result.reply}」</p></div>
-      <div className={"ej-formed "+J_FORM_META[result.fire.form].cls}>
-        <span className="ej-formed-label">{J_FORM_META[result.fire.form].label}</span>
-        <span className="ej-formed-title">「{jTitleOf(result.fire)}」</span>
-        <span className="ej-formed-note">{result.upgraded?"置き札が、受領証になった。":(ex?"もう一層、積まれた。":"棚に灯った。")}</span>
-      </div>
+      {result.fire.form==="certificate"
+        ?<CertificateView fire={result.fire}/>
+        :<div className={"ej-formed "+J_FORM_META[result.fire.form].cls}>
+          <span className="ej-formed-label">{J_FORM_META[result.fire.form].label}</span>
+          <span className="ej-formed-title">「{jTitleOf(result.fire)}」</span>
+          <span className="ej-formed-note">{result.upgraded?"置き札が、受領証になった。":(ex?"もう一層、積まれた。":"棚に灯った。")}</span>
+        </div>}
       <button className="btn btn-p ej-go" onClick={p.onClose}>棚へ戻る</button>
     </div>}
 
@@ -4196,23 +4256,26 @@ function JourneyFireView(p){
   return <div className="ov ej-ov" onClick={p.onClose}><div className="bsh ej-bsh" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
     <div className="ej-in jfv">
-      <div className={"jfv-head "+meta.cls}>
-        <span className="ej-formed-label">{meta.label}</span>
-        <span className="jfv-title">「{jTitleOf(f)}」</span>
-        {f.returnedAt&&<span className="jfv-returned">心へ返した火</span>}
-      </div>
-      {f.pain&&<p className="jfv-pain">その奥にあったもの：{f.pain}</p>}
-
-      <div className="jfv-strata">
-        <p className="jfv-strata-h">これまで会った層</p>
-        {meetings.map(function(m,i){return <div key={i} className="jfv-layer">
-          <div className="jfv-layer-top"><span className="jfv-layer-tag">{jStrataLabel(m)}</span><span className="jfv-layer-by">{jName(m.companion)}と</span></div>
-          {m.question&&<div className="jfv-layer-q">{m.question}</div>}
-          {m.answer&&<div className="jfv-layer-a">{m.answer}</div>}
-          {m.deferred&&<div className="jfv-layer-a jfv-defer">まだ答えなかった。</div>}
-        </div>;})}
-        {f.form==="kept"&&!meetings.length&&<div className="jfv-layer"><div className="jfv-layer-a jfv-defer">答えを求めずに預かった。落ち着いた日に、送り先を選べます。</div></div>}
-      </div>
+      {f.form==="certificate"
+        ?<CertificateView fire={f} inline={true}/>
+        :<>
+          <div className={"jfv-head "+meta.cls}>
+            <span className="ej-formed-label">{meta.label}</span>
+            <span className="jfv-title">「{jTitleOf(f)}」</span>
+            {f.returnedAt&&<span className="jfv-returned">心へ返した火</span>}
+          </div>
+          {f.pain&&<p className="jfv-pain">その奥にあったもの：{f.pain}</p>}
+          <div className="jfv-strata">
+            <p className="jfv-strata-h">これまで会った層</p>
+            {meetings.map(function(m,i){return <div key={i} className="jfv-layer">
+              <div className="jfv-layer-top"><span className="jfv-layer-tag">{jStrataLabel(m)}</span><span className="jfv-layer-by">{jName(m.companion)}と</span></div>
+              {m.question&&<div className="jfv-layer-q">{m.question}</div>}
+              {m.answer&&<div className="jfv-layer-a">{m.answer}</div>}
+              {m.deferred&&<div className="jfv-layer-a jfv-defer">まだ答えなかった。</div>}
+            </div>;})}
+            {f.form==="kept"&&!meetings.length&&<div className="jfv-layer"><div className="jfv-layer-a jfv-defer">答えを求めずに預かった。落ち着いた日に、送り先を選べます。</div></div>}
+          </div>
+        </>}
 
       {locked?<div className="jfv-lock">
         <p className="jfv-lock-line">この火には、今日はもう触れません。</p>

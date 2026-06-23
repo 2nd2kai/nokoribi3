@@ -4381,6 +4381,34 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .ej-kept-title{font-size:16px;font-family:var(--serif);color:var(--p);margin:4px 0 0}
 .ej-kept-body{font-size:13.5px;color:var(--dim);line-height:1.7;margin:0}
 .ej-kept-safety{font-size:11.5px;color:var(--faint);line-height:1.6;background:rgba(255,255,255,.04);border-radius:10px;padding:10px 12px;margin:0}
+.ej-done-cert{align-items:stretch}
+/* 受領証 */
+.cert{display:flex;flex-direction:column;gap:14px;background:linear-gradient(160deg,rgba(90,55,20,.28) 0%,rgba(60,40,15,.18) 100%);border:1px solid rgba(219,164,94,.35);border-radius:16px;padding:20px 18px;position:relative;overflow:hidden}
+.cert::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 24px,rgba(219,164,94,.025) 24px,rgba(219,164,94,.025) 25px);pointer-events:none}
+.cert-inline{background:linear-gradient(160deg,rgba(90,55,20,.22) 0%,rgba(60,40,15,.14) 100%)}
+.cert-head{display:flex;flex-direction:column;align-items:center;gap:6px;padding-bottom:12px;border-bottom:1px dashed rgba(219,164,94,.3)}
+.cert-flame{font-size:28px;line-height:1}
+.cert-badge{font-size:13px;letter-spacing:.5em;color:var(--ember2);font-weight:600;text-indent:.5em}
+.cert-dest-line{font-size:11.5px;color:var(--faint);letter-spacing:.06em}
+.cert-kindle-block{display:flex;flex-direction:column;gap:4px}
+.cert-kindle-label{font-size:10.5px;color:var(--faint);letter-spacing:.1em}
+.cert-kindle{font-size:14.5px;font-family:var(--serif);color:var(--p);line-height:1.65;border-left:2px solid rgba(219,164,94,.5);padding:6px 12px;margin:0}
+.cert-pain{font-size:12px;color:var(--dim);margin:0;padding-left:14px;line-height:1.5}
+.cert-strata{display:flex;flex-direction:column;gap:7px}
+.cert-strata-label{font-size:10.5px;color:var(--faint);letter-spacing:.1em}
+.cert-layer{background:rgba(255,255,255,.04);border-radius:9px;padding:9px 12px;display:flex;flex-direction:column;gap:3px}
+.cert-layer-defer{opacity:.6}
+.cert-layer-q{font-size:11.5px;color:var(--dim)}
+.cert-layer-a{font-size:13px;font-family:var(--serif);color:var(--p);line-height:1.5}
+.cert-layer-by{font-size:10.5px;color:var(--faint);text-align:right}
+.cert-voice{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:rgba(255,255,255,.04);border-radius:10px}
+.cert-voice-dot{width:12px;height:12px;flex-shrink:0;margin-top:4px}
+.cert-voice-text{font-size:13px;font-family:var(--serif);color:var(--dim);line-height:1.65;margin:0}
+.cert-voice-name{font-size:11px;color:var(--faint);margin-left:6px}
+.cert-foot{display:flex;flex-direction:column;align-items:center;gap:5px;padding-top:10px;border-top:1px dashed rgba(219,164,94,.3)}
+.cert-confirm{font-size:12px;color:var(--ember2);letter-spacing:.06em}
+.cert-date{font-size:11px;color:var(--faint)}
+.cert-seal{font-size:18px;color:rgba(219,164,94,.6)}
 /* 棚 */
 .jshelf-sub{font-size:12px;color:var(--faint);margin:2px 0 10px}
 .jshelf-list{display:flex;flex-direction:column;gap:8px}
