@@ -633,6 +633,7 @@ function grantToka(s,amount,reason){
   if(!s.toka)s.toka={total:0,log:[]};
   s.toka.total=(s.toka.total||0)+amount;
   s.toka.log=[{amount:amount,reason:reason,at:nowISO()}].concat(s.toka.log||[]).slice(0,50);
+  return amount;
 }
 
 /* ── 称号チェック＆付与 ── */
@@ -2090,8 +2091,8 @@ function applyJudgmentConversionRoute(state,card){
   s.lastSavedAt=nowISO();
   unlockPlacesFromCard(s,c,false);
   if(!s.toka)s.toka={total:0,log:[]};
-  grantToka(s,3,"判決を確定せず、問いとして保留した。");
-  return{state:s,card:c,converted:true,event:ev};
+  var tokaGained=grantToka(s,3,"判決を確定せず、問いとして保留した。");
+  return{state:s,card:c,converted:true,event:ev,tokaGained:tokaGained};
 }
 function addNewEmberToState(game,card){
   if(isJudgmentConversionInput(card)){
@@ -2115,8 +2116,8 @@ function addNewEmberToState(game,card){
   var s=Object.assign({},game,{emberCards:[unit].concat(game.emberCards||[]),lastSavedAt:nowISO(),recentPlaceUnlocks:[]});
   unlockPlacesFromCard(s,unit,false);
   if(!s.toka)s.toka={total:0,log:[]};
-  grantToka(s,1,"捨てずに預けた。今夜の火を、なかったことにしなかった。");
-  return{state:s,card:unit,converted:false,event:null};
+  var tokaGained=grantToka(s,1,"捨てずに預けた。今夜の火を、なかったことにしなかった。");
+  return{state:s,card:unit,converted:false,event:null,tokaGained:tokaGained};
 }
 
 const EMBER_UNIT_FLOW={
@@ -2587,6 +2588,7 @@ function receiveEmberCard(game,emberId,receiptInput){
   var cur=growth.current||{};
   var tokaAmt=Math.max(1,Math.round(((cur.satisfaction||0)+(cur.meaning||0)+(cur.value||0))/3/10));
   grantToka(s,tokaAmt,"この火の中に、まだ消してはいけない火を確認した。");
+  s._tokaGained=tokaAmt;
   var rw=[{type:"receipt",title:receipt.title},{type:"item",name:ITEM_NAMES.red_stamp_mark,count:1},{type:"ip",amount:growth.canGraduate?3:1},{type:"toka",amount:tokaAmt}];
   checkAndGrantAchievements(s,rw);
   checkUnlocks(s);
@@ -3899,10 +3901,25 @@ function HomeView(p){
       <p>無理に続けなくていい。今日見た分は、ちゃんと残ります。</p>
       <button className="btn btn-g home-today-btn" onClick={function(){p.onTodayEnd&&p.onTodayEnd();}}>今日はここで閉じる</button>
     </section>
-    {(game.toka&&game.toka.total>0)&&<div className="home-toka-bar">
-      <span className="htb-label">灯貨</span>
-      <span className="htb-count">{game.toka.total}</span>
-      <span className="htb-desc">捨てなかった証</span>
+    {(game.toka&&game.toka.total>0)&&<div className="home-toka-card">
+      <div className="htc-top">
+        <div className="htc-label">灯貨</div>
+        <div className="htc-count">{game.toka.total}<span className="htc-unit">枚</span></div>
+        <div className="htc-tagline">捨てなかった証</div>
+      </div>
+      <div className="htc-uses">
+        <div className="htc-uses-label">灯貨でできること（近日実装）</div>
+        <div className="htc-use-list">
+          <div className="htc-use-item"><span className="htc-cost">1枚</span><span className="htc-use-desc">今夜の判決を、明日の朝まで閉廷する</span></div>
+          <div className="htc-use-item"><span className="htc-cost">2枚</span><span className="htc-use-desc">判決を問いに変換する</span></div>
+          <div className="htc-use-item"><span className="htc-cost">3枚</span><span className="htc-use-desc">残り火に宛先をつける（誰かへ届ける形にする）</span></div>
+          <div className="htc-use-item"><span className="htc-cost">5枚</span><span className="htc-use-desc">うつろの箱に三日間預ける</span></div>
+        </div>
+      </div>
+      {game.toka.log&&game.toka.log[0]&&<div className="htc-latest">
+        <span className="htc-latest-label">直近の発行</span>
+        <span className="htc-latest-text">{game.toka.log[0].reason}</span>
+      </div>}
     </div>}
     <div className="home-version">残り火の箱庭</div>
   </div>;
@@ -4020,7 +4037,7 @@ function App(){
   var resetWorld=useCallback(function(){clearSave();var f=initGame();setGame(f);setDigest(null);setFirst(true);setLive([]);setProg({toyman:0,kana:0,utsuro:0,kotae:0});persistSave(f);setScreen("closed");showToast("世界を最初に戻した。");},[showToast]);
   var handleTieredIntv=useCallback(function(newState){if(!newState)return;newState.lastSavedAt=nowISO();var checked=withUnlock(game,newState);if(checked.dailyGoals&&checked.dailyGoals.goals){var pg2=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(pg2,checked,game);checked=checkGoalsAwardIP(pg2,checked.dailyGoals.goals,checked);}setGame(checked);persistSave(checked);},[game,withUnlock]);
   var quickGoalAction=useCallback(function(action){if(!game||!action)return;if(action.screen&&action.screen!=="quick"){navigateTo(action.screen,action);return;}var r=runGoalAction(game,action);if(r.blocked){showToast((r.lines&&r.lines[0])||"実行できません。");return;}var ns=r.newState;ns.lastSavedAt=nowISO();var checked=withUnlock(game,ns);if(checked.dailyGoals&&checked.dailyGoals.goals){var pg=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(pg,checked,game);checked=checkGoalsAwardIP(pg,checked.dailyGoals.goals,checked);}setGame(checked);persistSave(checked);setLive(function(prev){return [{text:(r.lines||[]).join("\n"),kind:"goal",time:nowISO()}].concat(prev).slice(0,40);});showToast(r.ipUsed?((r.lines&&r.lines[0])||"干渉しました。"):"実行しました。");},[game,withUnlock,navigateTo,showToast]);
-  var addEmber=useCallback(function(card){if(!game)return;var res=addNewEmberToState(game,card);var ns=res.state;ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};setGame(ns);persistSave(ns);setShowCreate(false);var pu=(ns.recentPlaceUnlocks||[])[0];showToast(pu?("新しい場所が開きました：「"+pu.name+"」"):(res.converted?"判決を問いとして保管しました。":"「"+makeEmberTitle(res.card)+"」を預けました。"));},[game,showToast]);
+  var addEmber=useCallback(function(card){if(!game)return;var res=addNewEmberToState(game,card);var ns=res.state;ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};setGame(ns);persistSave(ns);setShowCreate(false);var pu=(ns.recentPlaceUnlocks||[])[0];var baseMsg=pu?("新しい場所が開きました：「"+pu.name+"」"):(res.converted?"判決を問いとして保管しました。":"「"+makeEmberTitle(res.card)+"」を預けました。");if(res.tokaGained){showToast(baseMsg);setTimeout(function(){showToast("灯貨を"+res.tokaGained+"枚手に入れました。合計："+(ns.toka&&ns.toka.total||0)+"枚");},2800);}else showToast(baseMsg);},[game,showToast]);
   var readConv=useCallback(function(id){setViewConv(id);if(!game)return;if(game.readConvs.indexOf(id)===-1){var ns=Object.assign({},game,{readConvs:[id].concat(game.readConvs)});setGame(ns);persistSave(ns);}},[game]);
   var receiveConv=useCallback(function(id){if(!game)return;var conv=CBID[id];if(!conv)return;if(game.receivedScenes&&game.receivedScenes.indexOf(id)!==-1)return;var ns=applySceneFx(game,conv);ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);showToast("「"+conv.title+"」を受領した。");},[game,showToast]);
   var savePhilAnswer=useCallback(function(ans){if(!game||!ans.trim())return;var beforeD=getPhilosophicalQuestion(game).depth;var ns=Object.assign({},game,{questionAnswers:([{q:getPhilosophicalQuestion(game).text,a:ans,at:nowISO()}]).concat(game.questionAnswers||[]).slice(0,30),lastSavedAt:nowISO()});setGame(ns);persistSave(ns);var afterD=getPhilosophicalQuestion(ns).depth;showToast(afterD>beforeD?"コタエ：「記録した。……問いが、深くなった」":"コタエ：「記録した。あなたの言葉を」");},[game,showToast]);
@@ -4124,9 +4141,11 @@ function App(){
     {sendGiftOpen&&<SendGiftModal onClose={function(){setSendGiftOpen(false);}} onSend={sendGiftCb}/>}
     {receiveTarget&&<ReceiptReceiveModal card={receiveTarget} onClose={function(){setReceiveTargetId(null);}} onSubmit={function(input){
       var ns=receiveEmberCard(game,receiveTarget.id,input);
+      var tg=ns._tokaGained||0;delete ns._tokaGained;
       ns.lastSavedAt=nowISO();
       setGame(ns);persistSave(ns);setReceiveTargetId(null);
       addWatchGauge("receive_ember",25);
+      if(tg){showToast("灯貨を"+tg+"枚手に入れました。合計："+(ns.toka&&ns.toka.total||0)+"枚");}
       var latest=(ns.receipts||[])[0];
       if(latest){
         setReceiptAcceptance({text:latest.acceptanceText||"あなたが書いたものは、なかったことにはなりません。",holdText:latest.holdText||null,nextQuestion:latest.nextQuestion||"次は、どんな問いを持ち帰る？",writeState:latest.writeState||"",feeling:latest.feeling||"",wanted:latest.wanted||"",bodyText:latest.bodyText||"",shadowAnswers:latest.shadowAnswers||[],reflectionQuestion:getReceiptReflectionQuestion(latest)});

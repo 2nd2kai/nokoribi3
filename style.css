@@ -4312,3 +4312,19 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .htb-label{font-size:11px;letter-spacing:.1em;color:var(--ember2);min-width:32px}
 .htb-count{font-size:22px;font-family:var(--serif);color:var(--p);line-height:1}
 .htb-desc{font-size:11.5px;color:var(--faint)}
+/* 灯貨カード */
+.home-toka-card{background:rgba(180,100,40,.07);border:1px solid rgba(180,100,40,.2);border-radius:14px;padding:16px;margin:0 0 8px}
+.htc-top{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+.htc-label{font-size:11px;letter-spacing:.12em;color:var(--ember2);min-width:28px}
+.htc-count{font-size:28px;font-family:var(--serif);color:var(--p);line-height:1}
+.htc-unit{font-size:14px;margin-left:2px;color:var(--faint)}
+.htc-tagline{font-size:12px;color:var(--faint);margin-left:auto}
+.htc-uses{margin-bottom:12px}
+.htc-uses-label{font-size:10.5px;letter-spacing:.08em;color:var(--faint);margin-bottom:8px}
+.htc-use-list{display:flex;flex-direction:column;gap:6px}
+.htc-use-item{display:flex;align-items:flex-start;gap:10px}
+.htc-cost{font-size:12px;color:var(--ember2);font-family:var(--serif);min-width:28px;padding-top:1px}
+.htc-use-desc{font-size:13px;color:rgba(255,255,255,.65);line-height:1.4}
+.htc-latest{border-top:1px solid rgba(255,255,255,.06);padding-top:10px;display:flex;flex-direction:column;gap:4px}
+.htc-latest-label{font-size:10px;letter-spacing:.1em;color:var(--faint)}
+.htc-latest-text{font-size:12px;color:rgba(255,255,255,.5);line-height:1.5;font-family:var(--serif)}
