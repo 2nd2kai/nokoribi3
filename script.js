@@ -1043,6 +1043,7 @@ function initGame(){
     achievements:{},unlocks:{scene_book:false,intervention:false,world_record:false,title_book:false,item_book:false,tabs:Object.assign({},BASE_TABS),places:Object.assign({},BASE_PLACES)},
     recentRewards:[],newAchievements:[],
     history:{prevOpen:null,lastOpen:null,hourly:[],daily:[]},introSeen:false,
+    eventLog:[],
   };
 }
 
@@ -4133,6 +4134,7 @@ function jCertVoice(comp,destId){
   return (tbl[comp]&&tbl[comp][destId])||jVoiceLine(comp);
 }
 function jTitleOf(fire){var k=(fire.kindle||"").trim();return k.length>22?k.slice(0,22)+"…":(k||"名もない火");}
+function appendEventLog(ns,text,kind){ns.eventLog=[{text:text,kind:kind||"record",at:nowISO()}].concat(ns.eventLog||[]).slice(0,150);}
 function jCalDay(iso){var d=iso?new Date(iso):new Date();return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();}
 function jLockedToday(fire){if(!fire||!fire.lastTouch)return false;return jCalDay(fire.lastTouch)===jCalDay();}
 function jStrataLabel(m){if(m.deferred)return "まだ答えなかった";if(m.mode==="place")return "置いた";return "掘って、答えた";}
@@ -4216,9 +4218,18 @@ function EmberJourney(p){
     var ns=cloneS(p.game);
     if(!ns.sentFires)ns.sentFires=[];
     if(isUpdate){
+      var prev=(ns.sentFires||[]).find(function(x){return x.id===fire.id;});
       ns.sentFires=ns.sentFires.map(function(f){return f.id===fire.id?fire:f;});
+      if(prev){
+        var gotCert=fire.form==="certificate"&&prev.form!=="certificate";
+        if(gotCert){appendEventLog(ns,"「"+jTitleOf(fire)+"」が受領証になった","certificate");}
+        else if((fire.meetings||[]).length>(prev.meetings||[]).length){appendEventLog(ns,"「"+jTitleOf(fire)+"」に、もう一度会った","remeet");}
+      }
     }else{
       ns.sentFires=[fire].concat(ns.sentFires);
+      if(fire.form==="certificate"){appendEventLog(ns,"「"+jTitleOf(fire)+"」を預けて、受領証になった","certificate");}
+      else if(fire.form==="kept"){appendEventLog(ns,"「"+jTitleOf(fire)+"」を、そっと棚に置いた","kept");}
+      else{appendEventLog(ns,"「"+jTitleOf(fire)+"」を、棚に預けた","placed");}
     }
     var add=fire.form==="certificate"?3:(fire.form==="placed"?2:1);
     if(typeof grantToka==="function")grantToka(ns,isUpdate?1:add,isUpdate?"もう一度、会いに行った。":"捨てずに、棚へ灯した。");
@@ -4454,6 +4465,7 @@ function JourneyFireView(p){
     var ns=cloneS(p.game);
     ns.sentFires=(ns.sentFires||[]).map(function(x){if(x.id!==f.id)return x;var dt=Object.assign({deposited:x.createdAt},x.dates||{},{returned:nowISO()});return Object.assign({},x,{returnedAt:nowISO(),lastTouch:nowISO(),dates:dt});});
     if(typeof grantToka==="function")grantToka(ns,2,"火を、心へ返した。");
+    appendEventLog(ns,"「"+jTitleOf(f)+"」を心へ返した","return");
     ns.lastSavedAt=nowISO();
     p.onChange&&p.onChange(ns);
     p.onClose&&p.onClose();
@@ -5010,27 +5022,64 @@ function ArchivedStories(p){
     })}
   </div>;
 }
+function EventLogPanel(p){
+  var game=p.game;
+  var evLog=game?(game.eventLog||[]):[];
+  if(!evLog.length)return null;
+  function fmtDate(iso){var d=new Date(iso);return (d.getMonth()+1)+"月"+d.getDate()+"日 "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");}
+  return <div className="lsec evlog-panel"><div className="lh">できごと</div>
+    {evLog.slice(0,30).map(function(e,i){return <div key={i} className={"evlog-row evlog-"+e.kind}>
+      <span className="evlog-time">{fmtDate(e.at)}</span>
+      <span className="evlog-text">{e.text}</span>
+    </div>;})}
+  </div>;
+}
+function LogConvPanel(p){
+  var game=p.game,onNav=p.onNav;
+  if(!game)return null;
+  var unlocked=getUnlockedConvIds(game);
+  var reads=game.readConvs||[];
+  var items=CONVS.filter(function(c){return unlocked.indexOf(c.id)>=0;}).slice(0,8);
+  if(!items.length)return null;
+  return <div className="lsec logconv-panel"><div className="lh">場面</div>
+    {items.map(function(c){var isR=reads.indexOf(c.id)>=0;return <div key={c.id} className={"logconv-row"+(isR?"":" logconv-unread")} onClick={function(){onNav&&onNav("conv");}}>
+      <span className={"nd cd-"+c.a}/><span className={"nd cd-"+c.b}/>
+      <span className="logconv-title">「{c.title}」</span>
+      {!isR&&<span className="cv-new">NEW</span>}
+    </div>;})}
+    <button className="logconv-more" onClick={function(){onNav&&onNav("conv");}}>場面帳をすべて見る →</button>
+  </div>;
+}
 function LogView(p){
   var digest=p.digest,goals=p.goals||[];
-  var stories=p.game?getUnlockedStories(p.game):[];
-  var reads=p.game?(p.game.readStories||[]):[];
+  var game=p.game;
+  var stories=game?getUnlockedStories(game):[];
+  var reads=game?(game.readStories||[]):[];
   var hasUnreadStory=stories.some(function(s){return reads.indexOf(s.id)===-1;});
-  function storyBlock(style){return stories.length>0&&<div style={style} className="lsec"><div className="lh">世界の記録</div>{stories.map(function(s){var isRead=reads.indexOf(s.id)>=0;return(<div key={s.id} className={"story-card"+(isRead?" story-read":"")} onClick={function(){if(reads.indexOf(s.id)===-1){var ns=Object.assign({},p.game,{readStories:[s.id].concat(reads)});p.setGame&&p.setGame(ns);}}}><div className="story-head"><span className="story-ch">第{s.ch}章</span><span className="story-title">{s.title}</span>{!isRead&&<span className="cv-new">NEW</span>}</div>{isRead&&<pre className="story-text">{s.text}</pre>}</div>);})}</div>;}
-  if(!digest)return <div className="scroll"><GoalsPanel goals={goals} game={p.game} onNav={p.onNav} onQuick={p.onQuick} onJourney={p.onJourney}/><p className="le">まだ、ログがありません。</p></div>;
-  var best=null;if(digest.places){var ps=digest.places.filter(function(q){return q.delta>0;}).sort(function(a,b){return b.delta-a.delta;});if(ps.length)best=ps[0];}
+  function storyBlock(){return stories.length>0&&<div className="lsec"><div className="lh">世界の記録</div>{stories.map(function(s){var isRead=reads.indexOf(s.id)>=0;return(<div key={s.id} className={"story-card"+(isRead?" story-read":"")} onClick={function(){if(reads.indexOf(s.id)===-1){var ns=Object.assign({},game,{readStories:[s.id].concat(reads)});p.setGame&&p.setGame(ns);}}}><div className="story-head"><span className="story-ch">第{s.ch}章</span><span className="story-title">{s.title}</span>{!isRead&&<span className="cv-new">NEW</span>}</div>{isRead&&<pre className="story-text">{s.text}</pre>}</div>);})}</div>;}
   return <div className="scroll"><div className="log unfold">
-    {hasUnreadStory&&storyBlock({"--d":"0ms"})}
-    <GoalsPanel goals={goals} game={p.game} onNav={p.onNav} onQuick={p.onQuick} onJourney={p.onJourney}/>
-    {p.game&&p.game.recentRewards&&p.game.recentRewards.length>0&&<RecentRewardsPanel rewards={p.game.recentRewards}/>}
-    <div style={{"--d":"0ms"}} className="lel"><p>{digest.hours<1?"ほとんど時間は経っていない。世界は静かなままだ。":<span>あなたが見ていない間に、世界は<span className="hi"> {digest.hours} </span>時間進みました。</span>}</p><p className="lre">誰も、あなたを責めていません。</p><p className="game-oneliner">未受領の問いを、5人が少しずつ受け取れる形にしていく箱庭。</p></div>
-    {!hasUnreadStory&&storyBlock({"--d":"30ms"})}
-    {p.game&&<ArchivedStories game={p.game} setGame={p.setGame}/>}
-    {digest.places&&<div style={{"--d":"60ms"}} className="lsec"><div className="lh">場所の進み具合</div>{best&&<div className="best">今日いちばん進んだ場所　<b>{best.name}</b><span className="bd"> +{Math.round(best.delta*100)}%</span></div>}<div className="plist">{digest.places.map(function(pp){var fp=Math.round(pp.from*100),tp=Math.round(pp.to*100),dp=Math.round(pp.delta*100);return <div key={pp.id} className="prow"><div className="ptop"><span className="pn">{pp.name}</span><span className="pnum">{fp}% → <span className="hi2">{tp}%</span>{dp>0&&<span className="pdelta"> +{dp}%</span>}</span></div><Bar value={tp} color={PCOL(pp.id)} h={4}/><div className="psub">{pp.label}　Lv.{pp.level}</div></div>;})}</div></div>}
-    {p.game&&<GrowthRanking game={p.game}/>}
-    {digest.events.length>0&&<div style={{"--d":"150ms"}} className="lsec"><div className="lh">主なできごと</div><ul className="evs">{digest.events.map(function(e,i){return <li key={i} className={"ev ev-"+e.kind}>{e.text}</li>;})}</ul></div>}
-    <div style={{"--d":"240ms"}} className="lsec"><div className="lh">キャラの変化</div><div className="chs">{digest.perChar.map(function(c){return <div key={c.id} className="chr"><span className={"nd cd-"+c.id}/><span className="cn">{c.name}</span><span className="cs2">{c.fatigue&&<span className="cs">疲労 <Dt from={c.fatigue.from} to={c.fatigue.to} inv={true}/></span>}<span className="cs">{c.unique.label} <Dt from={c.unique.from} to={c.unique.to} inv={c.id==="auditor"}/></span></span>{c.id!=="auditor"&&<Badge status={c.status}/>}</div>;})}</div></div>
-    {p.game&&Object.keys(p.game.inventory||{}).some(function(k){return(p.game.inventory[k]||0)>0;})&&<div style={{"--d":"280ms"}} className="lsec"><div className="lh">アイテム帳</div><InventoryPanel inventory={p.game.inventory}/></div>}
-    {p.game&&Object.keys(p.game.achievements||{}).some(function(k){return p.game.achievements[k];})&&<div style={{"--d":"310ms"}} className="lsec"><div className="lh">称号帳</div><AchievementsPanel achievements={p.game.achievements}/></div>}
+    {/* 1. 今日できること */}
+    <GoalsPanel goals={goals} game={game} onNav={p.onNav} onQuick={p.onQuick} onJourney={p.onJourney}/>
+    {/* 2. 世界の記録（未読なら最上部、既読は後ろに自然に収まる） */}
+    {hasUnreadStory&&storyBlock()}
+    {/* 3. ログ概要 */}
+    {digest&&<div className="lel"><p>{digest.hours<1?"ほとんど時間は経っていない。世界は静かなままだ。":<span>あなたが見ていない間に、世界は<span className="hi"> {digest.hours} </span>時間進みました。</span>}</p><p className="lre">誰も、あなたを責めていません。</p></div>}
+    {/* 4. 場面 */}
+    <LogConvPanel game={game} onNav={p.onNav}/>
+    {/* 5. できごと */}
+    <EventLogPanel game={game}/>
+    {/* 6. 世界の記録（既読時はここ） */}
+    {!hasUnreadStory&&storyBlock()}
+    {/* 7. 以前の記録 */}
+    {game&&<ArchivedStories game={game} setGame={p.setGame}/>}
+    {/* 8. 詳細：場所・キャラ・その他 */}
+    {digest&&digest.places&&<div className="lsec"><div className="lh">場所の進み具合</div>{(function(){var best=null;var ps=digest.places.filter(function(q){return q.delta>0;}).sort(function(a,b){return b.delta-a.delta;});if(ps.length)best=ps[0];return(<>{best&&<div className="best">今日いちばん進んだ場所　<b>{best.name}</b><span className="bd"> +{Math.round(best.delta*100)}%</span></div>}<div className="plist">{digest.places.map(function(pp){var fp=Math.round(pp.from*100),tp=Math.round(pp.to*100),dp=Math.round(pp.delta*100);return <div key={pp.id} className="prow"><div className="ptop"><span className="pn">{pp.name}</span><span className="pnum">{fp}% → <span className="hi2">{tp}%</span>{dp>0&&<span className="pdelta"> +{dp}%</span>}</span></div><Bar value={tp} color={PCOL(pp.id)} h={4}/><div className="psub">{pp.label}　Lv.{pp.level}</div></div>;})}</div></>);})()}</div>}
+    {game&&<GrowthRanking game={game}/>}
+    {digest&&digest.events&&digest.events.length>0&&<div className="lsec"><div className="lh">主なできごと</div><ul className="evs">{digest.events.map(function(e,i){return <li key={i} className={"ev ev-"+e.kind}>{e.text}</li>;})}</ul></div>}
+    {digest&&<div className="lsec"><div className="lh">キャラの変化</div><div className="chs">{digest.perChar.map(function(c){return <div key={c.id} className="chr"><span className={"nd cd-"+c.id}/><span className="cn">{c.name}</span><span className="cs2">{c.fatigue&&<span className="cs">疲労 <Dt from={c.fatigue.from} to={c.fatigue.to} inv={true}/></span>}<span className="cs">{c.unique.label} <Dt from={c.unique.from} to={c.unique.to} inv={c.id==="auditor"}/></span></span>{c.id!=="auditor"&&<Badge status={c.status}/>}</div>;})}</div></div>}
+    {game&&Object.keys(game.inventory||{}).some(function(k){return(game.inventory[k]||0)>0;})&&<div className="lsec"><div className="lh">アイテム帳</div><InventoryPanel inventory={game.inventory}/></div>}
+    {game&&Object.keys(game.achievements||{}).some(function(k){return game.achievements[k];})&&<div className="lsec"><div className="lh">称号帳</div><AchievementsPanel achievements={game.achievements}/></div>}
+    {game&&game.recentRewards&&game.recentRewards.length>0&&<RecentRewardsPanel rewards={game.recentRewards}/>}
   </div></div>;
 }
 function GoalsPanel(p){
