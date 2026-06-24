@@ -4473,6 +4473,7 @@ function JourneyFireView(p){
   function shelve(){
     var ns=cloneS(p.game);
     ns.sentFires=(ns.sentFires||[]).map(function(x){return x.id===f.id?Object.assign({},x,{shelved:true,lastTouch:nowISO()}):x;});
+    appendEventLog(ns,"「"+jTitleOf(f)+"」を棚の奥へしまった","shelved");
     ns.lastSavedAt=nowISO();
     p.onChange&&p.onChange(ns);
     p.onClose&&p.onClose();
@@ -5051,26 +5052,33 @@ function LogConvPanel(p){
   </div>;
 }
 function LogView(p){
-  var digest=p.digest,goals=p.goals||[];
+  var digest=p.digest;
   var game=p.game;
   var stories=game?getUnlockedStories(game):[];
   var reads=game?(game.readStories||[]):[];
   var hasUnreadStory=stories.some(function(s){return reads.indexOf(s.id)===-1;});
-  function storyBlock(){return stories.length>0&&<div className="lsec"><div className="lh">世界の記録</div>{stories.map(function(s){var isRead=reads.indexOf(s.id)>=0;return(<div key={s.id} className={"story-card"+(isRead?" story-read":"")} onClick={function(){if(reads.indexOf(s.id)===-1){var ns=Object.assign({},game,{readStories:[s.id].concat(reads)});p.setGame&&p.setGame(ns);}}}><div className="story-head"><span className="story-ch">第{s.ch}章</span><span className="story-title">{s.title}</span>{!isRead&&<span className="cv-new">NEW</span>}</div>{isRead&&<pre className="story-text">{s.text}</pre>}</div>);})}</div>;}
+  /* 世界の記録は必ず1回だけ。未読があれば先頭、全既読なら後ろ。 */
+  var storySection=stories.length>0?<div className={"lsec"+(hasUnreadStory?" lsec-highlight":"")}>
+    <div className="lh">世界の記録{hasUnreadStory&&<span className="lh-new"> NEW</span>}</div>
+    {stories.map(function(s){var isRead=reads.indexOf(s.id)>=0;return(
+      <div key={s.id} className={"story-card"+(isRead?" story-read":"")} onClick={function(){if(reads.indexOf(s.id)===-1){var ns=Object.assign({},game,{readStories:[s.id].concat(reads)});p.setGame&&p.setGame(ns);}}}>
+        <div className="story-head"><span className="story-ch">第{s.ch}章</span><span className="story-title">{s.title}</span>{!isRead&&<span className="cv-new">NEW</span>}</div>
+        {isRead&&<pre className="story-text">{s.text}</pre>}
+      </div>
+    );})}
+  </div>:null;
   return <div className="scroll"><div className="log unfold">
-    {/* 1. 今日できること */}
-    <GoalsPanel goals={goals} game={game} onNav={p.onNav} onQuick={p.onQuick} onJourney={p.onJourney}/>
-    {/* 2. 世界の記録（未読なら最上部、既読は後ろに自然に収まる） */}
-    {hasUnreadStory&&storyBlock()}
-    {/* 3. ログ概要 */}
+    {/* 1. 世界の記録（未読あり → 最上部） */}
+    {hasUnreadStory&&storySection}
+    {/* 2. ログ概要 */}
     {digest&&<div className="lel"><p>{digest.hours<1?"ほとんど時間は経っていない。世界は静かなままだ。":<span>あなたが見ていない間に、世界は<span className="hi"> {digest.hours} </span>時間進みました。</span>}</p><p className="lre">誰も、あなたを責めていません。</p></div>}
-    {/* 4. 場面 */}
+    {/* 3. 場面 */}
     <LogConvPanel game={game} onNav={p.onNav}/>
-    {/* 5. できごと */}
+    {/* 4. できごと */}
     <EventLogPanel game={game}/>
-    {/* 6. 世界の記録（既読時はここ） */}
-    {!hasUnreadStory&&storyBlock()}
-    {/* 7. 以前の記録 */}
+    {/* 5. 世界の記録（全既読 → 後ろ） */}
+    {!hasUnreadStory&&storySection}
+    {/* 6. 以前の記録 */}
     {game&&<ArchivedStories game={game} setGame={p.setGame}/>}
     {/* 8. 詳細：場所・キャラ・その他 */}
     {digest&&digest.places&&<div className="lsec"><div className="lh">場所の進み具合</div>{(function(){var best=null;var ps=digest.places.filter(function(q){return q.delta>0;}).sort(function(a,b){return b.delta-a.delta;});if(ps.length)best=ps[0];return(<>{best&&<div className="best">今日いちばん進んだ場所　<b>{best.name}</b><span className="bd"> +{Math.round(best.delta*100)}%</span></div>}<div className="plist">{digest.places.map(function(pp){var fp=Math.round(pp.from*100),tp=Math.round(pp.to*100),dp=Math.round(pp.delta*100);return <div key={pp.id} className="prow"><div className="ptop"><span className="pn">{pp.name}</span><span className="pnum">{fp}% → <span className="hi2">{tp}%</span>{dp>0&&<span className="pdelta"> +{dp}%</span>}</span></div><Bar value={tp} color={PCOL(pp.id)} h={4}/><div className="psub">{pp.label}　Lv.{pp.level}</div></div>;})}</div></>);})()}</div>}
