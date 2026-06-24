@@ -4001,30 +4001,12 @@ function HomeView(p){
       <div className="lh">残り火を預ける</div>
       <p className="hfe-desc">書いたあとに残ったものを、箱庭に預けます。行き先と同行者を選んで、残り火を旅に出せます。</p>
       <button className="btn btn-p hfe-main" onClick={function(){p.onJourney&&p.onJourney();}}>残り火を預ける</button>
-      {todayBadNight
-        ?<div className="hfe-received">
-          <div className="hfe-rcv-chars">
-            <div className="hfe-rcv-line"><span className="isc-dot cd-utsuro"/>うつろ：「封筒に入れた。明日まで、捨てない。」</div>
-            <div className="hfe-rcv-line"><span className="isc-dot cd-kana"/>かな：「痛かったんだね。それは、軽くない。」</div>
-          </div>
-          <p className="hfe-rcv-msg">今夜の気持ちは、受け取りました。</p>
-          <p className="hfe-rcv-sub">答えを求めず、今夜はただ預かっています。<br/>落ち着いたら、明日以降に棚で見返せます。</p>
-        </div>
-        :<div className="hfe-yn-block">
-          <span className="hfe-yn-q">書くのをやめようと思っていますか？</span>
-          <div className="hfe-yn-btns">
-            <button className="btn hfe-yn-yes" onClick={function(){p.onBadNight&&p.onBadNight();}}>はい</button>
-            <button className="btn hfe-yn-no" onClick={function(){setNoToast(true);setTimeout(function(){setNoToast(false);p.onJourney&&p.onJourney();},1400);}}>いいえ</button>
-          </div>
-          {noToast&&<div className="hfe-no-toast"><span className="isc-dot cd-toyman"/>トイマン：「残り火を、預けてみましょう。」</div>}
-        </div>
-      }
     </section>
 
     {/* 3. 棚サマリー */}
     {(function(){
-      var activeFires=(game.sentFires||[]).filter(function(f){return !f.returnedAt&&!f.shelved;});
-      if(!activeFires.length)return null;
+      var hasShelfItems=(game.sentFires||[]).some(function(f){return !f.returnedAt;});
+      if(!hasShelfItems)return null;
       return <div className="home-shelf-summary">
         <p className="hss-text">捨てなかった残り火が、棚に並んでいます。</p>
         <button className="btn btn-g hss-btn" onClick={goToShelf}>残り火の棚を見る →</button>
