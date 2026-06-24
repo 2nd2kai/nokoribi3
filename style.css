@@ -4537,3 +4537,12 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 
 /* できごとログ：奥へしまう */
 .evlog-shelved .evlog-text{color:var(--faint)}
+
+/* はい/いいえブロック */
+.hfe-yn-block{display:flex;flex-direction:column;gap:8px;margin-top:4px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02)}
+.hfe-yn-q{font-family:var(--serif);font-size:13.5px;color:var(--p);line-height:1.6}
+.hfe-yn-btns{display:flex;gap:8px}
+.hfe-yn-yes{flex:1;background:rgba(192,56,56,.12);border-color:rgba(192,56,56,.35);color:#e08080;font-size:14px;padding:11px}
+.hfe-yn-yes:active{background:rgba(192,56,56,.22)}
+.hfe-yn-no{flex:1;background:rgba(219,164,94,.08);border-color:rgba(219,164,94,.3);color:var(--ember2);font-size:14px;padding:11px}
+.hfe-yn-no:active{background:rgba(219,164,94,.16)}
