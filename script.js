@@ -3901,6 +3901,7 @@ function HomeView(p){
   var [okuOpen,setOkuOpen]=useState(false);
   var cards=game.emberCards||[];
   var fires=game.sentFires||[];
+  var todayBadNight=(cards).find(function(c){return c.mode==="bad_night"&&c.createdAt&&c.createdAt.slice(0,10)===nowISO().slice(0,10);});
   var active=cards.find(function(c){return c.status!=="ready"&&c.status!=="awaiting";})||cards[0]||null;
   var openPlaces=getUnlockedPlaceKeys(game).filter(function(k){return game.unlocks&&game.unlocks.places&&game.unlocks.places[k];});
   var next=getNextAction(game);
@@ -3939,13 +3940,22 @@ function HomeView(p){
       <div className="lh">火を預ける</div>
       <p className="hfe-desc">書いたあとに残ったものを、箱庭に預けます。行き先と同行者を選んで、火を旅に出せます。</p>
       <button className="btn btn-p hfe-main" onClick={function(){p.onJourney&&p.onJourney();}}>火を預ける</button>
-      <div className="hfe-yn-block">
-        <span className="hfe-yn-q">書くのをやめようと思っていますか？</span>
-        <div className="hfe-yn-btns">
-          <button className="btn hfe-yn-yes" onClick={function(){p.onBadNight&&p.onBadNight();}}>はい</button>
-          <button className="btn hfe-yn-no" onClick={function(){p.onJourney&&p.onJourney();}}>いいえ</button>
+      {todayBadNight
+        ?<div className="hfe-received">
+          <div className="hfe-rcv-chars">
+            <div className="hfe-rcv-line"><span className="isc-dot cd-utsuro"/>うつろ：「封筒に入れた。明日まで、捨てない。」</div>
+            <div className="hfe-rcv-line"><span className="isc-dot cd-kana"/>かな：「痛かったんだね。それは、軽くない。」</div>
+          </div>
+          <p className="hfe-rcv-msg">今夜の気持ちは、受け取りました。</p>
         </div>
-      </div>
+        :<div className="hfe-yn-block">
+          <span className="hfe-yn-q">書くのをやめようと思っていますか？</span>
+          <div className="hfe-yn-btns">
+            <button className="btn hfe-yn-yes" onClick={function(){p.onBadNight&&p.onBadNight();}}>はい</button>
+            <button className="btn hfe-yn-no" onClick={function(){p.onJourney&&p.onJourney();}}>いいえ</button>
+          </div>
+        </div>
+      }
     </section>
 
     {/* 3. 棚 */}

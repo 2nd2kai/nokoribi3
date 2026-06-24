@@ -4546,3 +4546,9 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .hfe-yn-yes:active{background:rgba(192,56,56,.22)}
 .hfe-yn-no{flex:1;background:rgba(219,164,94,.08);border-color:rgba(219,164,94,.3);color:var(--ember2);font-size:14px;padding:11px}
 .hfe-yn-no:active{background:rgba(219,164,94,.16)}
+
+/* 今夜の気持ち受取カード */
+.hfe-received{margin-top:4px;padding:14px 16px;border:1px solid rgba(219,164,94,.25);border-radius:12px;background:rgba(219,164,94,.05)}
+.hfe-rcv-chars{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.hfe-rcv-line{display:flex;align-items:flex-start;gap:6px;font-family:var(--serif);font-size:13px;color:var(--dim);line-height:1.65}
+.hfe-rcv-msg{margin:0;font-family:var(--serif);font-size:13.5px;color:var(--ember2);line-height:1.7;text-align:center;padding-top:10px;border-top:1px solid rgba(219,164,94,.15)}
