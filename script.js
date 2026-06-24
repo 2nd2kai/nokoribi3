@@ -4780,7 +4780,7 @@ function App(){
 
   return(<div className="root"><div className="frame">
     {saveError&&<div className="save-error-banner" role="alert">⚠ セーブが保存できていません。プライベートモードを解除するか、ブラウザの空き容量をご確認ください。進行は次の保存成功時に反映されます。</div>}
-    {returnConvId&&<ReturnConvOverlay conv={CBID[returnConvId]} onClose={function(){setReturnConvId(null);}} onGoConv={function(){setReturnConvId(null);readConv(returnConvId);setScreen("conv");}}/>}
+    {returnConvId&&<ReturnConvOverlay conv={CBID[returnConvId]} onClose={function(){setReturnConvId(null);}} onGoConv={function(){setReturnConvId(null);readConv(returnConvId);setScreen(MVP_MODE?"log":"conv");}}/>}
     {screen==="ending"&&<EndingView game={game} onFinish={function(){var ns=Object.assign({},game,{endingSeen:true,lastSavedAt:nowISO()});setGame(ns);persistSave(ns);setScreen("home");}}/>}
     {screen==="closed"&&(!game.introSeen?<IntroScreen onComplete={function(){var ns=Object.assign({},game,{introSeen:true,lastSavedAt:nowISO()});setGame(ns);persistSave(ns);}}/>:<ClosedScreen game={game} first={first} onOpen={openWorld}/>)}
     {screen!=="closed"&&screen!=="ending"&&<>
@@ -4817,7 +4817,8 @@ function App(){
         <Header title="称号帳" day={game.world.day}/>
         <TitlesView game={game}/>
       </>}
-      {screen==="conv"&&<>
+      {screen==="conv"&&MVP_MODE&&(function(){setScreen("log");return null;})()}
+      {screen==="conv"&&!MVP_MODE&&<>
         <Header title="場面帳" day={game.world.day}/>
         {viewConv?<ConvDetail conv={CBID[viewConv]} game={game} onBack={function(){setViewConv(null);}} onReceive={receiveConv}/>:<ConvView game={game} onRead={readConv}/>}
       </>}
