@@ -3971,6 +3971,12 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .home-oku-sub{font-size:11px;color:var(--faint);margin-left:4px}
 .home-oku-inner{display:flex;flex-direction:column;gap:10px;padding:0 12px 14px}
 .home-oku-foot{display:flex;justify-content:center;padding-top:4px}
+/* 以前の記録（旧ループ章の折りたたみ） */
+.lsec-archived{margin-top:6px}
+.arch-stories-toggle{width:100%;display:flex;align-items:center;gap:8px;padding:10px 0;background:none;border:none;border-top:1px solid rgba(255,255,255,.06);color:var(--faint);cursor:pointer;text-align:left}
+.arch-stories-icon{font-size:9px;width:12px}
+.arch-stories-label{font-size:12px;font-family:var(--serif);color:var(--dim)}
+.arch-stories-sub{font-size:10.5px;color:var(--faint);margin-left:2px}
 
 /* ── v5.52: タブ追加・戦闘UX・いまのようす明確化 ── */
 

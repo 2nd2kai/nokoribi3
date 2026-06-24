@@ -949,10 +949,12 @@ function makeJourneyGoals(game){
   }
   var front=fires.filter(function(f){return !f.returnedAt&&!f.shelved;});
   var jLocked=function(f){return typeof jLockedToday==="function"?jLockedToday(f):false;};
+  /* unlocked から先に絞ることで、以降の grad/remeet/resend は必ず「今日まだ動ける火」だけになる。
+     ＝ canGraduate だけで「心へ返す」を出してロックと矛盾する事故を構造的に防ぐ。 */
   var unlocked=front.filter(function(f){return !jLocked(f);});
-  /* 心へ返せる：受領証・会い直し済み（meetings>=2）・今日ロックされていない */
+  /* 心へ返せる：受領証 ＆ 会い直し済み（meetings>=2）＆ 今日ロックされていない（canGraduate && !locked） */
   var grad=unlocked.filter(function(f){return f.form==="certificate"&&(f.meetings||[]).length>=2;});
-  /* 会い直せる：受領証・まだ1層・今日ロックされていない */
+  /* 会い直せる：受領証 ＆ まだ1層 ＆ 今日ロックされていない */
   var remeet=unlocked.filter(function(f){return f.form==="certificate"&&(f.meetings||[]).length<2;});
   /* 置き札・預かり札で、もう一度送り出せる */
   var resend=unlocked.filter(function(f){return f.form!=="certificate";});
@@ -1917,15 +1919,28 @@ function getUnlockedStories(game){
   var hasCert=fires.some(function(f){return f.form==="certificate";});
   var hasRemeet=fires.some(function(f){return (f.meetings||[]).length>=2;});
   var hasReturn=fires.some(function(f){return !!f.returnedAt;});
-  /* 新ループを始めているプレイヤーには、旧 emberCards 章は出さない（章番号の重複と混乱を避ける）。 */
-  var newLoop=hasFire;
+  /* 本編＝共通の序章＋新ループの進行章。新ループを始めたら旧 emberCards 章は本編から外し、
+     消すのではなく getArchivedStories で「以前の記録」として畳んで残す。 */
   return STORY_EVENTS.filter(function(s){
     if(s.trigger==="always")return true;
     if(s.trigger==="j_deposit")return hasFire;
     if(s.trigger==="j_certificate")return hasCert;
     if(s.trigger==="j_remeet")return hasRemeet;
     if(s.trigger==="j_return")return hasReturn;
-    if(newLoop)return false;
+    if(hasFire)return false;
+    if(s.trigger==="hint")return cards.some(function(c){return c.status!=="unreceived";});
+    if(s.trigger==="analysis")return cards.some(function(c){return c.status==="checking"||c.status==="ready";});
+    if(s.trigger==="fragment")return rcpts.length>0;
+    return false;
+  });
+}
+/* 新ループ開始後に、以前見えていた旧ループの章を「以前の記録」として畳んで見せる。
+   既存ユーザーから記録が消えたように見えるのを防ぐ。新ループ未開始なら本編側に出ているので空。 */
+function getArchivedStories(game){
+  var fires=game.sentFires||[];
+  if(fires.length===0)return [];
+  var cards=game.emberCards||[];var rcpts=game.receipts||[];
+  return STORY_EVENTS.filter(function(s){
     if(s.trigger==="hint")return cards.some(function(c){return c.status!=="unreceived";});
     if(s.trigger==="analysis")return cards.some(function(c){return c.status==="checking"||c.status==="ready";});
     if(s.trigger==="fragment")return rcpts.length>0;
@@ -4330,11 +4345,21 @@ function EmberJourney(p){
         </div>}
       {(function(){
         var fm=result.fire,mc=(fm.meetings||[]).length;
-        var g=fm.form==="certificate"
-          ?(mc>=2
-            ?{here:"この火は、棚に並びました。",now:"もう、心へ返せるところまで来ています。棚で「心へ返す」を選べます。"}
-            :{here:"この火は、受領証になりました。棚に並んで、いつでも会いに来られます。",now:"日が変わったら、もう一度会いに来てください。会い直すと、心へ返せるようになります。"})
-          :{here:"この火は、棚に置きました。急がなくていい、置いておけます。",now:"落ち着いた日に、送り先を選び直して、もう一度旅に出せます。"};
+        /* この火は直前に lastTouch を更新したばかり＝当日ロック中。
+           「棚で心へ返せます」と言い切るとロックと矛盾するので、必ず locked を見て分岐する。 */
+        var locked=typeof jLockedToday==="function"&&jLockedToday(fm);
+        var g;
+        if(fm.form==="certificate"){
+          if(mc>=2){
+            g=locked
+              ?{here:"この火は、返せるところまで来たかもしれません。",now:"今日は、ここに置いておきます。日が変わったら、棚から心へ返せます。"}
+              :{here:"この火は、心へ返せるところまで来ています。",now:"棚で「心へ返す」を選べます。"};
+          }else{
+            g={here:"この火は、受領証になりました。棚に並んで、いつでも会いに来られます。",now:"日が変わったら、もう一度会いに来てください。会い直すと、心へ返せるようになります。"};
+          }
+        }else{
+          g={here:"この火は、棚に置きました。急がなくていい、置いておけます。",now:"落ち着いた日に、送り先を選び直して、もう一度旅に出せます。"};
+        }
         return <div className="ej-next">
           <div className="ej-next-h">このあと、できること</div>
           <p className="ej-next-here">{g.here}</p>
@@ -4954,6 +4979,27 @@ function TitlesView(p){
 }
 
 function Header(p){return <div className="hdr"><div><span className="hday">{p.day}日目</span><h2 className="htit">{p.title}</h2></div>{p.right&&<div>{p.right}</div>}</div>;}
+function ArchivedStories(p){
+  var game=p.game;
+  var [open,setOpen]=useState(false);
+  var stories=getArchivedStories(game);
+  if(!stories.length)return null;
+  var reads=game.readStories||[];
+  return <div className="lsec lsec-archived">
+    <button className="arch-stories-toggle" onClick={function(){setOpen(function(v){return !v;});}}>
+      <span className="arch-stories-icon">{open?"▲":"▼"}</span>
+      <span className="arch-stories-label">以前の記録</span>
+      <span className="arch-stories-sub">残り火を送り出す前の、箱庭の記録</span>
+    </button>
+    {open&&stories.map(function(s){
+      var isRead=reads.indexOf(s.id)>=0;
+      return <div key={s.id} className={"story-card"+(isRead?" story-read":"")} onClick={function(){if(reads.indexOf(s.id)===-1){var ns=Object.assign({},game,{readStories:[s.id].concat(reads)});p.setGame&&p.setGame(ns);}}}>
+        <div className="story-head"><span className="story-ch">第{s.ch}章</span><span className="story-title">{s.title}</span></div>
+        {isRead&&<pre className="story-text">{s.text}</pre>}
+      </div>;
+    })}
+  </div>;
+}
 function LogView(p){
   var digest=p.digest,goals=p.goals||[];
   if(!digest)return <div className="scroll"><GoalsPanel goals={goals} game={p.game} onNav={p.onNav} onQuick={p.onQuick} onJourney={p.onJourney}/><p className="le">まだ、ログがありません。</p></div>;
@@ -4963,6 +5009,7 @@ function LogView(p){
     {p.game&&p.game.recentRewards&&p.game.recentRewards.length>0&&<RecentRewardsPanel rewards={p.game.recentRewards}/>}
     <div style={{"--d":"0ms"}} className="lel"><p>{digest.hours<1?"ほとんど時間は経っていない。世界は静かなままだ。":<span>あなたが見ていない間に、世界は<span className="hi"> {digest.hours} </span>時間進みました。</span>}</p><p className="lre">誰も、あなたを責めていません。</p><p className="game-oneliner">未受領の問いを、5人が少しずつ受け取れる形にしていく箱庭。</p></div>
     {p.game&&(function(){var stories=getUnlockedStories(p.game);var reads=p.game.readStories||[];return stories.length>0&&<div style={{"--d":"30ms"}} className="lsec"><div className="lh">世界の記録</div>{stories.map(function(s){var isRead=reads.indexOf(s.id)>=0;return(<div key={s.id} className={"story-card"+(isRead?" story-read":"")} onClick={function(){if(!p.game.readStories||reads.indexOf(s.id)===-1){var ns=Object.assign({},p.game,{readStories:[s.id].concat(reads)});p.setGame&&p.setGame(ns);}}}><div className="story-head"><span className="story-ch">第{s.ch}章</span><span className="story-title">{s.title}</span>{!isRead&&<span className="cv-new">NEW</span>}</div>{isRead&&<pre className="story-text">{s.text}</pre>}</div>);})}</div>;})()}
+    {p.game&&<ArchivedStories game={p.game} setGame={p.setGame}/>}
     {digest.places&&<div style={{"--d":"60ms"}} className="lsec"><div className="lh">場所の進み具合</div>{best&&<div className="best">今日いちばん進んだ場所　<b>{best.name}</b><span className="bd"> +{Math.round(best.delta*100)}%</span></div>}<div className="plist">{digest.places.map(function(pp){var fp=Math.round(pp.from*100),tp=Math.round(pp.to*100),dp=Math.round(pp.delta*100);return <div key={pp.id} className="prow"><div className="ptop"><span className="pn">{pp.name}</span><span className="pnum">{fp}% → <span className="hi2">{tp}%</span>{dp>0&&<span className="pdelta"> +{dp}%</span>}</span></div><Bar value={tp} color={PCOL(pp.id)} h={4}/><div className="psub">{pp.label}　Lv.{pp.level}</div></div>;})}</div></div>}
     {p.game&&<GrowthRanking game={p.game}/>}
     {digest.events.length>0&&<div style={{"--d":"150ms"}} className="lsec"><div className="lh">主なできごと</div><ul className="evs">{digest.events.map(function(e,i){return <li key={i} className={"ev ev-"+e.kind}>{e.text}</li>;})}</ul></div>}
