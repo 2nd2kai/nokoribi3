@@ -3611,6 +3611,7 @@ function NowSceneView(p){
           <span className="now-loc-lv"> Lv.{locLv}「{getPlaceLvName(loc,locLv)}」</span>
         </div>
       </div>
+      {(function(){var desc={unexplored_forest:"まだ受け取れなかった残り火が迷い込む森。トイマンが、問いを探しに行く場所。",tears_pond:"名前のつかない気持ちが沈む泉。急いで答えにしない。ただ、分ける場所。",shelf:"捨てなかった残り火を置いておく場所。受領証、置き札、預かり札がここに残る。",post_office:"外から届いたものを、いつか受け取る場所。",record_tower:"世界の記録、場面、できごとが集まる場所。"};return desc[loc]?<p className="facility-desc">{desc[loc]}</p>:null;})()}
 
       {/* 場所進捗バー */}
       <div className="now-locbar">
@@ -3942,16 +3943,19 @@ function HomeView(p){
   var canGraduateFires=canActFires.filter(function(f){return f.form==="certificate"&&(f.meetings||[]).length>=2;});
   // 今夜の声：状態に応じてキャラと台詞を切り替える
   var voiceChar,voiceLine,nightCta;
+  var hasReturned=canActFires.some(function(f){return (f.meetings||[]).length>0;});
   if(canGraduateFires.length>0){
     voiceChar="kana";voiceLine="返せるところまで来た残り火がある。棚を見て。";nightCta="shelf";
+  }else if(canActFires.length>0&&hasReturned){
+    voiceChar="toyman";voiceLine="戻ってきた残り火がある。受け取るかは、あなたが決めていい。";nightCta="shelf";
   }else if(canActFires.length>0){
-    voiceChar="toyman";voiceLine="残り火が、届いている。行き先は、あなたが決めていい。";nightCta="shelf";
+    voiceChar="toyman";voiceLine="棚の残り火を、送り出せる。行き先は、あなたが決めていい。";nightCta="shelf";
   }else if(fires.length>0){
     voiceChar="kana";voiceLine="今日はここに置いておこう。日が変わったら、また会える。";nightCta=null;
   }else if(cards.length>0){
     voiceChar="toyman";voiceLine="まだ残っている。";nightCta=null;
   }else{
-    voiceChar="kana";voiceLine="今夜、置くだけでもいい。ここに、ちゃんと残るよ。";nightCta=null;
+    voiceChar="toyman";voiceLine="残り火を、預けて。私が、探してくる。";nightCta=null;
   }
   function scrollToShelf(){var el=document.getElementById("home-shelf");if(el)el.scrollIntoView({behavior:"smooth"});}
   return <div className="scroll home-screen">
@@ -4471,7 +4475,7 @@ function JourneyShelf(p){
   var returnedShown=showAllReturned?returned:returned.slice(0,RET_CAP);
   return <section className="home-card jshelf">
     <div className="lh">残り火の棚</div>
-    <p className="jshelf-sub">棚に残っている残り火：{front.length}つ。捨てなかったもの。</p>
+    <p className="jshelf-sub">捨てなかった残り火が、ここに並んでいます。</p>
     <div className="jshelf-list">{frontShown.map(card)}</div>
     {front.length>FRONT_CAP&&<button className="jshelf-more-btn" onClick={function(){setShowAllFront(function(v){return !v;});}}>{showAllFront?"とじる":"もっと見る（残り "+(front.length-FRONT_CAP)+"つ）"}</button>}
 
@@ -5116,6 +5120,7 @@ function LogView(p){
     );})}
   </div>:null;
   return <div className="scroll"><div className="log unfold">
+    <p className="facility-desc facility-desc-log">世界の記録、場面、できごとが集まる場所。箱庭で起きたことを、ここで見返せます。</p>
     {/* 1. 世界の記録（未読あり → 最上部） */}
     {hasUnreadStory&&storySection}
     {/* 2. ログ概要 */}

@@ -4564,3 +4564,7 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 
 /* いいえ押下後のインライントースト */
 .hfe-no-toast{display:flex;align-items:center;gap:7px;margin-top:10px;padding:10px 13px;background:rgba(219,164,94,.07);border:1px solid rgba(219,164,94,.2);border-radius:10px;font-family:var(--serif);font-size:13px;color:var(--ember2);line-height:1.6;animation:ti .18s ease}
+
+/* 施設役割説明（薄字1行） */
+.facility-desc{font-family:var(--serif);font-size:12px;color:var(--faint);line-height:1.7;margin:0 0 10px;padding:0 2px}
+.facility-desc-log{margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line)}
