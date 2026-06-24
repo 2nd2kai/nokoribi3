@@ -3264,10 +3264,17 @@ function BattleEncounterScreen(p){
   var game=p.game;
   var [result,setResult]=useState(null);
   var [selfAnswer,setSelfAnswer]=useState("");
+  var [,setTick]=useState(0);
   var pv=makeBattlePreview(game);
+  useEffect(function(){
+    if(pv.cooldownMs<=0)return;
+    var t=setTimeout(function(){setTick(function(n){return n+1;});},Math.min(pv.cooldownMs+50,1000));
+    return function(){clearTimeout(t);};
+  },[pv.cooldownMs]);
   var card=getToymanBattleEmber(game);
   var cdSec=Math.ceil((pv.cooldownMs||0)/1000);
   var disabled=pv.mod.blocked||pv.cooldownMs>0||!card||game.characters.toyman.lastAction!=="exploring";
+  var disabledReason=!card?"いま向き合える残り火がありません。":(game.characters.toyman.lastAction!=="exploring"?"トイマンが森で回収しているあいだだけ、言葉を渡せます。":(pv.mod.blocked?"トイマンが限界です。かなのケアが必要です。":(pv.cooldownMs>0?"いま言葉が届いたところ。あと "+cdSec+"秒、見守ってから渡せます。":"")));
   var intensity=getShadowIntensity(card);
   function doSubmit(){var r=p.onManualBattle&&p.onManualBattle("hold",selfAnswer);if(r)setResult(r);setSelfAnswer("");}
   function doRetreat(){var r=p.onManualBattle&&p.onManualBattle("retreat","");if(r)setResult(r);}
@@ -3314,6 +3321,7 @@ function BattleEncounterScreen(p){
         <button className="btn btn-p" disabled={disabled} onClick={doSubmit}>{selfAnswer.trim()?"言葉を渡して前へ進む":"言葉なしで前へ進む"}</button>
         <button className="btn btn-g battle-retreat-btn" onClick={doRetreat}>今日はここまでにする</button>
       </div>
+      {disabled&&disabledReason&&<p className="battle-disabled-reason">{disabledReason}</p>}
       {pv.cooldownMs>0&&<p className="battle-cd">次に向き合えるまで あと {cdSec} 秒</p>}
       <div className="battle-progress-row">
         <span>回収率</span><b>{pv.progress}%</b>
