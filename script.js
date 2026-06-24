@@ -4958,7 +4958,7 @@ function BurnConfirmModal(p){
       <div className="burn-sheet" onClick={function(e){e.stopPropagation();}}>
         <div className="burn-title">この受領証を、心へ返しますか</div>
         <div className="burn-receipt-name">「{r.title}」</div>
-        <p className="burn-desc">燃やすのは、消すことではありません。<br/>受け取りきったものを、自分の中へ戻す行為です。<br/>戻したあとは、この受領証の一覧からは消えます。<br/>もうこの世界では、見ることができなくなります。</p>
+        <p className="burn-desc">心へ返すのは、消すことではありません。<br/>受け取りきったものを、自分の中へ戻す行為です。<br/>戻したあとは、この受領証の一覧からは消えます。<br/>もうこの世界では、見ることができなくなります。</p>
         <p className="burn-confirm-q">それでもいいですか？</p>
         <div className="burn-actions">
           <button className="btn btn-g" onClick={p.onCancel}>まだ持っておく</button>
