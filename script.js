@@ -5706,7 +5706,6 @@ function EmberView(p){
   }
   return(<div className="scroll"><div className="ev-wrap">
     <p className="facility-desc">捨てなかった残り火を、置いておく場所。</p>
-    <JudgmentRoutePanel game={game} onOpenCreate={onOpenCreate}/><QuestionTicketPanel game={game}/>
     {hasAny&&<button className="ev-create-btn touchable" onClick={p.onJourney}>+ 残り火を預ける</button>}
     {hasAnyFires
       ? <JourneyShelf game={game} onOpen={p.onOpenFire}/>
@@ -5733,6 +5732,7 @@ function EmberView(p){
         <span className="legacy-toggle-icon">{legacyOpen?"▲":"▼"}</span>
       </button>
       {legacyOpen&&<div className="legacy-content">
+        <JudgmentRoutePanel game={game} onOpenCreate={onOpenCreate}/><QuestionTicketPanel game={game}/>
         {units.length>0&&<div className="ev-section">
           <div className="lh">旅の途中の残り火</div>
           {units.map(unitCard)}
