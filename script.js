@@ -766,9 +766,9 @@ function getUnlockedPlaceKeys(game){
 }
 function getVisibleTabs(game){
   if(!game)return[];
-  if(MVP_MODE){var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"peek",label:"箱庭"}];if((game.emberCards||[]).length>0||(game.receipts||[]).length>0)mvpT.push({id:"conv",label:"場面"});mvpT.push({id:"log",label:"ログ"});return mvpT;}
+  if(MVP_MODE){var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"peek",label:"箱庭"}];if((game.emberCards||[]).length>0||(game.receipts||[]).length>0)mvpT.push({id:"conv",label:"場面"});mvpT.push({id:"log",label:"記録塔"});return mvpT;}
   ensureProgressiveUnlockShell(game);
-  var tabs=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"ログ"}];
+  var tabs=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];
   if(game.unlocks.tabs.garden)tabs.push({id:"peek",label:"箱庭"});
   if(game.unlocks.tabs.conv)tabs.push({id:"conv",label:"場面"});
   return tabs.slice(0,5);
@@ -940,10 +940,10 @@ function makeJourneyGoals(game){
   var goals=[];
   if(fires.length===0){
     goals.push({id:"jg_first",icon:"🔥",done:false,type:"journey",
-      label:"火を預ける",
+      label:"残り火を預ける",
       what:"書いたあとに残ったものを、箱庭に預ける。",
-      rec:"行き先と同行者を選ぶと、火が旅に出ます。",
-      reward:"棚に、最初の火が灯る",
+      rec:"行き先と同行者を選ぶと、残り火が旅に出ます。",
+      reward:"棚に、最初の残り火が灯る",
       action:{screen:"journey",label:"預ける"}});
     return goals;
   }
@@ -960,34 +960,34 @@ function makeJourneyGoals(game){
   var resend=unlocked.filter(function(f){return f.form!=="certificate";});
   if(grad.length>0){
     goals.push({id:"jg_grad",icon:"🤲",done:false,type:"journey",
-      label:"火を、心へ返す",
-      what:grad.length>1?(grad.length+"つの火が、返せるところまで来ています。"):"返せるところまで来た火があります。",
-      rec:"棚で、その火を開いて「心へ返す」を選びます。",
-      reward:"火が、あなたの中へ戻る",
+      label:"残り火を、心へ返す",
+      what:grad.length>1?(grad.length+"つの残り火が、返せるところまで来ています。"):"返せるところまで来た残り火があります。",
+      rec:"棚で、その残り火を開いて「心へ返す」を選びます。",
+      reward:"残り火が、あなたの中へ戻る",
       action:{screen:"home",label:"棚を見る"}});
   }
   if(remeet.length>0){
     goals.push({id:"jg_remeet",icon:"🔁",done:false,type:"journey",
-      label:"棚の火に、もう一度会う",
-      what:"受領証になった火に会い直すと、心へ返せるようになります。",
+      label:"棚の残り火に、もう一度会う",
+      what:"受領証になった残り火に会い直すと、心へ返せるようになります。",
       rec:"棚で受領証を開いて、もう一度会いに行きます。",
-      reward:"火が、もう一層ぶん深くなる",
+      reward:"残り火が、もう一層ぶん深くなる",
       action:{screen:"home",label:"棚を見る"}});
   }
   if(resend.length>0&&goals.length<2){
     goals.push({id:"jg_resend",icon:"📮",done:false,type:"journey",
-      label:"置いた火を、送り出す",
-      what:"棚に置いたままの火を、もう一度旅に出せます。",
-      rec:"棚でその火を開いて、送り先を選びます。",
+      label:"棚の残り火を、送り出す",
+      what:"棚に置いたままの残り火を、もう一度旅に出せます。",
+      rec:"棚でその残り火を開いて、送り先を選びます。",
       reward:"置き札が、受領証に育つことがある",
       action:{screen:"home",label:"棚を見る"}});
   }
   /* 新しい火はいつでも預けられる */
   goals.push({id:"jg_more",icon:"🔥",done:false,type:"journey",
-    label:"新しい火を預ける",
+    label:"新しい残り火を預ける",
     what:"別の残り火を、箱庭に預けられます。",
     rec:"今日預けるだけでも、ちゃんと残ります。",
-    reward:"棚に、新しい火が灯る",
+    reward:"棚に、新しい残り火が灯る",
     action:{screen:"journey",label:"預ける"}});
   /* 今日できる行動が「預ける」しかない（手持ちは全部ロック中）なら、静かなdone行を先頭に */
   if(unlocked.length===0&&front.length>0){
@@ -3943,15 +3943,15 @@ function HomeView(p){
   // 今夜の声：状態に応じてキャラと台詞を切り替える
   var voiceChar,voiceLine,nightCta;
   if(canGraduateFires.length>0){
-    voiceChar="kana";voiceLine="返せるところまで来た火がある。";nightCta="shelf";
+    voiceChar="kana";voiceLine="返せるところまで来た残り火がある。棚を見て。";nightCta="shelf";
   }else if(canActFires.length>0){
-    voiceChar="toyman";voiceLine="届いた火がある。行き先は、あなたが決めていい。";nightCta="shelf";
+    voiceChar="toyman";voiceLine="残り火が、届いている。行き先は、あなたが決めていい。";nightCta="shelf";
   }else if(fires.length>0){
-    voiceChar="kana";voiceLine="今日はここに置いておく。日が変わったら、また会える。";nightCta=null;
+    voiceChar="kana";voiceLine="今日はここに置いておこう。日が変わったら、また会える。";nightCta=null;
   }else if(cards.length>0){
-    voiceChar="toyman";voiceLine="まだ落としてない。";nightCta=null;
+    voiceChar="toyman";voiceLine="まだ残っている。";nightCta=null;
   }else{
-    voiceChar="kana";voiceLine="今夜、何かを置いてみる？置くだけでいい。";nightCta=null;
+    voiceChar="kana";voiceLine="今夜、置くだけでもいい。ここに、ちゃんと残るよ。";nightCta=null;
   }
   function scrollToShelf(){var el=document.getElementById("home-shelf");if(el)el.scrollIntoView({behavior:"smooth"});}
   return <div className="scroll home-screen">
@@ -3965,11 +3965,11 @@ function HomeView(p){
       {nightCta==="shelf"&&<button className="btn btn-g hnv-cta" onClick={scrollToShelf}>棚を見る</button>}
     </section>
 
-    {/* 2. 火を預ける */}
+    {/* 2. 残り火を預ける */}
     <section className="home-card home-fire-entry">
-      <div className="lh">火を預ける</div>
-      <p className="hfe-desc">書いたあとに残ったものを、箱庭に預けます。行き先と同行者を選んで、火を旅に出せます。</p>
-      <button className="btn btn-p hfe-main" onClick={function(){p.onJourney&&p.onJourney();}}>火を預ける</button>
+      <div className="lh">残り火を預ける</div>
+      <p className="hfe-desc">書いたあとに残ったものを、箱庭に預けます。行き先と同行者を選んで、残り火を旅に出せます。</p>
+      <button className="btn btn-p hfe-main" onClick={function(){p.onJourney&&p.onJourney();}}>残り火を預ける</button>
       {todayBadNight
         ?<div className="hfe-received">
           <div className="hfe-rcv-chars">
@@ -4346,7 +4346,7 @@ function EmberJourney(p){
     <div className="sh-handle"/>
 
     {phase==="deposit"&&<div className="ej-in">
-      <p className="ej-kicker">火を送り出す</p>
+      <p className="ej-kicker">残り火を送り出す</p>
       <h2 className="ej-title">残り火を、預ける</h2>
       <label className="ej-field"><span>火種 ── 書いたあとに残ったもの</span>
         <textarea rows={3} value={kindle} placeholder="例：もう誰にも読まれないなら、書く意味がない" onChange={function(e){setKindle(e.target.value);}}/>
@@ -4471,7 +4471,7 @@ function JourneyShelf(p){
   var returnedShown=showAllReturned?returned:returned.slice(0,RET_CAP);
   return <section className="home-card jshelf">
     <div className="lh">残り火の棚</div>
-    <p className="jshelf-sub">ここに灯っている火：{front.length}つ。捨てなかったもの。</p>
+    <p className="jshelf-sub">棚に残っている残り火：{front.length}つ。捨てなかったもの。</p>
     <div className="jshelf-list">{frontShown.map(card)}</div>
     {front.length>FRONT_CAP&&<button className="jshelf-more-btn" onClick={function(){setShowAllFront(function(v){return !v;});}}>{showAllFront?"とじる":"もっと見る（残り "+(front.length-FRONT_CAP)+"つ）"}</button>}
 
@@ -4730,7 +4730,7 @@ function App(){
         <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onBadNight={function(){var today=nowISO().slice(0,10);var already=(game.emberCards||[]).find(function(c){return c.mode==="bad_night"&&c.createdAt&&c.createdAt.slice(0,10)===today;});if(already){showToast("今夜の気持ちは、すでに受け取りました。");return;}setShowBadNight(true);}} onJourney={function(){setShowJourney(true);}} onOpenFire={function(id){setFireDetailId(id);}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}} onShowGlossary={function(){setShowGlossary(true);}}/>
       </>}
       {screen==="log"&&<>
-        <Header title="記録" day={game.world.day}/>
+        <Header title="記録塔" day={game.world.day}/>
         <LogView digest={digest} goals={game.dailyGoals?game.dailyGoals.goals:[]} game={game} onNav={navigateTo} onQuick={quickGoalAction} onJourney={function(){setShowJourney(true);}} setGame={function(ns){setGame(ns);persistSave(ns);}}/>
         <div className="actions"><button className="btn btn-g" onClick={closeWorld}>閉じる</button></div>
         <DevPanel open={devOpen} onToggle={function(){setDevOpen(function(v){return !v;});}} onAdvance={advTime} onReset={resetWorld}/>
@@ -5146,7 +5146,7 @@ function GoalsPanel(p){
   var hasEmber=game&&(game.emberCards||[]).length>0;
   var oldGoals=hasEmber?(goals||[]).filter(function(g){return g.type!=="idle";}):[];
   if(!jgoals.length&&!oldGoals.length)return null;
-  return <div className="goals-panel"><div className="lh">今日できること</div>
+  return <div className="goals-panel"><div className="lh">今夜、できること</div>
     {jgoals.map(function(g){return <QuestCard key={g.id} goal={g} onNav={onNav} onQuick={onQuick} onJourney={onJourney}/>;})}
     {oldGoals.map(function(g){return <QuestCard key={g.id} goal={enrichGoal(g,game)} onNav={onNav} onQuick={onQuick} onJourney={onJourney}/>;})}
   </div>;
