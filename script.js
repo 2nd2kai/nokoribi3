@@ -3798,146 +3798,152 @@ function GlossaryModal(p){
 function HomeView(p){
   var game=p.game;
   var [showGlossary,setShowGlossary]=useState(false);
+  var [okuOpen,setOkuOpen]=useState(false);
   var cards=game.emberCards||[];
+  var fires=game.sentFires||[];
   var active=cards.find(function(c){return c.status!=="ready"&&c.status!=="awaiting";})||cards[0]||null;
-  var ready=cards.find(function(c){return c.status==="ready";});
   var openPlaces=getUnlockedPlaceKeys(game).filter(function(k){return game.unlocks&&game.unlocks.places&&game.unlocks.places[k];});
   var next=getNextAction(game);
   var philQ=getPhilosophicalQuestion(game);
   var isExploringNow=active&&active.unitState==="exploring";
-  var nextText=ready?"受け取れる残り火があります。":active?"「"+makeEmberTitle(active)+"」を見守っています。":"まずは、ひとつだけ置いてみてください。";
+  var frontFires=fires.filter(function(f){return !f.returnedAt&&!f.shelved;});
+  var canActFires=frontFires.filter(function(f){return !jLockedToday(f);});
+  var canGraduateFires=canActFires.filter(function(f){return f.form==="certificate"&&(f.meetings||[]).length>=2;});
+  // 今夜の声：状態に応じてキャラと台詞を切り替える
+  var voiceChar,voiceLine,nightCta;
+  if(canGraduateFires.length>0){
+    voiceChar="kana";voiceLine="返せるところまで来た火がある。";nightCta="shelf";
+  }else if(canActFires.length>0){
+    voiceChar="toyman";voiceLine="届いた火がある。行き先は、あなたが決めていい。";nightCta="shelf";
+  }else if(fires.length>0){
+    voiceChar="kana";voiceLine="今日はここに置いておく。日が変わったら、また会える。";nightCta=null;
+  }else if(cards.length>0){
+    voiceChar="toyman";voiceLine="まだ落としてない。";nightCta=null;
+  }else{
+    voiceChar="kana";voiceLine="今夜、何かを置いてみる？置くだけでいい。";nightCta=null;
+  }
+  function scrollToShelf(){var el=document.getElementById("home-shelf");if(el)el.scrollIntoView({behavior:"smooth"});}
   return <div className="scroll home-screen">
     {showGlossary&&<GlossaryModal onClose={function(){setShowGlossary(false);}}/>}
-    <section className="home-hero">
-      {cards.length===0&&(game.receipts||[]).length===0&&<div className="home-firstguide">
-        <div className="hfg-line"><span className="isc-dot cd-toyman hfg-dot"/><span>トイマン：「置かれたら、迎えに行く」</span></div>
-        <p>「残り火」は、書いたあとに何かが残ったときに預ける場所です。<br/>まず「残り火を置く」を押してみてください。</p>
+
+    {/* 1. 今夜の声 */}
+    <section className="home-night-voice">
+      <div className="hnv-line">
+        <span className={"isc-dot cd-"+voiceChar+" hnv-dot"}/>
+        <span className="hnv-name">{voiceChar==="kana"?"かな":"トイマン"}</span>
+        <span className="hnv-say">「{voiceLine}」</span>
+      </div>
+      {nightCta==="shelf"&&<button className="btn btn-g hnv-cta" onClick={scrollToShelf}>棚を見る</button>}
+    </section>
+
+    {/* 2. 火を預ける */}
+    <section className="home-card home-fire-entry">
+      <div className="lh">火を預ける</div>
+      <p className="hfe-desc">書いたあとに残ったものを、箱庭に預けます。行き先と同行者を選んで、火を旅に出せます。</p>
+      <button className="btn btn-p hfe-main" onClick={function(){p.onJourney&&p.onJourney();}}>火を預ける</button>
+      <button className="btn btn-g hfe-sub" onClick={function(){p.onBadNight&&p.onBadNight();}}>今夜は、判決を保留する</button>
+    </section>
+
+    {/* 3. 棚 */}
+    <div id="home-shelf">
+      <JourneyShelf game={game} onOpen={function(id){p.onOpenFire&&p.onOpenFire(id);}}/>
+    </div>
+
+    {/* 4. 灯貨ミニ */}
+    {(game.toka&&game.toka.total>0)&&<div className="home-toka-mini">
+      <span className="htm-label">灯貨</span>
+      <span className="htm-count">{game.toka.total}</span>
+      <span className="htm-note">捨てなかった火の記録。まだ使い道はありません。</span>
+    </div>}
+
+    {/* 5. 箱庭の奥 */}
+    <section className="home-oku">
+      <button className="home-oku-toggle" onClick={function(){setOkuOpen(function(v){return !v;});}}>
+        <span className="home-oku-icon">{okuOpen?"▲":"▼"}</span>
+        <span className="home-oku-label">箱庭の奥</span>
+        <span className="home-oku-sub">以前の記録や、開いた場所を見る</span>
+      </button>
+      {okuOpen&&<div className="home-oku-inner">
+        {p.utsuroEvent&&<section className="home-card home-utsuro-event" onClick={p.onUtsuroFound}>
+          <div className="lh">うつろより</div>
+          <div className="uev-line"><span className="isc-dot cd-utsuro uev-dot"/><p className="uev-say">「一通、見当たらない……」</p></div>
+          <p className="uev-hint">タップして探す</p>
+        </section>}
+        {p.kotaeStuck&&<section className="home-card home-kotae-stuck" onClick={p.onKotaeResume}>
+          <div className="lh">コタエより</div>
+          <div className="uev-line"><span className="isc-dot cd-kotae uev-dot"/><p className="uev-say">「……これは、すぐには記録できない」</p></div>
+          <p className="uev-hint">タップして続ける</p>
+        </section>}
+        {active&&<section className="home-card">
+          <div className="lh">いま動いている残り火</div>
+          <div className="home-fire-title">「{makeEmberTitle(active)}」</div>
+          <DeliveredWordsBox card={active} compact={true}/>
+          <div className="home-fire-foot">{getEmberUnitLabel(active)} / {Math.round(active.progress||0)}%</div>
+          {(active.status==="awaiting"||active.unitState==="waiting")&&<div className="home-depart-box">
+            <div className="hdb-title">出発待ち</div>
+            <p>出発させることで、トイマンがあなたの「{makeEmberTitle(active)}」を探しに行きます。見つけるのは答えではなく、問いの欠片です。</p>
+            <button className={"btn btn-p touchable"+(next&&next.action==="depart"?" btn-next-action":"")} onClick={function(){p.onDepart&&p.onDepart(active.id);}}>トイマンを未受領の森に出発させる</button>
+          </div>}
+        </section>}
+        {isExploringNow&&<section className="home-card home-send-card">
+          <div className="lh">トイマンへ送る</div>
+          <p className="home-send-note">探索中のトイマンに、何かを届けられます。</p>
+          <button className="btn btn-g home-send-btn" onClick={function(){p.onSendGift&&p.onSendGift();}}>送る</button>
+        </section>}
+        {cards.length>=3&&<section className="home-card">
+          <div className="home-char-lines">
+            <div className="home-char-line"><div className="home-cv-namerow"><span className="isc-dot cd-kana home-cv-dot"/><span className="home-cv-name">かな</span></div><span className="home-cv-say">「たくさん、預けてくれてるね。……全部、ちゃんと感じてる」</span></div>
+          </div>
+        </section>}
+        <section className="home-card home-q-card" onClick={p.onPhilAnswer} style={{cursor:"pointer"}}>
+          <div className="lh">今の問い <span className="home-q-depth">深度 {philQ.depth}</span></div>
+          <p className="home-q-text">「{philQ.text}」</p>
+          <p className="home-q-note">{(game.questionAnswers||[]).length>0?"答えると、問いはさらに深くなる。":"答えなくても、世界は進む。答えれば、問いが深まる。"}</p>
+        </section>
+        {(function(){
+          var rs=game.receipts||[];if(rs.length===0)return null;
+          var top=rs[0],topStage=getReceiptCherishStage(rs[0],game);
+          rs.forEach(function(r){var st=getReceiptCherishStage(r,game);if(st>topStage){topStage=st;top=r;}});
+          var ins=getEmberInsight(top,game);
+          return <section className="home-card home-cherish-card" onClick={function(){p.onNav&&p.onNav("ember");}} style={{cursor:"pointer"}}>
+            <div className="lh">大切にされている残り火 <span className="home-cherish-tag">{ins.label}</span></div>
+            <div className="home-fire-title">「{top.title}」</div>
+            <p className="home-cherish-line">{ins.text}</p>
+            <span className="home-cherish-dots">{[0,1,2,3,4].map(function(i){return <span key={i} className={"ec-dot"+(i<=ins.stage?" ec-dot-on":"")}/>;})}</span>
+          </section>;
+        })()}
+        {(function(){
+          var pending=(game.emberCards||[]).find(function(c){return c.mode==="bad_night"&&(c.unitState==="waiting"||c.status==="awaiting");});
+          if(!pending)return null;
+          return <section className="home-card bad-night-pending">
+            <div className="lh">保留中の判決</div>
+            <div className="bnp-char"><span className="isc-dot cd-auditor"/><span className="bnp-say">審査官：「受理しない。保留だ。」</span></div>
+            <div className="bnp-judgment">判決：「{pending.judgmentText||pending.memo}」</div>
+            <div className="bnp-question">問い：「{pending.question}」</div>
+            <p className="bnp-note">今夜の判決は、まだ正式決定ではありません。</p>
+            <button className="btn btn-g" onClick={function(){p.onNav&&p.onNav("ember");}}>この問いを見る</button>
+          </section>;
+        })()}
+        <section className="home-card"><div className="lh">開いた場所</div>
+          {openPlaces.length>0
+            ?<div className="home-place-list">{openPlaces.map(function(k){return <button key={k} className="home-place" onClick={function(){p.onOpenPlace&&p.onOpenPlace(k);}}><b>{PNAME[k]||PSHORT[k]}</b><span>{getPlaceUnlockReason(k)}</span></button>;})}</div>
+            :<div className="closed-place-note">まだ閉じている場所があります。残り火を預けることで、少しずつ開きます。</div>}
+        </section>
+        <ClosedPlacesPreview game={game}/>
+        <div className="home-oku-foot">
+          <button className="glossary-btn" onClick={function(){setShowGlossary(true);}}>？ 用語集</button>
+        </div>
       </div>}
-      <div className="home-hero-top">
-        <div className="home-kicker">今日のひとつ</div>
-        <button className="glossary-btn" onClick={function(){setShowGlossary(true);}}>？ 用語</button>
-      </div>
-      <h2>{nextText}</h2>
-      {!active&&!ready&&<p>ここは、書いたあとに残ってしまったものを、なかったことにしないための場所です。</p>}
-      {active&&<p>箱庭は、この残り火を消さずに扱っています。急がなくていい。まず、届いていることを確認します。</p>}
-      <div className="home-actions">
-        {!active&&!ready&&<button className={"btn btn-p"+(next&&next.action==="create"?" btn-next-action":"")} onClick={p.onCreate}>残り火を置く</button>}
-        {(active||ready)&&<button className={"btn btn-p"+(next&&next.screen==="ember"?" btn-next-action":"")} onClick={function(){p.onNav&&p.onNav("ember");}}>残り火を見る</button>}
-        {openPlaces.length>0&&<button className="btn btn-g" onClick={function(){p.onNav&&p.onNav("peek");}}>箱庭を見る</button>}
-      </div>
     </section>
-    {active&&<section className="home-card"><div className="lh">いま動いている残り火</div><div className="home-fire-title">「{makeEmberTitle(active)}」</div><DeliveredWordsBox card={active} compact={true}/><div className="home-fire-foot">{getEmberUnitLabel(active)} / {Math.round(active.progress||0)}%</div>{(active.status==="awaiting"||active.unitState==="waiting")&&<div className="home-depart-box"><div className="hdb-title">出発待ち</div><p>出発させることで、トイマンがあなたの「{makeEmberTitle(active)}」を探しに行きます。見つけるのは答えではなく、問いの欠片です。</p><button className={"btn btn-p touchable"+(next&&next.action==="depart"?" btn-next-action":"")} onClick={function(){p.onDepart&&p.onDepart(active.id);}}>トイマンを未受領の森に出発させる</button></div>}</section>}
-    <section className="home-card home-char-voice-card">{(function(){
-      if(!active)return <><div className="lh">トイマンのひとこと</div><p className="home-line">「置かれたら、拾いに行く」</p></>;
-      var p=active.progress||0;
-      var isExploring=active.unitState==="exploring";
-      var isWaiting=active.status==="awaiting"||active.unitState==="waiting";
-      var isReady=active.status==="ready";
-      if(isReady)return <><div className="lh">トイマンのひとこと</div>
-        <div className="home-char-lines">
-          <div className="home-char-line"><div className="home-cv-namerow"><span className="isc-dot cd-toyman home-cv-dot"/><span className="home-cv-name">トイマン</span></div><span className="home-cv-say">「全部、持ち帰った」</span></div>
-          <div className="home-char-line"><div className="home-cv-namerow"><span className="isc-dot cd-kana home-cv-dot"/><span className="home-cv-name">かな</span></div><span className="home-cv-say">「受け取れるよ。今」</span></div>
-        </div></>;
-      if(isWaiting)return <><div className="lh">トイマンのひとこと</div>
-        <div className="home-char-lines">
-          <div className="home-char-line"><div className="home-cv-namerow"><span className="isc-dot cd-toyman home-cv-dot"/><span className="home-cv-name">トイマン</span></div><span className="home-cv-say">「出発の準備ができている」</span></div>
-          <div className="home-char-line"><div className="home-cv-namerow"><span className="isc-dot cd-toyman home-cv-dot"/><span className="home-cv-name">トイマン</span></div><span className="home-cv-say">「いつでも行ける」</span></div>
-        </div></>;
-      if(isExploring){var sc=getEmberExploreScene(active);var sl=sc.slice(0,2);return <><div className="lh">箱庭の今</div>
-        <div className="home-char-lines">
-          {sl.map(function(L,i){return <div key={i} className="home-char-line"><div className="home-cv-namerow"><span className={"isc-dot cd-"+L.s+" home-cv-dot"}/><span className="home-cv-name">{NAMES[L.s]||L.s}</span></div><span className="home-cv-say">「{L.t}」</span></div>;})}
-        </div></>;
-      }
-      return <><div className="lh">トイマンのひとこと</div><p className="home-line">「まだ落としてない」</p></>;
-    })()}</section>
-    {p.utsuroEvent&&<section className="home-card home-utsuro-event" onClick={p.onUtsuroFound}>
-      <div className="lh">うつろより</div>
-      <div className="uev-line"><span className="isc-dot cd-utsuro uev-dot"/>
-        <p className="uev-say">「一通、見当たらない……」</p></div>
-      <p className="uev-hint">タップして探す</p>
-    </section>}
-    {p.kotaeStuck&&<section className="home-card home-kotae-stuck" onClick={p.onKotaeResume}>
-      <div className="lh">コタエより</div>
-      <div className="uev-line"><span className="isc-dot cd-kotae uev-dot"/>
-        <p className="uev-say">「……これは、すぐには記録できない」</p></div>
-      <p className="uev-hint">タップして続ける</p>
-    </section>}
-    <section className="home-card home-q-card" onClick={p.onPhilAnswer} style={{cursor:"pointer"}}>
-      <div className="lh">今の問い <span className="home-q-depth">深度 {philQ.depth}</span></div>
-      <p className="home-q-text">「{philQ.text}」</p>
-      <p className="home-q-note">{(game.questionAnswers||[]).length>0?"答えると、問いはさらに深くなる。":"答えなくても、世界は進む。答えれば、問いが深まる。"}</p>
-    </section>
-    {(function(){
-      var rs=game.receipts||[];
-      if(rs.length===0)return null;
-      /* 最も深く汲み取られた残り火（同率なら最新）を、ホームの前面に */
-      var top=rs[0],topStage=getReceiptCherishStage(rs[0],game);
-      rs.forEach(function(r){var st=getReceiptCherishStage(r,game);if(st>topStage){topStage=st;top=r;}});
-      var ins=getEmberInsight(top,game);
-      return <section className="home-card home-cherish-card" onClick={function(){p.onNav&&p.onNav("ember");}} style={{cursor:"pointer"}}>
-        <div className="lh">大切にされている残り火 <span className="home-cherish-tag">{ins.label}</span></div>
-        <div className="home-fire-title">「{top.title}」</div>
-        <p className="home-cherish-line">{ins.text}</p>
-        <span className="home-cherish-dots">{[0,1,2,3,4].map(function(i){return <span key={i} className={"ec-dot"+(i<=ins.stage?" ec-dot-on":"")}/>;})}</span>
-      </section>;
-    })()}
-    {isExploringNow&&<section className="home-card home-send-card">
-      <div className="lh">トイマンへ送る</div>
-      <p className="home-send-note">探索中のトイマンに、何かを届けられます。</p>
-      <button className="btn btn-g home-send-btn" onClick={function(){p.onSendGift&&p.onSendGift();}}>送る</button>
-    </section>}
-    {cards.length>=3&&<section className="home-card">
-      <div className="home-char-lines">
-        <div className="home-char-line"><div className="home-cv-namerow"><span className="isc-dot cd-kana home-cv-dot"/><span className="home-cv-name">かな</span></div><span className="home-cv-say">「たくさん、預けてくれてるね。……全部、ちゃんと感じてる」</span></div>
-      </div>
-    </section>}
-    <section className="home-card"><div className="lh">開いた場所</div>{openPlaces.length>0?<div className="home-place-list">{openPlaces.map(function(k){return <button key={k} className="home-place" onClick={function(){p.onOpenPlace&&p.onOpenPlace(k);}}><b>{PNAME[k]||PSHORT[k]}</b><span>{getPlaceUnlockReason(k)}</span></button>;})}</div>:<div className="closed-place-note">まだ閉じている場所があります。残り火を預けることで、少しずつ開きます。</div>}</section>
-    <ClosedPlacesPreview game={game}/>
-    {(function(){
-      var pending=(game.emberCards||[]).find(function(c){return c.mode==="bad_night"&&(c.unitState==="waiting"||c.status==="awaiting");});
-      if(!pending)return null;
-      return <section className="home-card bad-night-pending">
-        <div className="lh">保留中の判決</div>
-        <div className="bnp-char"><span className="isc-dot cd-auditor"/><span className="bnp-say">審査官：「受理しない。保留だ。」</span></div>
-        <div className="bnp-judgment">判決：「{pending.judgmentText||pending.memo}」</div>
-        <div className="bnp-question">問い：「{pending.question}」</div>
-        <p className="bnp-note">今夜の判決は、まだ正式決定ではありません。</p>
-        <button className="btn btn-g" onClick={function(){p.onNav&&p.onNav("ember");}}>この問いを見る</button>
-      </section>;
-    })()}
-    <section className="home-card journey-entry">
-      <div className="lh">火を送り出す</div>
-      <h3 className="bne-title">どこへ送り、誰と会わせるか</h3>
-      <p className="bne-desc">残り火を旅に出す。送り先で問いの種類が、同行者で問いの声が変わる。帰ってきた問いに、会う。</p>
-      <button className="btn btn-p" onClick={function(){p.onJourney&&p.onJourney();}}>残り火を送り出す</button>
-    </section>
-    <JourneyShelf game={game} onOpen={function(id){p.onOpenFire&&p.onOpenFire(id);}}/>
-    <section className="home-card bad-night-entry">
-      <div className="lh">判決保留</div>
-      <h3 className="bne-title">書くのをやめようとしている、あなたへ</h3>
-      <p className="bne-desc">心が沈んでいるとき、結論を出さないための場所へ行けます。判決は、今夜受理しません。</p>
-      <button className="btn btn-g" onClick={function(){p.onBadNight&&p.onBadNight();}}>今夜の判決を保留する</button>
-    </section>
+
+    {/* 6. 今日はここまで */}
     <section className="home-card home-today-end-section">
       <div className="lh">今日はここまで</div>
       <p>無理に続けなくていい。今日見た分は、ちゃんと残ります。</p>
       <button className="btn btn-g home-today-btn" onClick={function(){p.onTodayEnd&&p.onTodayEnd();}}>今日はここで閉じる</button>
     </section>
-    {(game.toka&&game.toka.total>0)&&<div className="home-toka-card">
-      <div className="htc-top">
-        <div className="htc-label">灯貨</div>
-        <div className="htc-count">{game.toka.total}<span className="htc-unit">枚</span></div>
-        <div className="htc-tagline">捨てなかった証</div>
-      </div>
-      <div className="htc-uses">
-        <div className="htc-uses-label">灯貨はまだ使いません</div>
-        <p className="htc-uses-note">これは「捨てなかった」という記録です。使い道は、棚が落ち着いてから増えていきます。</p>
-      </div>
-      {game.toka.log&&game.toka.log[0]&&<div className="htc-latest">
-        <span className="htc-latest-label">直近の発行</span>
-        <span className="htc-latest-text">{game.toka.log[0].reason}</span>
-      </div>}
-    </div>}
+
+    {/* 7. バージョン */}
     <div className="home-version">残り火の箱庭</div>
   </div>;
 }
