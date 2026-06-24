@@ -3883,15 +3883,44 @@ var GLOSSARY=[
 function GlossaryModal(p){
   return <div className="ov" onClick={p.onClose}><div className="bsh glossary-modal" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
-    <div className="glossary-title">用語について</div>
-    <p className="glossary-sub">このゲームで使われる言葉の意味です。</p>
-    <div className="glossary-list">
-      {GLOSSARY.map(function(g){return(
-        <div key={g.term} className="glossary-item">
-          <div className="glossary-term">{g.term}<span className="glossary-read">（{g.read}）</span></div>
-          <p className="glossary-desc">{g.desc}</p>
-        </div>
-      );})}
+    <div className="glossary-title">この世界について</div>
+    <div className="glossary-body">
+
+      <div className="gls-section">
+        <p className="gls-lead">ここは、心の内側にある小さな箱庭です。</p>
+        <p className="gls-p">書いたあとに残ったもの。言葉にならなかった痛み。捨てたつもりでも、まだ消えなかった問い。そういうものは、この世界では「火」として残ります。</p>
+        <p className="gls-p">火は、すぐに答えにしなくていい。すぐに意味にしなくていい。ここでは、ただ預けることができます。</p>
+      </div>
+
+      <div className="gls-section">
+        <div className="gls-h">火とは</div>
+        <p className="gls-p">書いたあとにまだ消えなかったもの。読まれなかった言葉、届かなかった気持ち、捨てきれなかった問い。それが「残り火」です。</p>
+        <p className="gls-p">火は預けることができます。預けた火には行き先と同行者を選んで、旅に出すことができます。帰ってきた火には問い札がついています。受け取った火は受領証になります。いつか準備ができたら、心へ返すことができます。</p>
+      </div>
+
+      <div className="gls-section">
+        <div className="gls-h">この世界にある場所</div>
+        <div className="gls-place"><span className="gls-place-name">未受領の森</span><span className="gls-place-desc">まだ受け取れなかった火が迷い込む森。トイマンはここで、火の奥に残った問いを探します。</span></div>
+        <div className="gls-place"><span className="gls-place-name">涙の泉</span><span className="gls-place-desc">名前のつかない気持ちが沈む泉。かなはここで、悲しみや寂しさを急がず分けます。</span></div>
+        <div className="gls-place"><span className="gls-place-name">棚</span><span className="gls-place-desc">捨てなかった火が並ぶ場所。受領証、置き札、預かり札がここに残ります。</span></div>
+        <div className="gls-place"><span className="gls-place-name">記録塔</span><span className="gls-place-desc">「これは確かにあった」と記録する場所。コタエが受領証を残します。</span></div>
+        <div className="gls-place"><span className="gls-place-name">心へ返した火</span><span className="gls-place-desc">もう棚に置かなくてもいい火。消えたのではなく、受け取ったものとして心へ戻った火。</span></div>
+      </div>
+
+      <div className="gls-section">
+        <div className="gls-h">住人たち</div>
+        <div className="gls-char"><span className="isc-dot cd-toyman"/><span className="gls-char-name">トイマン</span><span className="gls-char-desc">残っている火を探しに行きます。答えは持ち帰らない。問いの欠片だけを拾って戻ってきます。</span></div>
+        <div className="gls-char"><span className="isc-dot cd-kana"/><span className="gls-char-name">かな</span><span className="gls-char-desc">言葉にならない気持ちのそばに座ります。急かさず、分類せず、ただそばにいます。</span></div>
+        <div className="gls-char"><span className="isc-dot cd-utsuro"/><span className="gls-char-name">うつろ</span><span className="gls-char-desc">終わったもののあとに残ったものを見ています。なくなったものの輪郭を、静かに覚えています。</span></div>
+        <div className="gls-char"><span className="isc-dot cd-kotae"/><span className="gls-char-name">コタエ</span><span className="gls-char-desc">それが確かにあったことを記録します。受領証を残し、「あった」という証明を作ります。</span></div>
+        <div className="gls-char"><span className="isc-dot cd-auditor"/><span className="gls-char-name">審査官</span><span className="gls-char-desc">今夜の判決を保留します。答えを急がせない。「今夜は受理しない」と言い続けます。</span></div>
+      </div>
+
+      <div className="gls-section gls-closing">
+        <p className="gls-close-p">ここは、答えを急がせる場所ではありません。</p>
+        <p className="gls-close-p">捨てなかったものに、もう一度会うための場所です。</p>
+      </div>
+
     </div>
     <button className="btn btn-g" style={{width:"100%",marginTop:16}} onClick={p.onClose}>閉じる</button>
   </div></div>;
