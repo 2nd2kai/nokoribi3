@@ -4240,7 +4240,7 @@ function jCertVoice(comp,destId){
   };
   return (tbl[comp]&&tbl[comp][destId])||jVoiceLine(comp);
 }
-function jTitleOf(fire){var k=(fire.kindle||"").trim();return k.length>22?k.slice(0,22)+"…":(k||"名もない火");}
+function jTitleOf(fire){if(fire.form==="azukari")return fire.label||"今夜の預かり札";var k=(fire.kindle||"").trim();return k.length>22?k.slice(0,22)+"…":(k||"名もない火");}
 function appendEventLog(ns,text,kind){ns.eventLog=[{text:text,kind:kind||"record",at:nowISO()}].concat(ns.eventLog||[]).slice(0,150);}
 function jCalDay(iso){var d=iso?new Date(iso):new Date();return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();}
 function jLockedToday(fire){if(!fire||!fire.lastTouch)return false;return jCalDay(fire.lastTouch)===jCalDay();}
