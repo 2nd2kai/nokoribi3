@@ -3175,7 +3175,7 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
    ───────────────────────────── */
 
 .care-center-ov .care-pop{
-  transform:translateY(-5.2cm) !important;
+  transform:none;
 }
 .sc-bub{
   transform:translateY(-10px);
@@ -3195,11 +3195,6 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 }
 .ev-unit-progress{
   box-shadow:inset 0 0 0 1px rgba(219,164,94,.04);
-}
-@media(max-width:759px){
-  .care-center-ov .care-pop{
-    transform:translateY(-2.8cm) !important;
-  }
 }
 
 
@@ -3945,7 +3940,7 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 /* リッチ手紙結果パネル */
 .lrp-rich{cursor:pointer;transition:opacity .2s}
 .lrp-rich:hover{opacity:.85}
-.lrp-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:flex-start;justify-content:center;padding-top:12px;z-index:60;cursor:pointer}
+.lrp-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;padding:16px;z-index:60;cursor:pointer}
 .lrp-overlay-inner{background:rgba(22,20,30,.94);border:1px solid rgba(219,164,94,.38);border-radius:14px;padding:16px 16px 13px;max-width:320px;width:calc(100% - 32px);display:flex;flex-direction:column;gap:7px;animation:ti .2s ease;cursor:default}
 .lrp-overlay-title{font-family:var(--serif);font-size:14.5px;font-weight:600;color:var(--ember2);line-height:1.5}
 .lrp-overlay-route{font-family:var(--serif);font-size:12.5px;color:var(--p);line-height:1.6}
@@ -4566,3 +4561,6 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .hfe-rcv-msg{margin:0;font-family:var(--serif);font-size:13.5px;color:var(--ember2);line-height:1.7;text-align:center;padding-top:10px;border-top:1px solid rgba(219,164,94,.15)}
 .hfe-rcv-sub{margin:8px 0 0;font-family:var(--serif);font-size:12.5px;color:var(--faint);line-height:1.75;text-align:center}
 .evlog-badnight .evlog-text{color:var(--prot)}
+
+/* いいえ押下後のインライントースト */
+.hfe-no-toast{display:flex;align-items:center;gap:7px;margin-top:10px;padding:10px 13px;background:rgba(219,164,94,.07);border:1px solid rgba(219,164,94,.2);border-radius:10px;font-family:var(--serif);font-size:13px;color:var(--ember2);line-height:1.6;animation:ti .18s ease}

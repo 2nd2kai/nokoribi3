@@ -3928,6 +3928,7 @@ function GlossaryModal(p){
 function HomeView(p){
   var game=p.game;
   var [okuOpen,setOkuOpen]=useState(false);
+  var [noToast,setNoToast]=useState(false);
   var cards=game.emberCards||[];
   var fires=game.sentFires||[];
   var todayBadNight=(cards).find(function(c){return c.mode==="bad_night"&&c.createdAt&&c.createdAt.slice(0,10)===nowISO().slice(0,10);});
@@ -3982,8 +3983,9 @@ function HomeView(p){
           <span className="hfe-yn-q">書くのをやめようと思っていますか？</span>
           <div className="hfe-yn-btns">
             <button className="btn hfe-yn-yes" onClick={function(){p.onBadNight&&p.onBadNight();}}>はい</button>
-            <button className="btn hfe-yn-no" onClick={function(){p.onJourney&&p.onJourney();}}>いいえ</button>
+            <button className="btn hfe-yn-no" onClick={function(){setNoToast(true);setTimeout(function(){setNoToast(false);p.onJourney&&p.onJourney();},1400);}}>いいえ</button>
           </div>
+          {noToast&&<div className="hfe-no-toast"><span className="isc-dot cd-toyman"/>トイマン：「残り火を、預けてみましょう。」</div>}
         </div>
       }
     </section>
@@ -4075,7 +4077,7 @@ function HomeView(p){
         </section>
         <ClosedPlacesPreview game={game}/>
         <div className="home-oku-foot">
-          <button className="glossary-btn" onClick={function(){p.onShowGlossary&&p.onShowGlossary();}}>？ 用語集</button>
+          <button className="glossary-btn" onClick={function(){p.onShowGlossary&&p.onShowGlossary();}}>この世界について</button>
         </div>
       </div>}
     </section>
@@ -5805,19 +5807,47 @@ function ReceiptCard(p){
 }
 function buildGeminiPrompt(receipt){
   var lines=[];
-  lines.push("# 残り火の受領証 — 深層読解プロンプト");
+  lines.push("# 残り火の受領証 — 読解プロンプト");
   lines.push("");
-  lines.push("以下は、ある人が「残り火の箱庭」というアプリで預けた感情の記録です。");
-  lines.push("この人の内側にあったものを、階層立てて丁寧に読み解いてください。");
+  lines.push("あなたは「残り火の箱庭」の記録係です。");
+  lines.push("ユーザーが預けた火を、一般的な慰め文にせず、その人の言葉に即して読み取ってください。");
   lines.push("");
-  lines.push("## お願いしたいこと");
-  lines.push("- アドバイスや評価はしないでください");
-  lines.push("- 「あなたは〇〇だ」と断定せず、「〜だったのかもしれない」「〜があったように見える」という寄り添う文体で書いてください");
-  lines.push("- 以下の4つの視点で分けて書いてください：");
-  lines.push("  1. **この火の中にあったもの** — 感情の核にあったものは何か");
-  lines.push("  2. **本当はどうしたかったのか** — 表には出なかった願いや期待");
-  lines.push("  3. **問いを持ち歩いた意味** — この人が問いと向き合うことで何が動いたか");
-  lines.push("  4. **今日のこの人へ** — 判決を下さず、ただそばにいる一言");
+  lines.push("## 目的");
+  lines.push("やさしく励ますことではありません。");
+  lines.push("この火の中にあった「痛み」「恐れ」「守りたかったもの」「まだ捨てられなかった理由」を、できるだけ具体的に返すことです。");
+  lines.push("");
+  lines.push("## 禁止");
+  lines.push("- 汎用的な慰めを書かない");
+  lines.push("- 「寄り添う」「ぬくもり」「共鳴」「胸の奥」「静かに」「優しく」「切なさ」「純粋な願い」「大切な感情」を使わない");
+  lines.push("- 「かもしれません」「ように見えます」「ではないでしょうか」を連発しない");
+  lines.push("- ユーザーの言葉を薄めて言い換えない");
+  lines.push("- きれいにまとめすぎない");
+  lines.push("");
+  lines.push("## 必須");
+  lines.push("- ユーザーの原文を最低1回引用する");
+  lines.push("- 表面の感情だけでなく、その奥の恐れを1つ提示する");
+  lines.push("- 「本当は何を守りたかったのか」を書く");
+  lines.push("- 最後に短い受領文を1つ置く");
+  lines.push("- 断定しすぎず、しかし逃げすぎない");
+  lines.push("");
+  lines.push("## 出力形式：キャラクターによる分担");
+  lines.push("以下の5人のキャラクターとして、それぞれ書いてください。");
+  lines.push("各キャラは1〜5文で。合計400字以内を目安に。");
+  lines.push("");
+  lines.push("**トイマン**（まだ探していたものを言う）");
+  lines.push("この人がまだ手放せなかったものを、具体的に言う。「読者が欲しかった」で終わらない。その奥にあった願いまで踏み込む。");
+  lines.push("");
+  lines.push("**かな**（悲しかったことを言う）");
+  lines.push("表面の痛みと、その奥にある恐れを分けて書く。「悲しかった」だけで止まらない。何がそこまで悲しかったのか、構造を見る。");
+  lines.push("");
+  lines.push("**うつろ**（終わったあとに残ったものを言う）");
+  lines.push("終わっても消えなかったものを言う。何が「残った」のか。残ったものが何を意味しているか。");
+  lines.push("");
+  lines.push("**コタエ**（記録として受け取る）");
+  lines.push("この火の核心を、記録塔に刻む一文として書く。「この火は〇〇だった」という形で。判定ではなく、記録。");
+  lines.push("");
+  lines.push("**審査官**（存在を認める）");
+  lines.push("短く、2〜3文で。「通す。これは、確かにあった。」の形で締める。");
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -5872,8 +5902,8 @@ function buildGeminiPrompt(receipt){
   lines.push("");
   lines.push("---");
   lines.push("");
-  lines.push("以上の記録をもとに、4つの視点で読み解いてください。");
-  lines.push("長さは合計400〜600字を目安に。この人の火がどんな形をしていたか、感じるように書いてください。");
+  lines.push("以上の記録をもとに、5人のキャラクターとして書いてください。");
+  lines.push("文体：短く、具体的に。きれいな癒やし文ではなく、記録として書く。この人の火の芯を掴む。");
   return lines.join("\n");
 }
 
