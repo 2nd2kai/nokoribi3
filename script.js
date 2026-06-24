@@ -933,6 +933,67 @@ function makeGoals(game){
   while(goals.length<3)goals.push({id:"g_x"+goals.length,icon:"·",done:true,type:"idle",label:"世界が静かに進んでいる",sub:""});
   return goals;
 }
+/* 新ループ（火を預ける→送り出す→棚→会い直す→心へ返す）用の目標。
+   旧 makeGoals と違い、進捗diffではなく現在の sentFires 状態から都度導出する自己評価型。 */
+function makeJourneyGoals(game){
+  var fires=(game&&game.sentFires)||[];
+  var goals=[];
+  if(fires.length===0){
+    goals.push({id:"jg_first",icon:"🔥",done:false,type:"journey",
+      label:"火を預ける",
+      what:"書いたあとに残ったものを、箱庭に預ける。",
+      rec:"行き先と同行者を選ぶと、火が旅に出ます。",
+      reward:"棚に、最初の火が灯る",
+      action:{screen:"journey",label:"預ける"}});
+    return goals;
+  }
+  var front=fires.filter(function(f){return !f.returnedAt&&!f.shelved;});
+  var jLocked=function(f){return typeof jLockedToday==="function"?jLockedToday(f):false;};
+  var unlocked=front.filter(function(f){return !jLocked(f);});
+  /* 心へ返せる：受領証・会い直し済み（meetings>=2）・今日ロックされていない */
+  var grad=unlocked.filter(function(f){return f.form==="certificate"&&(f.meetings||[]).length>=2;});
+  /* 会い直せる：受領証・まだ1層・今日ロックされていない */
+  var remeet=unlocked.filter(function(f){return f.form==="certificate"&&(f.meetings||[]).length<2;});
+  /* 置き札・預かり札で、もう一度送り出せる */
+  var resend=unlocked.filter(function(f){return f.form!=="certificate";});
+  if(grad.length>0){
+    goals.push({id:"jg_grad",icon:"🤲",done:false,type:"journey",
+      label:"火を、心へ返す",
+      what:grad.length>1?(grad.length+"つの火が、返せるところまで来ています。"):"返せるところまで来た火があります。",
+      rec:"棚で、その火を開いて「心へ返す」を選びます。",
+      reward:"火が、あなたの中へ戻る",
+      action:{screen:"home",label:"棚を見る"}});
+  }
+  if(remeet.length>0){
+    goals.push({id:"jg_remeet",icon:"🔁",done:false,type:"journey",
+      label:"棚の火に、もう一度会う",
+      what:"受領証になった火に会い直すと、心へ返せるようになります。",
+      rec:"棚で受領証を開いて、もう一度会いに行きます。",
+      reward:"火が、もう一層ぶん深くなる",
+      action:{screen:"home",label:"棚を見る"}});
+  }
+  if(resend.length>0&&goals.length<2){
+    goals.push({id:"jg_resend",icon:"📮",done:false,type:"journey",
+      label:"置いた火を、送り出す",
+      what:"棚に置いたままの火を、もう一度旅に出せます。",
+      rec:"棚でその火を開いて、送り先を選びます。",
+      reward:"置き札が、受領証に育つことがある",
+      action:{screen:"home",label:"棚を見る"}});
+  }
+  /* 新しい火はいつでも預けられる */
+  goals.push({id:"jg_more",icon:"🔥",done:false,type:"journey",
+    label:"新しい火を預ける",
+    what:"別の残り火を、箱庭に預けられます。",
+    rec:"今日預けるだけでも、ちゃんと残ります。",
+    reward:"棚に、新しい火が灯る",
+    action:{screen:"journey",label:"預ける"}});
+  /* 今日できる行動が「預ける」しかない（手持ちは全部ロック中）なら、静かなdone行を先頭に */
+  if(unlocked.length===0&&front.length>0){
+    goals.unshift({id:"jg_rest",icon:"·",done:true,type:"journey",
+      label:"今日の火は、置いておく",sub:"日が変わったら、また会えます"});
+  }
+  return goals.slice(0,3);
+}
 function findCardById(game,id){return (game.emberCards||[]).find(function(c){return c.id===id;});}
 function emberAdvanced(prevCard,card,startStatus,startProgress){
   if(!card&&!prevCard)return false;
@@ -1836,11 +1897,35 @@ const STORY_EVENTS=[
   {id:"s3",ch:3,title:"受領",
    text:"審査官が「通していい」と言った日があった。\nそれは、はじめて聞く声だった。\n封筒は、自分宛ての形になった。\n受け取った。\nなかったことにはしなかった。",
    trigger:"fragment"},
+  /* ── 新ループ（預ける→送り出す→棚→会い直す→心へ返す）の記録 ── */
+  {id:"js1",ch:1,title:"火を預けた",
+   text:"あなたは、書いたあとに残ったものを、消さずに預けた。\n名前のない火が、ひとつ、棚に灯った。\n誰も、それを急がせなかった。",
+   trigger:"j_deposit"},
+  {id:"js2",ch:2,title:"掘って、答えた",
+   text:"火は旅をして、問いを連れて帰ってきた。\nあなたは逃げずに、ひとこと返した。\nそれは答えではなかったかもしれない。\nでも、受領証になった。",
+   trigger:"j_certificate"},
+  {id:"js3",ch:3,title:"会い直す",
+   text:"一度受け取った火に、もう一度会いに行った。\n前より少し、奥まで掘れた。\n同じ火が、違って見えた。\n急がなくても、戻ってこられる。",
+   trigger:"j_remeet"},
+  {id:"js4",ch:4,title:"心へ返す",
+   text:"返せるところまで来た火を、あなたは心へ返した。\n捨てたのではない。\n受け取って、しまった。\nなかったことには、しなかった。",
+   trigger:"j_return"},
 ];
 function getUnlockedStories(game){
-  var cards=game.emberCards||[];var rcpts=game.receipts||[];
+  var cards=game.emberCards||[];var rcpts=game.receipts||[];var fires=game.sentFires||[];
+  var hasFire=fires.length>0;
+  var hasCert=fires.some(function(f){return f.form==="certificate";});
+  var hasRemeet=fires.some(function(f){return (f.meetings||[]).length>=2;});
+  var hasReturn=fires.some(function(f){return !!f.returnedAt;});
+  /* 新ループを始めているプレイヤーには、旧 emberCards 章は出さない（章番号の重複と混乱を避ける）。 */
+  var newLoop=hasFire;
   return STORY_EVENTS.filter(function(s){
     if(s.trigger==="always")return true;
+    if(s.trigger==="j_deposit")return hasFire;
+    if(s.trigger==="j_certificate")return hasCert;
+    if(s.trigger==="j_remeet")return hasRemeet;
+    if(s.trigger==="j_return")return hasReturn;
+    if(newLoop)return false;
     if(s.trigger==="hint")return cards.some(function(c){return c.status!=="unreceived";});
     if(s.trigger==="analysis")return cards.some(function(c){return c.status==="checking"||c.status==="ready";});
     if(s.trigger==="fragment")return rcpts.length>0;
@@ -4243,6 +4328,19 @@ function EmberJourney(p){
           <span className="ej-formed-title">「{jTitleOf(result.fire)}」</span>
           <span className="ej-formed-note">{result.upgraded?"置き札が、受領証になった。":(ex?"もう一層、積まれた。":"棚に灯った。")}</span>
         </div>}
+      {(function(){
+        var fm=result.fire,mc=(fm.meetings||[]).length;
+        var g=fm.form==="certificate"
+          ?(mc>=2
+            ?{here:"この火は、棚に並びました。",now:"もう、心へ返せるところまで来ています。棚で「心へ返す」を選べます。"}
+            :{here:"この火は、受領証になりました。棚に並んで、いつでも会いに来られます。",now:"日が変わったら、もう一度会いに来てください。会い直すと、心へ返せるようになります。"})
+          :{here:"この火は、棚に置きました。急がなくていい、置いておけます。",now:"落ち着いた日に、送り先を選び直して、もう一度旅に出せます。"};
+        return <div className="ej-next">
+          <div className="ej-next-h">このあと、できること</div>
+          <p className="ej-next-here">{g.here}</p>
+          <p className="ej-next-now">{g.now}</p>
+        </div>;
+      })()}
       <button className="btn btn-p ej-go" onClick={p.onClose}>棚へ戻る</button>
     </div>}
 
@@ -4550,7 +4648,7 @@ function App(){
       </>}
       {screen==="log"&&<>
         <Header title="記録" day={game.world.day}/>
-        <LogView digest={digest} goals={game.dailyGoals?game.dailyGoals.goals:[]} game={game} onNav={navigateTo} onQuick={quickGoalAction} setGame={function(ns){setGame(ns);persistSave(ns);}}/>
+        <LogView digest={digest} goals={game.dailyGoals?game.dailyGoals.goals:[]} game={game} onNav={navigateTo} onQuick={quickGoalAction} onJourney={function(){setShowJourney(true);}} setGame={function(ns){setGame(ns);persistSave(ns);}}/>
         <div className="actions"><button className="btn btn-g" onClick={closeWorld}>閉じる</button></div>
         <DevPanel open={devOpen} onToggle={function(){setDevOpen(function(v){return !v;});}} onAdvance={advTime} onReset={resetWorld}/>
       </>}
@@ -4858,10 +4956,10 @@ function TitlesView(p){
 function Header(p){return <div className="hdr"><div><span className="hday">{p.day}日目</span><h2 className="htit">{p.title}</h2></div>{p.right&&<div>{p.right}</div>}</div>;}
 function LogView(p){
   var digest=p.digest,goals=p.goals||[];
-  if(!digest)return <div className="scroll"><GoalsPanel goals={goals} game={p.game} onNav={p.onNav} onQuick={p.onQuick}/><p className="le">まだ、ログがありません。</p></div>;
+  if(!digest)return <div className="scroll"><GoalsPanel goals={goals} game={p.game} onNav={p.onNav} onQuick={p.onQuick} onJourney={p.onJourney}/><p className="le">まだ、ログがありません。</p></div>;
   var best=null;if(digest.places){var ps=digest.places.filter(function(q){return q.delta>0;}).sort(function(a,b){return b.delta-a.delta;});if(ps.length)best=ps[0];}
   return <div className="scroll"><div className="log unfold">
-    {goals.length>0&&<GoalsPanel goals={goals} game={p.game} onNav={p.onNav} onQuick={p.onQuick}/>}
+    <GoalsPanel goals={goals} game={p.game} onNav={p.onNav} onQuick={p.onQuick} onJourney={p.onJourney}/>
     {p.game&&p.game.recentRewards&&p.game.recentRewards.length>0&&<RecentRewardsPanel rewards={p.game.recentRewards}/>}
     <div style={{"--d":"0ms"}} className="lel"><p>{digest.hours<1?"ほとんど時間は経っていない。世界は静かなままだ。":<span>あなたが見ていない間に、世界は<span className="hi"> {digest.hours} </span>時間進みました。</span>}</p><p className="lre">誰も、あなたを責めていません。</p><p className="game-oneliner">未受領の問いを、5人が少しずつ受け取れる形にしていく箱庭。</p></div>
     {p.game&&(function(){var stories=getUnlockedStories(p.game);var reads=p.game.readStories||[];return stories.length>0&&<div style={{"--d":"30ms"}} className="lsec"><div className="lh">世界の記録</div>{stories.map(function(s){var isRead=reads.indexOf(s.id)>=0;return(<div key={s.id} className={"story-card"+(isRead?" story-read":"")} onClick={function(){if(!p.game.readStories||reads.indexOf(s.id)===-1){var ns=Object.assign({},p.game,{readStories:[s.id].concat(reads)});p.setGame&&p.setGame(ns);}}}><div className="story-head"><span className="story-ch">第{s.ch}章</span><span className="story-title">{s.title}</span>{!isRead&&<span className="cv-new">NEW</span>}</div>{isRead&&<pre className="story-text">{s.text}</pre>}</div>);})}</div>;})()}
@@ -4874,16 +4972,25 @@ function LogView(p){
   </div></div>;
 }
 function GoalsPanel(p){
-  var goals=p.goals,game=p.game,onNav=p.onNav,onQuick=p.onQuick;
-  if(!goals||!goals.length)return null;
-  return <div className="goals-panel"><div className="lh">今日できること</div>{goals.map(function(g){return <QuestCard key={g.id} goal={enrichGoal(g,game)} onNav={onNav} onQuick={onQuick}/>;})}</div>;
+  var goals=p.goals,game=p.game,onNav=p.onNav,onQuick=p.onQuick,onJourney=p.onJourney;
+  /* 新ループの目標は現在の状態から都度導出（常に最新）。旧 emberCards の目標は、
+     実際に残り火がある時だけ補助的に下へ。idle 埋め草は出さない。 */
+  var jgoals=game?makeJourneyGoals(game):[];
+  var hasEmber=game&&(game.emberCards||[]).length>0;
+  var oldGoals=hasEmber?(goals||[]).filter(function(g){return g.type!=="idle";}):[];
+  if(!jgoals.length&&!oldGoals.length)return null;
+  return <div className="goals-panel"><div className="lh">今日できること</div>
+    {jgoals.map(function(g){return <QuestCard key={g.id} goal={g} onNav={onNav} onQuick={onQuick} onJourney={onJourney}/>;})}
+    {oldGoals.map(function(g){return <QuestCard key={g.id} goal={enrichGoal(g,game)} onNav={onNav} onQuick={onQuick} onJourney={onJourney}/>;})}
+  </div>;
 }
 function QuestCard(p){
-  var g=p.goal,onNav=p.onNav,onQuick=p.onQuick;
+  var g=p.goal,onNav=p.onNav,onQuick=p.onQuick,onJourney=p.onJourney;
   var [open,setOpen]=useState(false);
   function runAction(e){
     if(e)e.stopPropagation();
     if(!g.action)return;
+    if(g.action.screen==="journey"&&onJourney){onJourney();return;}
     if(g.action.screen==="quick"&&onQuick)onQuick(g.action);
     else onNav&&onNav(g.action.screen,{target:g.action.target,tier:g.action.tier,who:g.action.who});
   }
