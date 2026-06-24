@@ -3374,6 +3374,7 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .battle-screen{padding:14px 16px 18px;display:flex;flex-direction:column;gap:12px;background:radial-gradient(90% 45% at 50% 0%,rgba(192,56,56,.13),transparent 58%)}
 .battle-back-btn{align-self:flex-start;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:20px;color:var(--dim);font-family:var(--serif);font-size:13px;padding:9px 18px;cursor:pointer;letter-spacing:.03em}
 .battle-back-btn:active{background:rgba(255,255,255,.12)}
+.battle-foot-nav{margin-top:8px;display:flex;justify-content:center}
 .battle-voice-action-row{display:flex;gap:12px;align-items:flex-start}
 .battle-voice-col{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0}
 .battle-advance-col{display:flex;align-items:stretch;padding-top:2px}

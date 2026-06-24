@@ -3377,10 +3377,9 @@ function BattleEncounterScreen(p){
   var disabledReason=!card?"いま向き合える残り火がありません。":(game.characters.toyman.lastAction!=="exploring"?"トイマンが森で回収しているあいだだけ、言葉を渡せます。":(pv.mod.blocked?"トイマンが限界です。かなのケアが必要です。":(pv.cooldownMs>0?"いま言葉が届いたところ。あと "+cdSec+"秒、見守ってから渡せます。":"")));
   var intensity=getShadowIntensity(card);
   function doSubmit(){var r=p.onManualBattle&&p.onManualBattle("hold",selfAnswer);if(r)setResult(r);setSelfAnswer("");}
-  function doRetreat(){var r=p.onManualBattle&&p.onManualBattle("retreat","");if(r)setResult(r);}
+  function doRetreat(){var r=p.onManualBattle&&p.onManualBattle("retreat","");if(r&&r.ok){setResult(r);}else{p.onBack&&p.onBack();}}
   return(
     <div className="battle-screen scroll">
-      <button className="battle-back-btn" onClick={p.onBack}>← 戻る</button>
       <div className="battle-full-hero">
         <div className="battle-k">影と向き合う</div>
         {card?<h2>「{makeEmberTitle(card)}」に届いた、内なる声</h2>:<h2>回収中の残り火がありません</h2>}
@@ -3435,6 +3434,7 @@ function BattleEncounterScreen(p){
           <span className="home-cv-say">{result.reached100?"「届いた。持ち帰る」":result.ok?"「まだ落としていない」":"「今日は、引き返す。また来る」"}</span>
         </div>
       </div>}
+      <div className="battle-foot-nav"><button className="battle-back-btn" onClick={p.onBack}>← 戻る</button></div>
     </div>
   );
 }
