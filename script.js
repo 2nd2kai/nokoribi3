@@ -3947,7 +3947,7 @@ function HomeView(p){
             <div className="hfe-rcv-line"><span className="isc-dot cd-kana"/>かな：「痛かったんだね。それは、軽くない。」</div>
           </div>
           <p className="hfe-rcv-msg">今夜の気持ちは、受け取りました。</p>
-          <p className="hfe-rcv-sub">答えを求めず、問いとして預かっています。<br/>落ち着いたら、明日以降に棚で見返せます。</p>
+          <p className="hfe-rcv-sub">答えを求めず、今夜はただ預かっています。<br/>落ち着いたら、明日以降に棚で見返せます。</p>
         </div>
         :<div className="hfe-yn-block">
           <span className="hfe-yn-q">書くのをやめようと思っていますか？</span>
