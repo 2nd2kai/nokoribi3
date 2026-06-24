@@ -3897,7 +3897,6 @@ function GlossaryModal(p){
 }
 function HomeView(p){
   var game=p.game;
-  var [showGlossary,setShowGlossary]=useState(false);
   var [okuOpen,setOkuOpen]=useState(false);
   var cards=game.emberCards||[];
   var fires=game.sentFires||[];
@@ -3924,8 +3923,6 @@ function HomeView(p){
   }
   function scrollToShelf(){var el=document.getElementById("home-shelf");if(el)el.scrollIntoView({behavior:"smooth"});}
   return <div className="scroll home-screen">
-    {showGlossary&&<GlossaryModal onClose={function(){setShowGlossary(false);}}/>}
-
     {/* 1. 今夜の声 */}
     <section className="home-night-voice">
       <div className="hnv-line">
@@ -4031,7 +4028,7 @@ function HomeView(p){
         </section>
         <ClosedPlacesPreview game={game}/>
         <div className="home-oku-foot">
-          <button className="glossary-btn" onClick={function(){setShowGlossary(true);}}>？ 用語集</button>
+          <button className="glossary-btn" onClick={function(){p.onShowGlossary&&p.onShowGlossary();}}>？ 用語集</button>
         </div>
       </div>}
     </section>
@@ -4548,7 +4545,7 @@ function App(){
   var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [battleFrom,setBattleFrom]=useState("peek");var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
   var gameRef=useRef(null),toastRef=useRef(null);
   var [watchGauge,setWatchGauge]=useState(0);var wgRef=useRef({gauge:0,last:{}});var [returnConvId,setReturnConvId]=useState(null);var [witnessTargetId,setWitnessTargetId]=useState(null);var [sendGiftOpen,setSendGiftOpen]=useState(false);var [utsuroEventActive,setUtsuroEventActive]=useState(false);var [closingPreview,setClosingPreview]=useState(null);var [philAnswerOpen,setPhilAnswerOpen]=useState(false);var [kotaeStuck,setKotaeStuck]=useState(false);
-  var [saveError,setSaveError]=useState(false);var [showBadNight,setShowBadNight]=useState(false);var [showJourney,setShowJourney]=useState(false);var [fireDetailId,setFireDetailId]=useState(null);var [journeyRevisit,setJourneyRevisit]=useState(null);
+  var [saveError,setSaveError]=useState(false);var [showBadNight,setShowBadNight]=useState(false);var [showJourney,setShowJourney]=useState(false);var [fireDetailId,setFireDetailId]=useState(null);var [journeyRevisit,setJourneyRevisit]=useState(null);var [showGlossary,setShowGlossary]=useState(false);
   useEffect(function(){gameRef.current=game;},[game]);
 
   useEffect(function(){var saved=loadSave();if(saved){setGame(migrateGame(saved));setFirst(false);}else{var f=initGame();setGame(f);setFirst(true);persistSave(f);}setScreen("closed");},[]); // eslint-disable-line
@@ -4669,7 +4666,7 @@ function App(){
     {screen!=="closed"&&screen!=="ending"&&<>
       {screen==="home"&&<>
         <Header title="ホーム" day={game.world.day}/>
-        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onBadNight={function(){setShowBadNight(true);}} onJourney={function(){setShowJourney(true);}} onOpenFire={function(id){setFireDetailId(id);}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}}/>
+        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onBadNight={function(){setShowBadNight(true);}} onJourney={function(){setShowJourney(true);}} onOpenFire={function(id){setFireDetailId(id);}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}} onShowGlossary={function(){setShowGlossary(true);}}/>
       </>}
       {screen==="log"&&<>
         <Header title="記録" day={game.world.day}/>
@@ -4708,11 +4705,24 @@ function App(){
         <Header title="干渉する" day={game.world.day}/>
         <InterventionTab game={game} onExecute={handleTieredIntv} config={intvConfig}/>
       </>}
-      {screen!=="battle"&&<nav className="bnav">
-        {getVisibleTabs(game).map(function(t){var isNext=nextAction&&nextAction.screen===t.id&&screen!==t.id;return <button key={t.id} className={"nbtn"+(screen===t.id?" nbtn-on":"")+(isNext?" nbtn-next":"")} onClick={function(){if(t.id!=="conv")setViewConv(null);setScreen(t.id);}}>{t.label}{isNext&&<span className="nbtn-dot"/>}</button>;})}
-      </nav>}
+      {screen!=="battle"&&(function(){
+        var logStories=getUnlockedStories(game);var logReads=game.readStories||[];
+        var hasUnreadLog=logStories.some(function(s){return logReads.indexOf(s.id)===-1;});
+        var unlockedConvs=getUnlockedConvIds(game);var readConvs=game.readConvs||[];
+        var hasUnreadConv=unlockedConvs.some(function(id){return readConvs.indexOf(id)===-1;});
+        return <nav className="bnav">
+          {getVisibleTabs(game).map(function(t){
+            var isNext=nextAction&&nextAction.screen===t.id&&screen!==t.id;
+            var isNew=(t.id==="log"&&hasUnreadLog)||(t.id==="conv"&&hasUnreadConv);
+            return <button key={t.id} className={"nbtn"+(screen===t.id?" nbtn-on":"")+(isNext?" nbtn-next":"")+(isNew&&screen!==t.id?" nbtn-new":"")} onClick={function(){if(t.id!=="conv")setViewConv(null);setScreen(t.id);}}>
+              {t.label}{(isNext||isNew)&&screen!==t.id&&<span className="nbtn-dot"/>}
+            </button>;
+          })}
+        </nav>;
+      })()}
     </>}
     
+    {showGlossary&&<GlossaryModal onClose={function(){setShowGlossary(false);}}/>}
     {closingPreview&&<ClosingPreviewOverlay text={closingPreview} onClose={function(){setClosingPreview(null);closeWorld(true);}}/>}
     {philAnswerOpen&&<PhilAnswerModal question={getPhilosophicalQuestion(game).text} onClose={function(){setPhilAnswerOpen(false);}} onSave={function(a){savePhilAnswer(a);setPhilAnswerOpen(false);}}/>}
     {showCreate&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber}/>}
@@ -5002,13 +5012,18 @@ function ArchivedStories(p){
 }
 function LogView(p){
   var digest=p.digest,goals=p.goals||[];
+  var stories=p.game?getUnlockedStories(p.game):[];
+  var reads=p.game?(p.game.readStories||[]):[];
+  var hasUnreadStory=stories.some(function(s){return reads.indexOf(s.id)===-1;});
+  function storyBlock(style){return stories.length>0&&<div style={style} className="lsec"><div className="lh">世界の記録</div>{stories.map(function(s){var isRead=reads.indexOf(s.id)>=0;return(<div key={s.id} className={"story-card"+(isRead?" story-read":"")} onClick={function(){if(reads.indexOf(s.id)===-1){var ns=Object.assign({},p.game,{readStories:[s.id].concat(reads)});p.setGame&&p.setGame(ns);}}}><div className="story-head"><span className="story-ch">第{s.ch}章</span><span className="story-title">{s.title}</span>{!isRead&&<span className="cv-new">NEW</span>}</div>{isRead&&<pre className="story-text">{s.text}</pre>}</div>);})}</div>;}
   if(!digest)return <div className="scroll"><GoalsPanel goals={goals} game={p.game} onNav={p.onNav} onQuick={p.onQuick} onJourney={p.onJourney}/><p className="le">まだ、ログがありません。</p></div>;
   var best=null;if(digest.places){var ps=digest.places.filter(function(q){return q.delta>0;}).sort(function(a,b){return b.delta-a.delta;});if(ps.length)best=ps[0];}
   return <div className="scroll"><div className="log unfold">
+    {hasUnreadStory&&storyBlock({"--d":"0ms"})}
     <GoalsPanel goals={goals} game={p.game} onNav={p.onNav} onQuick={p.onQuick} onJourney={p.onJourney}/>
     {p.game&&p.game.recentRewards&&p.game.recentRewards.length>0&&<RecentRewardsPanel rewards={p.game.recentRewards}/>}
     <div style={{"--d":"0ms"}} className="lel"><p>{digest.hours<1?"ほとんど時間は経っていない。世界は静かなままだ。":<span>あなたが見ていない間に、世界は<span className="hi"> {digest.hours} </span>時間進みました。</span>}</p><p className="lre">誰も、あなたを責めていません。</p><p className="game-oneliner">未受領の問いを、5人が少しずつ受け取れる形にしていく箱庭。</p></div>
-    {p.game&&(function(){var stories=getUnlockedStories(p.game);var reads=p.game.readStories||[];return stories.length>0&&<div style={{"--d":"30ms"}} className="lsec"><div className="lh">世界の記録</div>{stories.map(function(s){var isRead=reads.indexOf(s.id)>=0;return(<div key={s.id} className={"story-card"+(isRead?" story-read":"")} onClick={function(){if(!p.game.readStories||reads.indexOf(s.id)===-1){var ns=Object.assign({},p.game,{readStories:[s.id].concat(reads)});p.setGame&&p.setGame(ns);}}}><div className="story-head"><span className="story-ch">第{s.ch}章</span><span className="story-title">{s.title}</span>{!isRead&&<span className="cv-new">NEW</span>}</div>{isRead&&<pre className="story-text">{s.text}</pre>}</div>);})}</div>;})()}
+    {!hasUnreadStory&&storyBlock({"--d":"30ms"})}
     {p.game&&<ArchivedStories game={p.game} setGame={p.setGame}/>}
     {digest.places&&<div style={{"--d":"60ms"}} className="lsec"><div className="lh">場所の進み具合</div>{best&&<div className="best">今日いちばん進んだ場所　<b>{best.name}</b><span className="bd"> +{Math.round(best.delta*100)}%</span></div>}<div className="plist">{digest.places.map(function(pp){var fp=Math.round(pp.from*100),tp=Math.round(pp.to*100),dp=Math.round(pp.delta*100);return <div key={pp.id} className="prow"><div className="ptop"><span className="pn">{pp.name}</span><span className="pnum">{fp}% → <span className="hi2">{tp}%</span>{dp>0&&<span className="pdelta"> +{dp}%</span>}</span></div><Bar value={tp} color={PCOL(pp.id)} h={4}/><div className="psub">{pp.label}　Lv.{pp.level}</div></div>;})}</div></div>}
     {p.game&&<GrowthRanking game={p.game}/>}
