@@ -3930,6 +3930,7 @@ function HomeView(p){
   var game=p.game;
   var [okuOpen,setOkuOpen]=useState(false);
   var [noToast,setNoToast]=useState(false);
+  var [bnDismissed,setBnDismissed]=useState(false);
   var cards=game.emberCards||[];
   var fires=game.sentFires||[];
   var legacyNeedsAction=cards.filter(function(c){
@@ -4117,7 +4118,29 @@ function HomeView(p){
       </div>}
     </section>
 
-    {/* 6. 今日はここまで */}
+    {/* 6. 今夜のこと（BadNight独立セクション） */}
+    {(function(){
+      var todayAzukari=(game.sentFires||[]).find(function(f){return f.form==="azukari"&&f.createdAt&&f.createdAt.slice(0,10)===nowISO().slice(0,10);});
+      if(bnDismissed&&!todayAzukari)return null;
+      return <section className="home-card home-badnight-section">
+        {todayAzukari
+          ?<div className="hbn-received">
+            <p className="hbn-rcv-msg">今夜の預かり札を、棚に置きました。</p>
+            <p className="hbn-rcv-sub">答えを求めずに、預かっています。</p>
+          </div>
+          :<>
+            <div className="lh">今夜のこと</div>
+            <p className="hbn-desc">今夜、書くのが難しいと感じていますか？</p>
+            <div className="hbn-btns">
+              <button className="btn btn-p hbn-btn-azukari" onClick={function(){p.onAzukari&&p.onAzukari();}}>今夜は預ける</button>
+              <button className="btn hbn-btn-dismiss" onClick={function(){setBnDismissed(true);}}>まだ大丈夫</button>
+            </div>
+          </>
+        }
+      </section>;
+    })()}
+
+    {/* 7. 今日はここまで */}
     <section className="home-card home-today-end-section">
       <div className="lh">今日はここまで</div>
       <p>無理に続けなくていい。今日見た分は、ちゃんと残ります。</p>
@@ -4155,7 +4178,8 @@ const J_DANGER_WORDS=["死にたい","しにたい","消えたい","きえたい
 const J_FORM_META={
   certificate:{label:"受領証",cls:"jf-cert"},
   placed:{label:"置き札",cls:"jf-placed"},
-  kept:{label:"預かり札",cls:"jf-kept"}
+  kept:{label:"預かり札",cls:"jf-kept"},
+  azukari:{label:"預かり札",cls:"jf-kept"}
 };
 function jName(c){return ({toyman:"トイマン",kana:"かな",utsuro:"うつろ"})[c]||c;}
 function jHasDanger(s){s=s||"";return J_DANGER_WORDS.some(function(w){return s.indexOf(w)>=0;});}
@@ -4493,7 +4517,7 @@ function JourneyShelf(p){
       {m&&m.question&&<div className="jfire-q">{m.question}</div>}
       {m&&m.answer&&<div className="jfire-a">{m.answer}</div>}
       {m&&m.deferred&&<div className="jfire-a jfire-defer">まだ答えていない。そばに置いてある。</div>}
-      {f.form==="kept"&&<div className="jfire-a jfire-defer">答えを求めずに、預かっています。</div>}
+      {(f.form==="kept"||f.form==="azukari")&&<div className="jfire-a jfire-defer">答えを求めずに、預かっています。</div>}
       <div className="jfire-foot">
         {layers>1&&<span className="jfire-layers">{layers}層</span>}
         {f.returnedAt&&<span className="jfire-returned">心へ返した</span>}
@@ -4762,7 +4786,7 @@ function App(){
     {screen!=="closed"&&screen!=="ending"&&<>
       {screen==="home"&&<>
         <Header title="ホーム" day={game.world.day}/>
-        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onBadNight={function(){var today=nowISO().slice(0,10);var already=(game.emberCards||[]).find(function(c){return c.mode==="bad_night"&&c.createdAt&&c.createdAt.slice(0,10)===today;});if(already){showToast("今夜の気持ちは、すでに受け取りました。");return;}setShowBadNight(true);}} onJourney={function(){setShowJourney(true);}} onOpenFire={function(id){setFireDetailId(id);}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}} onShowGlossary={function(){setShowGlossary(true);}}/>
+        <HomeView game={game} digest={digest} onCreate={function(){setShowCreate(true);}} onNav={navigateTo} onDepart={departEmberCb} onSendGift={function(){setSendGiftOpen(true);}} onPhilAnswer={function(){setPhilAnswerOpen(true);}} utsuroEvent={utsuroEventActive} onUtsuroFound={function(){setUtsuroEventActive(false);var ns=Object.assign({},game,{lastUtsuroEvent:nowISO().slice(0,10)});setGame(ns);persistSave(ns);}} kotaeStuck={kotaeStuck} onKotaeResume={function(){setKotaeStuck(false);}} onOpenPlace={function(k){setPeekTargetLoc(k);setPeekMode("scene");setScreen("peek");}} onBadNight={function(){var today=nowISO().slice(0,10);var already=(game.emberCards||[]).find(function(c){return c.mode==="bad_night"&&c.createdAt&&c.createdAt.slice(0,10)===today;});if(already){showToast("今夜の気持ちは、すでに受け取りました。");return;}setShowBadNight(true);}} onAzukari={function(){var today=nowISO().slice(0,10);var already=(game.sentFires||[]).find(function(f){return f.form==="azukari"&&f.createdAt&&f.createdAt.slice(0,10)===today;});if(already){showToast("今夜の預かり札は、すでに棚にあります。");return;}var ns=cloneS(game);if(!ns.sentFires)ns.sentFires=[];ns.sentFires=[{id:"az"+Date.now(),form:"azukari",label:"今夜の預かり札",createdAt:nowISO(),lastTouch:nowISO(),meetings:[],companion:null,dest:null,retreated:false,shelved:false,returnedAt:null}].concat(ns.sentFires);ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);showToast("預かり札を棚に置きました。");}} onJourney={function(){setShowJourney(true);}} onOpenFire={function(id){setFireDetailId(id);}} onTodayEnd={function(){var ns=Object.assign({},game,{lastSavedAt:nowISO(),logs:[{hours:0,events:[{text:"今日はここで閉じた。見たものは、ちゃんと残っている。",kind:"record",pri:3}],ts:nowISO()}].concat(game.logs||[]).slice(0,30)});setGame(ns);persistSave(ns);showToast("うつろ：「預かっています」");setTimeout(function(){closeWorld(false);},800);}} onShowGlossary={function(){setShowGlossary(true);}}/>
       </>}
       {screen==="log"&&<>
         <Header title="記録塔" day={game.world.day}/>
