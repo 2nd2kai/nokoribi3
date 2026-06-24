@@ -766,7 +766,7 @@ function getUnlockedPlaceKeys(game){
 }
 function getVisibleTabs(game){
   if(!game)return[];
-  if(MVP_MODE){var showNiwata=(game.sentFires||[]).some(function(f){return f.returnedAt;});var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];if(showNiwata)mvpT.push({id:"peek",label:"箱庭"});if((game.emberCards||[]).length>0||(game.receipts||[]).length>0)mvpT.push({id:"conv",label:"場面"});return mvpT;}
+  if(MVP_MODE){var showNiwata=(game.sentFires||[]).some(function(f){return f.returnedAt;});var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];if(showNiwata)mvpT.push({id:"peek",label:"箱庭"});return mvpT;}
   ensureProgressiveUnlockShell(game);
   var tabs=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];
   if(game.unlocks.tabs.garden)tabs.push({id:"peek",label:"箱庭"});
@@ -5143,19 +5143,41 @@ function EventLogPanel(p){
   </div>;
 }
 function LogConvPanel(p){
-  var game=p.game,onNav=p.onNav;
+  var game=p.game,setGame=p.setGame;
+  var [viewId,setViewId]=useState(null);
   if(!game)return null;
   var unlocked=getUnlockedConvIds(game);
   var reads=game.readConvs||[];
-  var items=CONVS.filter(function(c){return unlocked.indexOf(c.id)>=0;}).slice(0,8);
+  var items=CONVS.filter(function(c){return unlocked.indexOf(c.id)>=0;});
   if(!items.length)return null;
-  return <div className="lsec logconv-panel"><div className="lh">場面</div>
-    {items.map(function(c){var isR=reads.indexOf(c.id)>=0;return <div key={c.id} className={"logconv-row"+(isR?"":" logconv-unread")} onClick={function(){onNav&&onNav("conv");}}>
+  function openScene(id){
+    setViewId(id);
+    if(reads.indexOf(id)===-1){
+      var ns=Object.assign({},game,{readConvs:[id].concat(reads)});
+      setGame&&setGame(ns);
+    }
+  }
+  if(viewId){
+    var conv=CBID[viewId];
+    if(!conv){setViewId(null);return null;}
+    var received=game.receivedScenes&&game.receivedScenes.indexOf(viewId)!==-1;
+    return <div className="lsec logconv-detail">
+      <button className="back logconv-back" onClick={function(){setViewId(null);}}>← 場面帳にもどる</button>
+      <div className="cvd-pair"><span className={"nd cd-"+conv.a}/> {NAMES[conv.a]} × <span className={"nd cd-"+conv.b}/> {NAMES[conv.b]}</div>
+      <div className="cvd-title">「{conv.title}」</div>
+      {conv.meaning&&<div className="cvd-meaning"><span className="cvd-mlbl">この場面は</span><p className="cvd-mtext">{conv.meaning}</p></div>}
+      <div className="cvd-lines">{conv.lines.map(function(line,i){var who=WHO[line[0]];var charId=who||line[0];return <div key={i} className="cvd-line"><div className="cvd-speaker-row"><span className={"isc-dot cd-"+charId+" cvd-sdot"}/><span className="cvd-speaker-name">{CNAME[line[0]]}</span></div><p className="cvd-text">「{line[1]}」</p></div>;})}</div>
+      {received&&<div className="cvd-recv-done" style={{marginBottom:8}}>受領済み</div>}
+      <button className="back logconv-back" onClick={function(){setViewId(null);}}>← 場面帳にもどる</button>
+    </div>;
+  }
+  return <div className="lsec logconv-panel">
+    <div className="lh">場面帳</div>
+    {items.map(function(c){var isR=reads.indexOf(c.id)>=0;return <div key={c.id} className={"logconv-row"+(isR?"":" logconv-unread")} onClick={function(){openScene(c.id);}}>
       <span className={"nd cd-"+c.a}/><span className={"nd cd-"+c.b}/>
       <span className="logconv-title">「{c.title}」</span>
       {!isR&&<span className="cv-new">NEW</span>}
     </div>;})}
-    <button className="logconv-more" onClick={function(){onNav&&onNav("conv");}}>場面帳をすべて見る →</button>
   </div>;
 }
 function LogView(p){
@@ -5180,8 +5202,8 @@ function LogView(p){
     {hasUnreadStory&&storySection}
     {/* 2. ログ概要 */}
     {digest&&<div className="lel"><p>{digest.hours<1?"ほとんど時間は経っていない。世界は静かなままだ。":<span>あなたが見ていない間に、世界は<span className="hi"> {digest.hours} </span>時間進みました。</span>}</p><p className="lre">誰も、あなたを責めていません。</p></div>}
-    {/* 3. 場面 */}
-    <LogConvPanel game={game} onNav={p.onNav}/>
+    {/* 3. 場面帳 */}
+    <LogConvPanel game={game} setGame={p.setGame}/>
     {/* 4. できごと */}
     <EventLogPanel game={game}/>
     {/* 5. 世界の記録（全既読 → 後ろ） */}
