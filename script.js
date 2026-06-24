@@ -1099,10 +1099,10 @@ function applyAction(s,events){
     if(roll<0.25){
       /* 影に遭遇。「何にもならなかった」と言われても、トイマンは引かない */
       var shadow=pick(TOYMAN_SHADOW_LOG);
-      events.push({text:shadow.join("\n")+"\n\n回収率 +"+pct+"%　疲労 +3",kind:"discover",pri:3});
+      events.push({text:shadow.join("\n")+"\n\n探索の深さ +"+pct+"%　疲労 +3",kind:"discover",pri:3});
     }else{
       var found=pick(TOYMAN_EXPLORE_LOG);
-      events.push({text:found.join("\n")+"\n\n回収率 +"+pct+"%　疲労 +"+(2+Math.floor(rnd()*3)),kind:"explore",pri:1});
+      events.push({text:found.join("\n")+"\n\n探索の深さ +"+pct+"%　疲労 +"+(2+Math.floor(rnd()*3)),kind:"explore",pri:1});
     }
     checkLvl(s,"unexplored_forest",events,s._rw);
   }else{
@@ -1405,17 +1405,17 @@ function runToymanBattleIntervention(game,actionId,selfAnswer){
   if(action.kind==="hold"){
     lines.push("トイマンは前に進んだ。");
     lines.push("トイマン：「"+toymanLine+"」");
-    lines.push("回収率 +"+prog+"%（"+beforeProg+" → "+afterProg+"）");
+    lines.push("探索の深さ +"+prog+"%（"+beforeProg+" → "+afterProg+"）");
     lines.push("疲労 "+(fat>=0?"+":"")+fat+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
   }else if(action.kind==="read"){
     lines.push("影の声を、判決ではなく声として聞いた。");
     lines.push("トイマン：「"+toymanLine+"」");
-    lines.push("回収率 +"+prog+"%（"+beforeProg+" → "+afterProg+"）");
+    lines.push("探索の深さ +"+prog+"%（"+beforeProg+" → "+afterProg+"）");
     lines.push("疲労 +"+Math.max(0,fat)+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
   }else{
     lines.push("トイマンは今日のところを引き返した。");
     lines.push("トイマン：「"+toymanLine+"」");
-    lines.push("回収率は動かなかった。でも、場所は覚えている。");
+    lines.push("探索の深さは変わらなかった。でも、場所は覚えている。");
     lines.push("疲労 "+fat+"（"+beforeFat+" → "+Math.round(t.stats.fatigue||0)+"）");
   }
   lines.push("見守り +"+watch+"（"+Math.round(ns.battle.watch||0)+" / 100）");
@@ -1435,7 +1435,7 @@ function runToymanBattleIntervention(game,actionId,selfAnswer){
   ns.battle.lastLines=lines.slice();
   ns.logs=[{hours:0,events:[{text:lines.join("\n"),kind:"explore_detail",pri:5}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);
   ns.lastSavedAt=nowISO();
-  return{ok:true,state:ns,msg:ended?(reached100?"問いが届いた":"今日の遭遇が終わりました"):"前に進みました",lines:lines,effects:[action.label,"疲労 "+(fat>=0?"+":"")+fat,"回収率 +"+prog+"%","見守り +"+watch].concat(ipGain>0?["IP +"+ipGain]:[]),ipGain:ipGain,watchGain:watch,action:actionId,ended:ended,reached100:reached100};
+  return{ok:true,state:ns,msg:ended?(reached100?"問いが届いた":"今日の遭遇が終わりました"):"前に進みました",lines:lines,effects:[action.label,"疲労 "+(fat>=0?"+":"")+fat,"探索の深さ +"+prog+"%","見守り +"+watch].concat(ipGain>0?["IP +"+ipGain]:[]),ipGain:ipGain,watchGain:watch,action:actionId,ended:ended,reached100:reached100};
 }
 
 function captureSnap(game){
@@ -1820,7 +1820,7 @@ function InternalPlaceMap(p){
         var n=nodes.find(function(x){return x.id===em.node;})||nodes[nodes.length-1]||{x:280,y:124};
         return <button className="room-ember-marker" style={{left:(n.x/360*100)+"%",top:((n.y+28)/180*100)+"%"}} onClick={function(e){e.stopPropagation();}}>
           <span className="rem-fire">🔥</span>
-          <span className="rem-label">回収率</span>
+          <span className="rem-label">探索の深さ</span>
           <span className="rem-pct">{Math.round(em.card.progress||0)}%</span>
           <span className="rem-desc">100%で問いが届く</span>
         </button>;
@@ -3424,7 +3424,7 @@ function BattleEncounterScreen(p){
       {disabled&&disabledReason&&<p className="battle-disabled-reason">{disabledReason}</p>}
       {pv.cooldownMs>0&&<p className="battle-cd">次に向き合えるまで あと {cdSec} 秒</p>}
       <div className="battle-progress-row">
-        <span>回収率</span><b>{pv.progress}%</b>
+        <span>探索の深さ</span><b>{pv.progress}%</b>
         <Bar value={pv.progress} color="var(--ember)" h={4}/>
       </div>
       {result&&<div className={"battle-result"+(result.ok?" battle-result-ok":" battle-result-ng")+(result.reached100?" battle-result-reached":"")}>
@@ -3679,8 +3679,8 @@ function NowSceneView(p){
             <div className="lrp-overlay-inner" onClick={function(e){e.stopPropagation();}}>
               <div className="lrp-overlay-title">{letterResult.stored?"手紙が保管庫に届きました":"手紙が次の場所へ進みました"}</div>
               <div className="lrp-overlay-route">{letterResult.from} → {letterResult.to}</div>
-              {letterResult.fireGain>0&&<div className="lrp-overlay-change">📬 残り火の回収率 +{letterResult.fireGain}%</div>}
-              {ec&&ec.progress>0&&<div className="lrp-overlay-change">「{ec.title}」の回収率：{ec.progress}%（100%で問いが届く）</div>}
+              {letterResult.fireGain>0&&<div className="lrp-overlay-change">📬 残り火の探索の深さ +{letterResult.fireGain}%</div>}
+              {ec&&ec.progress>0&&<div className="lrp-overlay-change">「{ec.title}」の探索の深さ：{ec.progress}%（100%で問いが届く）</div>}
               <div className="lrp-overlay-gain">見守り +{letterResult.gained||1}</div>
               <div className="lrp-overlay-hint">タップで閉じる</div>
             </div>
@@ -3932,6 +3932,14 @@ function HomeView(p){
   var [noToast,setNoToast]=useState(false);
   var cards=game.emberCards||[];
   var fires=game.sentFires||[];
+  var legacyNeedsAction=cards.filter(function(c){
+    return c.unitState==="waiting"
+      || c.status==="ready"
+      || c.status==="awaiting"
+      || (c.unitState && c.unitState!=="completed" && c.unitState!=="waiting" && c.questionPending);
+  });
+  var hasLegacyAction=legacyNeedsAction.length>0;
+  useEffect(function(){if(hasLegacyAction)setOkuOpen(true);},[legacyNeedsAction.length]);
   var todayBadNight=(cards).find(function(c){return c.mode==="bad_night"&&c.createdAt&&c.createdAt.slice(0,10)===nowISO().slice(0,10);});
   var active=cards.find(function(c){return c.status!=="ready"&&c.status!=="awaiting";})||cards[0]||null;
   var openPlaces=getUnlockedPlaceKeys(game).filter(function(k){return game.unlocks&&game.unlocks.places&&game.unlocks.places[k];});
@@ -3950,6 +3958,20 @@ function HomeView(p){
     voiceChar="toyman";voiceLine="戻ってきた残り火がある。受け取るかは、あなたが決めていい。";nightCta="shelf";
   }else if(canActFires.length>0){
     voiceChar="toyman";voiceLine="棚の残り火を、送り出せる。行き先は、あなたが決めていい。";nightCta="shelf";
+  }else if(hasLegacyAction){
+    var legacyReady=legacyNeedsAction.some(function(c){return c.status==="ready";});
+    var legacyDepart=legacyNeedsAction.some(function(c){return c.status==="awaiting"||c.unitState==="waiting";});
+    var legacyQuestion=legacyNeedsAction.some(function(c){return c.questionPending;});
+    voiceChar="toyman";
+    if(legacyReady){
+      voiceLine="まだ受け取っていない残り火がある。";nightCta="ember-ready";
+    }else if(legacyDepart){
+      voiceLine="まだ出発していない残り火がある。";nightCta="ember-depart";
+    }else if(legacyQuestion){
+      voiceLine="問いが来ている。";nightCta="ember-question";
+    }else{
+      voiceLine="まだ残っているものがある。";nightCta="ember";
+    }
   }else if(fires.length>0){
     voiceChar="kana";voiceLine="今日はここに置いておこう。日が変わったら、また会える。";nightCta=null;
   }else if(cards.length>0){
@@ -3967,6 +3989,10 @@ function HomeView(p){
         <span className="hnv-say">「{voiceLine}」</span>
       </div>
       {nightCta==="shelf"&&<button className="btn btn-g hnv-cta" onClick={goToShelf}>棚を見る</button>}
+      {nightCta==="ember-ready"&&<button className="btn btn-g hnv-cta" onClick={goToShelf}>受け取りに行く</button>}
+      {nightCta==="ember-depart"&&<button className="btn btn-g hnv-cta" onClick={goToShelf}>出発させる</button>}
+      {nightCta==="ember-question"&&<button className="btn btn-g hnv-cta" onClick={goToShelf}>問いを受け取る</button>}
+      {nightCta==="ember"&&<button className="btn btn-g hnv-cta" onClick={goToShelf}>残り火を見に行く</button>}
     </section>
 
     {/* 2. 残り火を預ける */}
@@ -4649,8 +4675,8 @@ function App(){
   var burnReceiptCb=useCallback(function(id){if(!game)return;var r=(game.receipts||[]).find(function(x){return x.id===id;});if(!r)return;if(r.receiptStatus!=="graduated"){showToast("この受領証は、まだ心へ返せません。卒業（プラス変化30%以上）が必要です。");return;}setBurnTargetId(id);},[game,showToast]);// eslint-disable-line
   var confirmBurnCb=useCallback(function(id){if(!game)return;var r=burnReceipt(game,id);setBurnTargetId(null);if(!r.ok){showToast(r.msg);return;}setGame(r.state);persistSave(r.state);if(r.isEnding){showToast(r.msg);setTimeout(function(){setScreen("ending");},700);}else showToast(r.msg);},[game,showToast]);// eslint-disable-line
   var dismissIntroSceneCb=useCallback(function(id){if(!game)return;var ns=cloneS(game);ns.introQueue=(ns.introQueue||[]).filter(function(x){return x!==id;});if(!ns.seenIntroScenes)ns.seenIntroScenes=[];if(ns.seenIntroScenes.indexOf(id)===-1)ns.seenIntroScenes=ns.seenIntroScenes.concat([id]);ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);},[game]);// eslint-disable-line
-  var deleteEmberCb=useCallback(function(id){if(!game)return;var card=(game.emberCards||[]).find(function(c){return c.id===id;});if(!card)return;var ns=Object.assign({},game,{emberCards:(game.emberCards||[]).filter(function(c){return c.id!==id;}),lastSavedAt:nowISO()});ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};ns.logs=[{hours:0,events:[{text:"残り火「"+makeEmberTitle(card)+"」を箱庭から外した。",kind:"ember",pri:3}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);showToast("残り火を削除しました。");},[game,showToast]);// eslint-disable-line
-  var advanceEmberCb=useCallback(function(id,choice,isCustom){if(!game)return;var r=advanceEmberUnit(game,id,choice,isCustom);if(!r.ok){showToast(r.msg+" "+(r.sub||""));return;}var ns=r.state;ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};setGame(ns);persistSave(ns);showToast(r.soulGained?(r.msg+" — あなたの言葉が、この残り火に魂を入れました。"):(r.msg+" — "+r.sub));},[game,showToast]);// eslint-disable-line
+  var deleteEmberCb=useCallback(function(id){if(!game)return;var card=(game.emberCards||[]).find(function(c){return c.id===id;});if(!card)return;var ns=Object.assign({},game,{emberCards:(game.emberCards||[]).filter(function(c){return c.id!==id;}),lastSavedAt:nowISO()});ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};ns.logs=[{hours:0,events:[{text:"残り火「"+makeEmberTitle(card)+"」を箱庭から外した。",kind:"ember",pri:3}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);setGame(ns);persistSave(ns);showToast("箱庭から外しました。");},[game,showToast]);// eslint-disable-line
+  var advanceEmberCb=useCallback(function(id,choice,isCustom){if(!game)return;var r=advanceEmberUnit(game,id,choice,isCustom);if(!r.ok){showToast(r.msg+" "+(r.sub||""));return;}var ns=r.state;ns.dailyGoals={date:nowISO().slice(0,10),goals:makeGoals(ns)};setGame(ns);persistSave(ns);showToast(r.soulGained?(r.msg+" — あなたの言葉が、この残り火に刻まれました。"):(r.msg+" — "+r.sub));},[game,showToast]);// eslint-disable-line
   var editEmberCb=useCallback(function(id,fields){
     if(!game)return;
     var ns=cloneS(game);
@@ -5542,8 +5568,10 @@ function EmberView(p){
   var hasLegacy=cards.length>0||receipts.length>0||(game.returnedToHeart||[]).length>0;
   var hasAny=hasAnyFires||hasLegacy;
   var legacyNeedsAction=cards.filter(function(c){
-    return c.unitState==="waiting"||c.status==="ready"
-      ||(c.unitState&&c.unitState!=="completed"&&c.unitState!=="waiting"&&c.questionPending);
+    return c.unitState==="waiting"
+      || c.status==="ready"
+      || c.status==="awaiting"
+      || (c.unitState && c.unitState!=="completed" && c.unitState!=="waiting" && c.questionPending);
   });
   var [legacyOpen,setLegacyOpen]=useState(legacyNeedsAction.length>0);
   useEffect(function(){if(legacyNeedsAction.length>0)setLegacyOpen(true);},[legacyNeedsAction.length]);
@@ -5680,7 +5708,15 @@ function EmberView(p){
     <p className="facility-desc">捨てなかった残り火を、置いておく場所。</p>
     <JudgmentRoutePanel game={game} onOpenCreate={onOpenCreate}/><QuestionTicketPanel game={game}/>
     {hasAny&&<button className="ev-create-btn touchable" onClick={p.onJourney}>+ 残り火を預ける</button>}
-    <JourneyShelf game={game} onOpen={p.onOpenFire}/>
+    {hasAnyFires
+      ? <JourneyShelf game={game} onOpen={p.onOpenFire}/>
+      : hasLegacy
+        ? <div className="ev-shelf-empty-legacy">
+            <p className="esel-text">この棚には、まだ旅に出した残り火はありません。</p>
+            <p className="esel-sub">以前の残り火は、下の「以前の残り火」に残っています。</p>
+          </div>
+        : null
+    }
     {!hasAny&&<div className="ev-empty">
       <div className="ev-empty-k">まだ残り火はありません。</div>
       <div className="ev-empty-title">書いたあとに、心に残ってしまったもの。</div>
