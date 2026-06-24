@@ -4529,6 +4529,10 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .jfv-debug-btn{margin-top:12px;font-size:11px;opacity:.7;border:1px dashed #f90 !important;color:#f90 !important;background:transparent !important}
 .jfv-actions{display:flex;flex-direction:column;gap:8px}
 
+/* 預かり札 詳細 */
+.jfv-azukari-body{margin:16px 0 20px;padding:14px 16px;background:rgba(176,128,168,.06);border:1px solid rgba(176,128,168,.15);border-radius:12px}
+.jfv-azukari-line{font-family:var(--serif);font-size:13.5px;color:var(--dim);line-height:1.85;margin:0}
+
 /* ── できごとログ ── */
 .evlog-panel .lh{margin-bottom:10px}
 .evlog-row{display:flex;flex-direction:column;gap:2px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04)}

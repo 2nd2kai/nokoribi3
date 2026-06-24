@@ -4592,6 +4592,27 @@ function JourneyFireView(p){
     p.onChange&&p.onChange(ns);
     p.onClose&&p.onClose();
   }
+  if(f.form==="azukari"){
+    return <div className="ov ej-ov" onClick={p.onClose}><div className="bsh ej-bsh" onClick={function(e){e.stopPropagation();}}>
+      <div className="sh-handle"/>
+      <div className="ej-in jfv">
+        <div className="jfv-head jf-kept">
+          <span className="ej-formed-label">預かり札</span>
+          <span className="jfv-title">「{f.label||"今夜の預かり札"}」</span>
+        </div>
+        <div className="jfv-azukari-body">
+          <p className="jfv-azukari-line">今夜の気持ちは、受け取りました。</p>
+          <p className="jfv-azukari-line">答えを求めずに、ただ預かっています。</p>
+          <p className="jfv-azukari-line">これは旅の途中ではありません。</p>
+          <p className="jfv-azukari-line">今夜は、ここに置いておけます。</p>
+        </div>
+        {f.shelved
+          ?<button className="btn btn-g ej-go" onClick={unshelve}>棚の正面に戻す</button>
+          :<button className="btn btn-g ej-go" onClick={shelve}>棚の奥へしまう</button>}
+        <button className="btn btn-g ej-cancel" onClick={p.onClose}>棚にもどる</button>
+      </div>
+    </div></div>;
+  }
   return <div className="ov ej-ov" onClick={p.onClose}><div className="bsh ej-bsh" onClick={function(e){e.stopPropagation();}}>
     <div className="sh-handle"/>
     <div className="ej-in jfv">
