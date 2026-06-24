@@ -3957,7 +3957,7 @@ function HomeView(p){
   }else{
     voiceChar="toyman";voiceLine="残り火を、預けて。私が、探してくる。";nightCta=null;
   }
-  function scrollToShelf(){var el=document.getElementById("home-shelf");if(el)el.scrollIntoView({behavior:"smooth"});}
+  function goToShelf(){p.onNav&&p.onNav("ember");}
   return <div className="scroll home-screen">
     {/* 1. 今夜の声 */}
     <section className="home-night-voice">
@@ -3966,7 +3966,7 @@ function HomeView(p){
         <span className="hnv-name">{voiceChar==="kana"?"かな":"トイマン"}</span>
         <span className="hnv-say">「{voiceLine}」</span>
       </div>
-      {nightCta==="shelf"&&<button className="btn btn-g hnv-cta" onClick={scrollToShelf}>棚を見る</button>}
+      {nightCta==="shelf"&&<button className="btn btn-g hnv-cta" onClick={goToShelf}>棚を見る</button>}
     </section>
 
     {/* 2. 残り火を預ける */}
@@ -3994,10 +3994,15 @@ function HomeView(p){
       }
     </section>
 
-    {/* 3. 棚 */}
-    <div id="home-shelf">
-      <JourneyShelf game={game} onOpen={function(id){p.onOpenFire&&p.onOpenFire(id);}}/>
-    </div>
+    {/* 3. 棚サマリー */}
+    {(function(){
+      var activeFires=(game.sentFires||[]).filter(function(f){return !f.returnedAt&&!f.shelved;});
+      if(!activeFires.length)return null;
+      return <div className="home-shelf-summary">
+        <p className="hss-text">捨てなかった残り火が、棚に並んでいます。</p>
+        <button className="btn btn-g hss-btn" onClick={goToShelf}>残り火の棚を見る →</button>
+      </div>;
+    })()}
 
     {/* 4. 灯貨ミニ */}
     {(game.toka&&game.toka.total>0)&&<div className="home-toka-mini">
@@ -4757,7 +4762,7 @@ function App(){
         <Header title="みんな" day={game.world.day}/>
         <div className="scroll"><div className="cg">{getMetCharIds(game).map(function(id){return <CharCard key={id} id={id} c={game.characters[id]} prog={prog[id]} game={game} expanded={expanded===id} onToggle={function(){setExpanded(function(v){return v===id?null:id;});}}/>;})} </div></div>
       </>}
-      {screen==="ember"&&<><Header title="残り火" day={game.world.day}/><ProcessingLine game={game}/><EmberView game={game} onReceive={receiveEmberCb} onDepart={departEmberCb} onDelete={deleteEmberCb} onAdvance={advanceEmberCb} onBurnReceipt={burnReceiptCb} onEditEmber={editEmberCb} onOpenCreate={function(){setShowCreate(true);}} onOpenBattle={function(){setBattleFrom("ember");setScreen("battle");}}/></>}
+      {screen==="ember"&&<><Header title="残り火" day={game.world.day}/><EmberView game={game} onReceive={receiveEmberCb} onDepart={departEmberCb} onDelete={deleteEmberCb} onAdvance={advanceEmberCb} onBurnReceipt={burnReceiptCb} onEditEmber={editEmberCb} onOpenCreate={function(){setShowCreate(true);}} onOpenBattle={function(){setBattleFrom("ember");setScreen("battle");}} onJourney={function(){setShowJourney(true);}} onOpenFire={function(id){setFireDetailId(id);}}/></>}
       {screen==="titles"&&<>
         <Header title="称号帳" day={game.world.day}/>
         <TitlesView game={game}/>
@@ -5531,14 +5536,24 @@ function EmberView(p){
   var [editReaction,setEditReaction]=useState("");
   var [customAnswerId,setCustomAnswerId]=useState(null);
   var [customAnswerText,setCustomAnswerText]=useState("");
+  var fires=game.sentFires||[];
+  var hasAnyFires=fires.length>0;
+  var cards=game.emberCards||[];var receipts=game.receipts||[];
+  var hasLegacy=cards.length>0||receipts.length>0||(game.returnedToHeart||[]).length>0;
+  var hasAny=hasAnyFires||hasLegacy;
+  var legacyNeedsAction=cards.filter(function(c){
+    return c.unitState==="waiting"||c.status==="ready"
+      ||(c.unitState&&c.unitState!=="completed"&&c.unitState!=="waiting"&&c.questionPending);
+  });
+  var [legacyOpen,setLegacyOpen]=useState(legacyNeedsAction.length>0);
+  useEffect(function(){if(legacyNeedsAction.length>0)setLegacyOpen(true);},[legacyNeedsAction.length]);
   function openEdit(card){setEditingId(card.id);setEditTitle(card.title||"");setEditMemo(card.memo||"");setEditBody(card.bodyText||"");setEditReaction(card.reaction||"");}
   function saveEdit(id){onEditEmber&&onEditEmber(id,{title:editTitle,memo:editMemo,bodyText:editBody,reaction:editReaction});setEditingId(null);}
-  var cards=game.emberCards||[];var receipts=game.receipts||[];
   var awaiting=cards.filter(function(c){return c.status==="awaiting"&&!c.unitState;});
   var ready=cards.filter(function(c){return c.status==="ready"&&!c.unitState;});
   var inProg=cards.filter(function(c){return c.status!=="ready"&&c.status!=="awaiting"&&!c.unitState;});
   var units=cards.filter(function(c){return c.unitState;});
-  function deleteButton(card){return <button className="ev-del-btn" onClick={function(e){e.stopPropagation();onDelete&&onDelete(card.id);}}>削除</button>;}
+  function deleteButton(card){return <button className="ev-del-btn" onClick={function(e){e.stopPropagation();onDelete&&onDelete(card.id);}}>箱庭から外す</button>;}
   function editButton(card){return <button className="ev-edit-btn" onClick={function(e){e.stopPropagation();openEdit(card);}}>編集</button>;}
   function editForm(card){
     if(editingId!==card.id)return null;
@@ -5578,7 +5593,7 @@ function EmberView(p){
         <p className="evbn-note">これは答えを出すための残り火ではありません。今夜の判決を、問いとして一晩預けるための残り火です。</p>
       </div>}
       {card.route==="judgment_conversion"&&!card.mode&&<div className="ev-route-badge">判決火 → 問い火</div>}
-      {card.soul&&<div className="ev-soul-badge">魂入り — この残り火は、あなたの言葉を持っています</div>}
+      {card.soul&&<div className="ev-soul-badge">手がかりが増えました</div>}
       <DeliveredWordsBox card={card}/>
       {card.questionTicket&&<div className="ev-ticket-box">
         <div className="evt-k">探索完了 / 問い札発見</div>
@@ -5602,7 +5617,7 @@ function EmberView(p){
           </div>
           <div className="eeb-footer">
             <span className="eeb-label">{pct<20?"まだ入口付近":pct<50?"森の中ほど":pct<80?"かなり深く":"届きそう"}</span>
-            <span className="eeb-pct">回収率 {pct}%</span>
+            <span className="eeb-pct">探索の深さ {pct}%</span>
           </div>
           <div className="eeb-face-row">
             <button className="btn btn-p eeb-face-btn touchable" onClick={function(){onOpenBattle&&onOpenBattle();}}>影と向き合う</button>
@@ -5611,13 +5626,13 @@ function EmberView(p){
         </div>;
       })()}
       <div className="ev-unit-progress">
-        <div className="eup-top"><span>{isCompleted?"受領準備":pending?"問い札発生":card.unitState==="exploring"?"回収率":"次の問いまで"}</span><b>{isCompleted?"完了":Math.round(card.progress||0)+"%"}</b></div>
+        <div className="eup-top"><span>{isCompleted?"受領準備":pending?"問い札発生":card.unitState==="exploring"?"探索の深さ":"次の問いまで"}</span><b>{isCompleted?"完了":Math.round(card.progress||0)+"%"}</b></div>
         <Bar value={isCompleted?100:(card.progress||0)} color="var(--ember2)" h={5}/>
       </div>
       {pending&&<div className="ev-pending-ticket">
         <div className="ept-k">問い札が出ています</div>
         <div className="ept-q">「{(card.pendingQuestion&&card.pendingQuestion.question)||flow.question}」</div>
-        <p>答えても、答えなくても、先へ進めます。答えれば、この火はより深く汲み取られます。</p>
+        <p>答えても、答えなくても、先へ進めます。答えれば、この残り火はより深く汲み取られます。</p>
       </div>}
       {!pending&&!isCompleted&&card.unitState!=="exploring"&&card.unitState!=="waiting"&&<div className="ev-unit-question ev-unit-question-wait">
         <div className="euq-label">次に生まれる問い</div>
@@ -5648,7 +5663,7 @@ function EmberView(p){
         {pending&&customAnswerId!==card.id&&<button className="ev-choice-btn ev-choice-custom" onClick={function(){setCustomAnswerId(card.id);setCustomAnswerText("");}}>自分の言葉で答える</button>}
         {pending&&customAnswerId===card.id&&<div className="ev-custom-answer">
           <textarea value={customAnswerText} placeholder="自分の言葉で答えてください。" onChange={function(e){setCustomAnswerText(e.target.value);}}/>
-          <div className="ev-custom-note">答えると、この火に魂が入り、より深く汲み取られます。</div>
+          <div className="ev-custom-note">答えると、この残り火はより深く汲み取られます。</div>
           <div className="ev-custom-actions">
             <button className="btn btn-g" onClick={function(){setCustomAnswerId(null);}}>やめる</button>
             <button className="btn btn-p" disabled={!customAnswerText.trim()} onClick={function(){onAdvance&&onAdvance(card.id,customAnswerText.trim(),true);setCustomAnswerId(null);}}>この言葉で受け取る</button>
@@ -5662,82 +5677,94 @@ function EmberView(p){
     </div>);
   }
   return(<div className="scroll"><div className="ev-wrap">
-    <button className="ev-create-btn touchable" onClick={onOpenCreate}>+ 残り火を預ける</button><JudgmentRoutePanel game={game}/><QuestionTicketPanel game={game}/>
-    {cards.length===0&&<div className="ev-empty">
+    <p className="facility-desc">捨てなかった残り火を、置いておく場所。</p>
+    <JudgmentRoutePanel game={game} onOpenCreate={onOpenCreate}/><QuestionTicketPanel game={game}/>
+    {hasAny&&<button className="ev-create-btn touchable" onClick={p.onJourney}>+ 残り火を預ける</button>}
+    <JourneyShelf game={game} onOpen={p.onOpenFire}/>
+    {!hasAny&&<div className="ev-empty">
       <div className="ev-empty-k">まだ残り火はありません。</div>
       <div className="ev-empty-title">書いたあとに、心に残ってしまったもの。</div>
       <p>終わったはずなのに、まだどこかに残っている問い。<br/>それが、この箱庭では「残り火」になります。</p>
-      <p>ここには、あなたが預けた火だけが並びます。</p>
+      <p>ここには、あなたが預けた残り火だけが並びます。</p>
       <p>書いて満足できた日は、それで大丈夫です。<br/>その日は、ここに残すものはありません。</p>
       <p>また何かが残ってしまった日に、ここへ置きにきてください。</p>
-      <button className="btn btn-p touchable" onClick={onOpenCreate}>残り火を預ける</button>
+      <button className="btn btn-p touchable" onClick={p.onJourney}>残り火を預ける</button>
     </div>}
-    {units.length>0&&<div className="ev-section">
-      <div className="lh">状態を持つ残り火</div>
-      {units.map(unitCard)}
-    </div>}
-    {awaiting.length>0&&<div className="ev-section">
-      <div className="lh">出発待ち</div>
-      {awaiting.map(function(card){return(<div key={card.id} className="ev-card ev-awaiting">
-        <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div><div className="ev-head-btns">{editButton(card)}{deleteButton(card)}</div></div>
-        {editForm(card)}
-        <div className="ev-card-meta">{card.feeling&&<span className="ev-tag">{card.feeling}</span>}{card.wanted&&<span className="ev-tag">{card.wanted}</span>}</div>
-        {card.soul&&<div className="ev-soul-badge">魂入り — この残り火は、あなたの言葉を持っています</div>}
-        <DeliveredWordsBox card={card} compact={true}/>
-        <div className="ev-card-desc">あなたが送った残り火を、トイマンが未受領の森で回収してくれます。見つけるのは答えではなく、問いの欠片です。</div>
-        <button className="btn btn-p touchable" style={{marginTop:10}} onClick={function(){onDepart&&onDepart(card.id);}}>トイマンを出発させる</button>
-      </div>);})}
-    </div>}
-    {ready.length>0&&<div className="ev-section">
-      <div className="lh">受領できる封筒</div>
-      {ready.map(function(card){return(<div key={card.id} className="ev-card ev-ready">
-        <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div><div className="ev-head-btns">{editButton(card)}{deleteButton(card)}</div></div>
-        {editForm(card)}
-        <div className="ev-card-meta">{card.feeling&&<span className="ev-tag">{card.feeling}</span>}{card.wanted&&<span className="ev-tag">{card.wanted}</span>}</div>
-        {card.soul&&<div className="ev-soul-badge">魂入り — この残り火は、あなたの言葉を持っています</div>}
-        <DeliveredWordsBox card={card} compact={true}/>
-        <div className="ev-card-desc">はじまりの部屋で、自分宛ての封筒が待っています。</div>
-        <button className="btn btn-p touchable" style={{marginTop:10}} onClick={function(){onReceive(card.id);}}>自分で受け取る</button>
-      </div>);})}
-    </div>}
-    {inProg.length>0&&<div className="ev-section">
-      <div className="lh">処理中</div>
-      {inProg.map(function(card){var st=EMBER_STATUS[card.status]||{};return(<div key={card.id} className="ev-card">
-        <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div><div className="ev-head-btns">{editButton(card)}{deleteButton(card)}</div></div>
-        {editForm(card)}
-        <div className="ev-card-status">{st.who?<span className={"nd cd-"+st.who}/>:null}<span className="ev-st-lbl">{st.label}</span></div>
-        <Bar value={card.progress||0} color={st.col||"var(--dim)"} h={4}/>
-        <div className="ev-progress-info"><span>現在 {Math.round(card.progress||0)}%</span><span>あと {Math.max(0,100-Math.round(card.progress||0))}% で {getEmberNextLabel(card.status)}</span></div>
-        <DeliveredWordsBox card={card} compact={true}/>
-      </div>);})}
-    </div>}
-    {receipts.length>0&&<div className="ev-section">
-      <div className="lh">受領証</div>
-      <p className="ev-receipt-guide">卒業した受領証は「心へ返す」ことができます。心へ返すと、その分だけ箱庭が静かになっていきます。卒業したものを全部返しきると、ひとつの区切りが訪れます。</p>
-      {receipts.map(function(r){var grad=r.receiptStatus==="graduated";return(<ReceiptCard key={r.id} r={r} grad={grad} game={game} onBurnReceipt={onBurnReceipt}/>);})}
-    </div>}
-    {receipts.length>0&&<div className="ev-section">
-      <div className="lh">問いの記録</div>
-      <p className="ev-q-history-note">受領証から生まれた問いの軌跡です。</p>
-      <div className="ev-q-history">
-        {receipts.filter(function(r){return r.nextQuestion;}).map(function(r,i){return(
-          <div key={i} className="evqh-item">
-            <div className="evqh-title">「{r.title}」</div>
-            <div className="evqh-q">「{r.nextQuestion}」</div>
+    {hasLegacy&&<div className="legacy-section">
+      <button className="legacy-toggle" onClick={function(){setLegacyOpen(function(v){return !v;});}}>
+        <span className="legacy-toggle-label">以前の残り火</span>
+        {legacyNeedsAction.length>0&&<span className="legacy-badge">対応待ち {legacyNeedsAction.length}件</span>}
+        <span className="legacy-toggle-icon">{legacyOpen?"▲":"▼"}</span>
+      </button>
+      {legacyOpen&&<div className="legacy-content">
+        {units.length>0&&<div className="ev-section">
+          <div className="lh">旅の途中の残り火</div>
+          {units.map(unitCard)}
+        </div>}
+        {awaiting.length>0&&<div className="ev-section">
+          <div className="lh">出発待ち</div>
+          {awaiting.map(function(card){return(<div key={card.id} className="ev-card ev-awaiting">
+            <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div><div className="ev-head-btns">{editButton(card)}{deleteButton(card)}</div></div>
+            {editForm(card)}
+            <div className="ev-card-meta">{card.feeling&&<span className="ev-tag">{card.feeling}</span>}{card.wanted&&<span className="ev-tag">{card.wanted}</span>}</div>
+            {card.soul&&<div className="ev-soul-badge">手がかりが増えました</div>}
+            <DeliveredWordsBox card={card} compact={true}/>
+            <div className="ev-card-desc">あなたが送った残り火を、トイマンが未受領の森で回収してくれます。見つけるのは答えではなく、問いの欠片です。</div>
+            <button className="btn btn-p touchable" style={{marginTop:10}} onClick={function(){onDepart&&onDepart(card.id);}}>トイマンを出発させる</button>
+          </div>);})}
+        </div>}
+        {ready.length>0&&<div className="ev-section">
+          <div className="lh">受領待ちの残り火</div>
+          {ready.map(function(card){return(<div key={card.id} className="ev-card ev-ready">
+            <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div><div className="ev-head-btns">{editButton(card)}{deleteButton(card)}</div></div>
+            {editForm(card)}
+            <div className="ev-card-meta">{card.feeling&&<span className="ev-tag">{card.feeling}</span>}{card.wanted&&<span className="ev-tag">{card.wanted}</span>}</div>
+            {card.soul&&<div className="ev-soul-badge">手がかりが増えました</div>}
+            <DeliveredWordsBox card={card} compact={true}/>
+            <div className="ev-card-desc">はじまりの部屋で、自分宛ての封筒が待っています。</div>
+            <button className="btn btn-p touchable" style={{marginTop:10}} onClick={function(){onReceive(card.id);}}>自分で受け取る</button>
+          </div>);})}
+        </div>}
+        {inProg.length>0&&<div className="ev-section">
+          <div className="lh">旅の途中</div>
+          {inProg.map(function(card){var st=EMBER_STATUS[card.status]||{};return(<div key={card.id} className="ev-card">
+            <div className="ev-card-head"><div className="ev-card-title">{makeEmberTitle(card)}</div><div className="ev-head-btns">{editButton(card)}{deleteButton(card)}</div></div>
+            {editForm(card)}
+            <div className="ev-card-status">{st.who?<span className={"nd cd-"+st.who}/>:null}<span className="ev-st-lbl">{st.label}</span></div>
+            <Bar value={card.progress||0} color={st.col||"var(--dim)"} h={4}/>
+            <div className="ev-progress-info"><span>現在 {Math.round(card.progress||0)}%</span><span>あと {Math.max(0,100-Math.round(card.progress||0))}% で {getEmberNextLabel(card.status)}</span></div>
+            <DeliveredWordsBox card={card} compact={true}/>
+          </div>);})}
+        </div>}
+        {receipts.length>0&&<div className="ev-section">
+          <div className="lh">受領証</div>
+          <p className="ev-receipt-guide">卒業した受領証は「心へ返す」ことができます。心へ返すと、その分だけ箱庭が静かになっていきます。卒業したものを全部返しきると、ひとつの区切りが訪れます。</p>
+          {receipts.map(function(r){var grad=r.receiptStatus==="graduated";return(<ReceiptCard key={r.id} r={r} grad={grad} game={game} onBurnReceipt={onBurnReceipt}/>);})}
+        </div>}
+        {receipts.length>0&&<div className="ev-section">
+          <div className="lh">受領証から生まれた問い</div>
+          <p className="ev-q-history-note">受領証から生まれた問いの軌跡です。</p>
+          <div className="ev-q-history">
+            {receipts.filter(function(r){return r.nextQuestion;}).map(function(r,i){return(
+              <div key={i} className="evqh-item">
+                <div className="evqh-title">「{r.title}」</div>
+                <div className="evqh-q">「{r.nextQuestion}」</div>
+              </div>
+            );})}
           </div>
-        );})}
-      </div>
-      {receipts.filter(function(r){return r.holdText;}).length>0&&<div className="ev-hold-log">
-        <span className="isc-dot cd-utsuro ev-hold-dot"/>
-        <span className="ev-hold-utsuro">うつろ：</span>
-        <span>「保留にしたものが、{receipts.filter(function(r){return r.holdText;}).length}つある。捨てていない」</span>
+          {receipts.filter(function(r){return r.holdText;}).length>0&&<div className="ev-hold-log">
+            <span className="isc-dot cd-utsuro ev-hold-dot"/>
+            <span className="ev-hold-utsuro">うつろ：</span>
+            <span>「保留にしたものが、{receipts.filter(function(r){return r.holdText;}).length}つある。捨てていない」</span>
+          </div>}
+        </div>}
+        {(game.returnedToHeart||[]).length>0&&<div className="ev-section">
+          <div className="lh">心へ返した火</div>
+          <div className="ev-returned-list">
+            {(game.returnedToHeart||[]).map(function(r,i){return <div key={i} className="ev-returned-item">「{r.title}」<span className="eri-sub">心へ戻した</span></div>;})}
+          </div>
+        </div>}
       </div>}
-    </div>}
-    {(game.returnedToHeart||[]).length>0&&<div className="ev-section">
-      <div className="lh">心へ返したもの</div>
-      <div className="ev-returned-list">
-        {(game.returnedToHeart||[]).map(function(r,i){return <div key={i} className="ev-returned-item">「{r.title}」<span className="eri-sub">心へ戻した</span></div>;})}
-      </div>
     </div>}
   </div></div>);
 }
@@ -5806,7 +5833,7 @@ function ReceiptCard(p){
         {copied?"コピーしました ✓":"受領証プロンプトをコピー"}
       </button>
     </div>
-    {grad?<button className="btn btn-burn touchable" onClick={function(){p.onBurnReceipt&&p.onBurnReceipt(r.id);}}>心へ返す（燃やす）</button>
+    {grad?<button className="btn btn-burn touchable" onClick={function(){p.onBurnReceipt&&p.onBurnReceipt(r.id);}}>心へ返す</button>
       :<div className="ev-receipt-locked">プラス変化が30%に届くと、心へ返せます（今 {r.positiveGrowthTotal||0}%）</div>}
   </div>;
 }
