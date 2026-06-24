@@ -3973,7 +3973,7 @@ function HomeView(p){
       voiceLine="まだ残っているものがある。";nightCta="ember";
     }
   }else if(fires.length>0){
-    voiceChar="kana";voiceLine="今日はここに置いておこう。日が変わったら、また会える。";nightCta=null;
+    voiceChar="kana";voiceLine="今夜はここに置いておこう。日が変わったら、また会える。";nightCta=null;
   }else if(cards.length>0){
     voiceChar="toyman";voiceLine="まだ残っている。";nightCta=null;
   }else{
@@ -4034,7 +4034,7 @@ function HomeView(p){
     {(game.toka&&game.toka.total>0)&&<div className="home-toka-mini">
       <span className="htm-label">灯貨</span>
       <span className="htm-count">{game.toka.total}</span>
-      <span className="htm-note">捨てなかった火の記録。まだ使い道はありません。</span>
+      <span className="htm-note">捨てなかった火の記録。今は、ただ集まっていきます。</span>
     </div>}
 
     {/* 5. 箱庭の奥 */}
@@ -4493,7 +4493,7 @@ function JourneyShelf(p){
       {m&&m.question&&<div className="jfire-q">{m.question}</div>}
       {m&&m.answer&&<div className="jfire-a">{m.answer}</div>}
       {m&&m.deferred&&<div className="jfire-a jfire-defer">まだ答えていない。そばに置いてある。</div>}
-      {f.form==="kept"&&<div className="jfire-a jfire-defer">答えを求めずに預かった。</div>}
+      {f.form==="kept"&&<div className="jfire-a jfire-defer">答えを求めずに、預かっています。</div>}
       <div className="jfire-foot">
         {layers>1&&<span className="jfire-layers">{layers}層</span>}
         {f.returnedAt&&<span className="jfire-returned">心へ返した</span>}
@@ -4605,7 +4605,7 @@ function JourneyFireView(p){
               <button className="btn btn-p ej-go" onClick={function(){p.onRevisit(f,"remeet");}}>{jName(f.companion)}と、もう一度会う</button>
               <button className="btn btn-g ej-go" onClick={function(){p.onRevisit(f,"resend");}}>送り先を選び直して、旅に出す</button>
               {canGraduate
-                ?<button className="btn btn-g ej-go" onClick={graduate}>心へ返す（卒業）</button>
+                ?<button className="btn btn-g ej-go" onClick={graduate}>心へ返す</button>
                 :<p className="jfv-shelf-note">心へ返せるのは、もう一度会いに来たあとです。</p>}
             </>
           :f.form==="kept"
