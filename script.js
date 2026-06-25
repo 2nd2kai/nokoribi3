@@ -3999,7 +3999,7 @@ function HomeView(p){
     {/* 2. 残り火を預ける */}
     <section className="home-card home-fire-entry">
       <div className="lh">残り火を預ける</div>
-      <p className="hfe-desc">書いたあとに残ったものを、箱庭に預けます。行き先と同行者を選んで、残り火を旅に出せます。</p>
+      <p className="hfe-desc">書いたあとに残ったものを、まず棚に預けます。<br/>送り先と同行者は、今でも、あとでも選べます。</p>
       <button className="btn btn-p hfe-main" onClick={function(){p.onJourney&&p.onJourney();}}>残り火を預ける</button>
     </section>
 
@@ -4808,7 +4808,10 @@ function App(){
     {saveError&&<div className="save-error-banner" role="alert">⚠ セーブが保存できていません。プライベートモードを解除するか、ブラウザの空き容量をご確認ください。進行は次の保存成功時に反映されます。</div>}
     {returnConvId&&<ReturnConvOverlay conv={CBID[returnConvId]} onClose={function(){setReturnConvId(null);}} onGoConv={function(){setReturnConvId(null);readConv(returnConvId);setScreen(MVP_MODE?"log":"conv");}}/>}
     {screen==="ending"&&<EndingView game={game} onFinish={function(){var ns=Object.assign({},game,{endingSeen:true,lastSavedAt:nowISO()});setGame(ns);persistSave(ns);setScreen("home");}}/>}
-    {screen==="closed"&&(!game.introSeen?<IntroScreen onComplete={function(){var ns=Object.assign({},game,{introSeen:true,lastSavedAt:nowISO()});setGame(ns);persistSave(ns);}}/>:<ClosedScreen game={game} first={first} onOpen={openWorld}/>)}
+    {screen==="closed"&&(!game.introSeen?<IntroScreen
+      onBeginJourney={function(){var ns=Object.assign({},game,{introSeen:true,lastSavedAt:nowISO()});setGame(ns);persistSave(ns);setScreen("home");setShowJourney(true);}}
+      onFarewell={function(){var ns=Object.assign({},game,{introSeen:true,lastSavedAt:nowISO()});setGame(ns);persistSave(ns);}}
+    />:<ClosedScreen game={game} first={first} onOpen={openWorld}/>)}
     {screen!=="closed"&&screen!=="ending"&&<>
       {screen==="home"&&<>
         <Header title="ホーム" day={game.world.day}/>
@@ -5052,7 +5055,7 @@ function IntroScreen(p){
             <div className="op-farewell-line"><span className="isc-dot cd-utsuro op-dot"/><span className="op-say">「うつろが、待っています」</span></div>
           </div>
           <div className="op-btn-wrap op-fade-up" style={{marginTop:32}}>
-            <button className="btn btn-g op-btn" onClick={p.onComplete}>閉じる</button>
+            <button className="btn btn-g op-btn" onClick={p.onFarewell}>閉じる</button>
           </div>
         </div>
       </div>
@@ -5064,12 +5067,11 @@ function IntroScreen(p){
       <div className="op-wrap">
         <div className="op-inner op-question-inner">
           <div className="op-question-body">
-            <p className="op-q-lead">書いたあと</p>
-            <p className="op-q-main">誰かに届いたか<br/>気になったことは<br/>ありますか？</p>
-            <p className="op-q-sub">通知を確認した。反応が気になった。<br/>そういう感覚が、残り火です。</p>
+            <p className="op-q-main">今、預けたい残り火はありますか？</p>
+            <p className="op-q-sub">小説、記事、投稿、下書き。誰にも見せていない言葉。<br/>書いたあとに残った痛みや問い。<br/><br/>届いたかどうかではなく、<br/>まだ残っているものを預けられます。</p>
           </div>
           <div className="op-q-choices">
-            <button className="btn btn-p big touchable op-q-yes" onClick={p.onComplete}>ある・あった</button>
+            <button className="btn btn-p big touchable op-q-yes" onClick={p.onBeginJourney}>残り火を預ける</button>
             <button className="btn btn-g op-q-no" onClick={goFarewell}>今はない</button>
           </div>
         </div>
