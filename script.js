@@ -766,7 +766,7 @@ function getUnlockedPlaceKeys(game){
 }
 function getVisibleTabs(game){
   if(!game)return[];
-  if(MVP_MODE){var showNiwata=(game.sentFires||[]).some(function(f){return f.form!=="azukari";});var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];if(showNiwata)mvpT.push({id:"peek",label:"箱庭"});return mvpT;}
+  if(MVP_MODE){var showNiwata=(game.sentFires||[]).some(function(f){return f.form!=="azukari";});var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"}];if(showNiwata)mvpT.push({id:"peek",label:"箱庭"});return mvpT;}
   ensureProgressiveUnlockShell(game);
   var tabs=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];
   if(game.unlocks.tabs.garden)tabs.push({id:"peek",label:"箱庭"});
@@ -2340,8 +2340,25 @@ function canAdvanceByQuestion(card){
   return !!(card&&card.unitState&&card.questionPending&&card.pendingQuestion);
 }
 
+function jDestToPlace(dest){
+  if(dest==="forest")return "unexplored_forest";
+  if(dest==="spring")return "tears_spring";
+  if(dest==="tower")return "record_tower";
+  if(dest==="post")return "post_office";
+  return "starting_room";
+}
+function getJourneyFiresAtPlace(game,place){
+  return (game.sentFires||[]).filter(function(f){
+    if(f.returnedAt)return false;
+    if(f.form==="azukari")return false;
+    var pl=f.dest?jDestToPlace(f.dest):"starting_room";
+    return pl===place;
+  });
+}
 function getEmbersAtPlace(game,place){
-  return (game.emberCards||[]).filter(function(c){return getEmberPlace(c)===place;});
+  var legacy=(game.emberCards||[]).filter(function(c){return getEmberPlace(c)===place;});
+  var journey=getJourneyFiresAtPlace(game,place);
+  return legacy.concat(journey);
 }
 function getEmbersForCharacter(game,id){
   return (game.emberCards||[]).filter(function(c){
@@ -3824,6 +3841,11 @@ function NowSceneView(p){
       })())}
 
 
+      {loc==="record_tower"&&MVP_MODE&&<div className="now-record-tower-panel">
+        <EventLogPanel game={game}/>
+        <LogConvPanel game={game}/>
+      </div>}
+
       {pressureOpen&&((function(){
         var a=game.characters.auditor||{};
         var st=a.stats||{};
@@ -4356,7 +4378,25 @@ function EmberJourney(p){
     setDepositedFire(placedFire);
     setPhase("placed");
   }
-  function sendOut(){if(!dest||!comp)return;setPhase("travel");}
+  function sendOut(){
+    if(!dest||!comp)return;
+    var curFire=depositedFire||ex;
+    if(curFire){
+      var ns=cloneS(p.game);
+      if(!ns.sentFires)ns.sentFires=[];
+      var updatedFire=Object.assign({},curFire,{dest:dest,companion:comp,sentAt:nowISO(),lastTouch:nowISO()});
+      ns.sentFires=ns.sentFires.map(function(f){return f.id===curFire.id?updatedFire:f;});
+      var compLoc=jDestToPlace(dest);
+      if(comp==="toyman"&&ns.characters&&ns.characters.toyman){ns.characters.toyman.location=compLoc;ns.characters.toyman.lastAction="exploring";}
+      else if(comp==="kana"&&ns.characters&&ns.characters.kana){ns.characters.kana.location=compLoc;ns.characters.kana.lastAction="comforting";}
+      else if(comp==="utsuro"&&ns.characters&&ns.characters.utsuro){ns.characters.utsuro.location=compLoc;ns.characters.utsuro.lastAction="organizing";}
+      appendEventLog(ns,"「"+jTitleOf(updatedFire)+"」を"+jName(comp)+"と旅に出した","placed");
+      ns.lastSavedAt=nowISO();
+      p.onChange&&p.onChange(ns);
+      if(depositedFire)setDepositedFire(updatedFire);
+    }
+    setPhase("travel");
+  }
   function returnFire(didRetreat){
     var pm=noWords||didRetreat;
     var curEx=ex||depositedFire;
@@ -4458,7 +4498,7 @@ function EmberJourney(p){
       <div className="ej-comps">{J_COMPS.map(function(c){return <button key={c.id} className={"ej-comp"+(comp===c.id?" ej-sel":"")} onClick={function(){setComp(c.id);}}>
         <span className={"isc-dot cd-"+c.id+" ej-comp-dot"}/><span className="ej-comp-name">{c.name}</span><span className="ej-comp-desc">{c.desc}</span>
       </button>;})}</div>
-      <button className="btn btn-p ej-go" disabled={!dest||!comp} onClick={sendOut}>旅に出す</button>
+      <button className="btn btn-p ej-go" disabled={!dest||!comp} onClick={sendOut}>{dest==="forest"&&comp==="toyman"?"トイマンを未受領の森へ送り出す":(jName(comp)+"と"+(J_DESTS.find(function(d){return d.id===dest;})||{label:"旅"}).label+"へ向かう")}</button>
       <button className="btn btn-g ej-cancel" onClick={p.onClose}>今日はやめておく</button>
     </div>}
 
@@ -4877,7 +4917,8 @@ function App(){
         <Header title="称号帳" day={game.world.day}/>
         <TitlesView game={game}/>
       </>}
-      {screen==="conv"&&MVP_MODE&&(function(){setScreen("log");return null;})()}
+      {screen==="log"&&MVP_MODE&&(function(){setScreen("home");return null;})()}
+      {screen==="conv"&&MVP_MODE&&(function(){setScreen("home");return null;})()}
       {screen==="conv"&&!MVP_MODE&&<>
         <Header title="場面帳" day={game.world.day}/>
         {viewConv?<ConvDetail conv={CBID[viewConv]} game={game} onBack={function(){setViewConv(null);}} onReceive={receiveConv}/>:<ConvView game={game} onRead={readConv}/>}
