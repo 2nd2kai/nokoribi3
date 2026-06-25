@@ -766,7 +766,7 @@ function getUnlockedPlaceKeys(game){
 }
 function getVisibleTabs(game){
   if(!game)return[];
-  if(MVP_MODE){var showNiwata=(game.sentFires||[]).some(function(f){return f.dest||f.companion||f.returnedAt||(f.meetings&&f.meetings.length>0);});var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];if(showNiwata)mvpT.push({id:"peek",label:"箱庭"});return mvpT;}
+  if(MVP_MODE){var showNiwata=(game.sentFires||[]).some(function(f){return f.form!=="azukari";});var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];if(showNiwata)mvpT.push({id:"peek",label:"箱庭"});return mvpT;}
   ensureProgressiveUnlockShell(game);
   var tabs=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];
   if(game.unlocks.tabs.garden)tabs.push({id:"peek",label:"箱庭"});
