@@ -4102,23 +4102,14 @@ function HomeView(p){
 
     {/* 6. 今夜のこと（BadNight独立セクション） */}
     {(function(){
-      var todayAzukari=(game.sentFires||[]).find(function(f){return f.form==="azukari"&&f.createdAt&&f.createdAt.slice(0,10)===nowISO().slice(0,10);});
-      if(bnDismissed&&!todayAzukari)return null;
+      if(bnDismissed)return null;
       return <section className="home-card home-badnight-section">
-        {todayAzukari
-          ?<div className="hbn-received">
-            <p className="hbn-rcv-msg">今夜は、何も書かずに預かりました。</p>
-            <p className="hbn-rcv-sub">これは作品の残り火ではなく、書けない夜の預かり札です。<br/>言葉にできる日が来たら、あらためて残り火を預けられます。</p>
-          </div>
-          :<>
-            <div className="lh">書けない夜の避難口</div>
-            <p className="hbn-desc">タイトルも、意味も、価値も、まだ書けない夜のための場所です。<br/>何も入力せず、今夜だけ預けられます。</p>
-            <div className="hbn-btns">
-              <button className="btn btn-p hbn-btn-azukari" onClick={function(){p.onAzukari&&p.onAzukari();}}>何も書かずに預ける</button>
-              <button className="btn hbn-btn-dismiss" onClick={function(){p.onJourney&&p.onJourney();}}>本命の残り火を書く</button>
-            </div>
-          </>
-        }
+        <div className="lh">書けない夜の避難口</div>
+        <p className="hbn-desc">今日は、残り火を言葉にしなくても大丈夫です。<br/>タイトルも、意味も、価値も、まだ書けないなら、<br/>何も残さず閉じてもかまいません。</p>
+        <div className="hbn-btns">
+          <button className="btn hbn-btn-dismiss" onClick={function(){setBnDismissed(true);}}>今日は何もしないで閉じる</button>
+          <button className="btn btn-p hbn-btn-azukari" onClick={function(){p.onJourney&&p.onJourney();}}>本命の残り火を書く</button>
+        </div>
       </section>;
     })()}
 
