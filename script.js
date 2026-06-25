@@ -4222,7 +4222,7 @@ function jCertVoice(comp,destId){
   };
   return (tbl[comp]&&tbl[comp][destId])||jVoiceLine(comp);
 }
-function jTitleOf(fire){if(fire.form==="azukari")return fire.label||"今夜の預かり札";var k=(fire.kindle||"").trim();return k.length>22?k.slice(0,22)+"…":(k||"名もない火");}
+function jTitleOf(fire){if(fire.form==="azukari")return fire.label||"今夜の預かり札";if(fire.title&&fire.title.trim())return fire.title.trim();var k=(fire.kindle||"").trim();return k.length>22?k.slice(0,22)+"…":(k||"名もない火");}
 function appendEventLog(ns,text,kind){ns.eventLog=[{text:text,kind:kind||"record",at:nowISO()}].concat(ns.eventLog||[]).slice(0,150);}
 function jCalDay(iso){var d=iso?new Date(iso):new Date();return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();}
 function jLockedToday(fire){if(!fire||!fire.lastTouch)return false;return jCalDay(fire.lastTouch)===jCalDay();}
@@ -4247,6 +4247,7 @@ function CertificateView(p){
     </div>
 
     <div className="cert-kindle-block">
+      {f.title&&<div className="cert-title-line">{f.title}</div>}
       <div className="cert-kindle-label">火種</div>
       <blockquote className="cert-kindle">「{f.kindle}」</blockquote>
       {f.pain&&<p className="cert-pain">その奥：{f.pain}</p>}
@@ -4303,6 +4304,13 @@ function EmberJourney(p){
   var [report,setReport]=useState("");
   var [result,setResult]=useState(null);
   var [depositedFire,setDepositedFire]=useState(null);
+  var [title,setTitle]=useState("");
+  var [memo,setMemo]=useState("");
+  var [bodyText,setBodyText]=useState("");
+  var [reaction,setReaction]=useState("");
+  var [imS,setImS]=useState(50);
+  var [imM,setImM]=useState(50);
+  var [imV,setImV]=useState(50);
 
   function commitFire(fire,isUpdate){
     var ns=cloneS(p.game);
@@ -4329,23 +4337,30 @@ function EmberJourney(p){
   function proceedFromDeposit(){
     if(!kindle.trim())return;
     var danger=tooHard||jHasDanger(kindle)||jHasDanger(pain);
+    var extraFields={
+      title:title.trim()||null,
+      memo:memo.trim(),
+      bodyText:bodyText.trim(),
+      reaction:reaction.trim(),
+      initialMetrics:normalizeMetrics({satisfaction:imS,meaning:imM,value:imV})
+    };
     if(danger){
-      var keptFire={
+      var keptFire=Object.assign({
         id:"sf"+Date.now(),kindle:kindle.trim(),pain:noWords?null:(pain.trim()||null),noWords:noWords,danger:true,
         dest:null,companion:null,retreated:false,form:"kept",meetings:[],voiceLine:null,
         createdAt:nowISO(),lastTouch:nowISO(),
         dates:{deposited:nowISO(),received:null,returned:null}
-      };
+      },extraFields);
       commitFire(keptFire);
       setResult(keptFire);setPhase("kept");return;
     }
-    var placedFire={
+    var placedFire=Object.assign({
       id:"sf"+Date.now(),kindle:kindle.trim(),
       pain:noWords?null:(pain.trim()||null),noWords:noWords,danger:false,
       dest:null,companion:null,retreated:false,form:"placed",meetings:[],voiceLine:null,
       createdAt:nowISO(),lastTouch:nowISO(),shelved:false,returnedAt:null,
       dates:{deposited:nowISO(),received:null,returned:null}
-    };
+    },extraFields);
     commitFire(placedFire,false);
     setDepositedFire(placedFire);
     setPhase("placed");
@@ -4401,6 +4416,9 @@ function EmberJourney(p){
     {phase==="deposit"&&<div className="ej-in">
       <p className="ej-kicker">残り火を送り出す</p>
       <h2 className="ej-title">残り火を、預ける</h2>
+      <label className="ej-field"><span>タイトル（任意）</span>
+        <input type="text" value={title} placeholder="例：読まれなかった記事の残り火" onChange={function(e){setTitle(e.target.value);}}/>
+      </label>
       <label className="ej-field"><span>火種 ── 書いたあとに残ったもの</span>
         <textarea rows={3} value={kindle} placeholder="例：もう誰にも読まれないなら、書く意味がない" onChange={function(e){setKindle(e.target.value);}}/>
       </label>
@@ -4409,6 +4427,22 @@ function EmberJourney(p){
       </label>
       <button className={"ej-chip"+(noWords?" ej-chip-on":"")} onClick={function(){setNoWords(function(v){return !v;});}}>まだ言葉にできない</button>
       <button className={"ej-chip ej-chip-soft"+(tooHard?" ej-chip-on":"")} onClick={function(){setTooHard(function(v){return !v;});}}>今夜は、これ以上ことばにしたくない（ただ預かってほしい）</button>
+      <div className="ej-metric-box">
+        <div className="ej-metric-title">最初の残り火</div>
+        <p className="ej-metric-desc">数字は判決ではありません。今この瞬間の、あなたの正直な感覚を記録するだけです。あとで変化を見るときの、目印になります。</p>
+        <MetricInput label="書いた納得" value={imS} onChange={setImS}/>
+        <MetricInput label="書いた意味" value={imM} onChange={setImM}/>
+        <MetricInput label="書いた価値" value={imV} onChange={setImV}/>
+      </div>
+      <label className="ej-field"><span>メモ（任意）</span>
+        <input type="text" value={memo} placeholder="例：公開したあと、何度も通知を見た" onChange={function(e){setMemo(e.target.value);}}/>
+      </label>
+      <label className="ej-field"><span>あなたの言葉（任意）</span>
+        <textarea rows={3} value={bodyText} placeholder="読まれなかったことより、何も返ってこなかったことが痛かった。" onChange={function(e){setBodyText(e.target.value);}}/>
+      </label>
+      <label className="ej-field"><span>反応・評価・スキの数など（任意）</span>
+        <textarea rows={2} value={reaction} placeholder="例：いいね3件、コメントなし" onChange={function(e){setReaction(e.target.value);}}/>
+      </label>
       <button className="btn btn-p ej-go" disabled={!kindle.trim()} onClick={proceedFromDeposit}>{tooHard?"預ける":"残り火を預ける"}</button>
       <button className="btn btn-g ej-cancel" onClick={p.onClose}>今日はやめておく</button>
     </div>}
@@ -4630,6 +4664,11 @@ function JourneyFireView(p){
             {f.returnedAt&&<span className="jfv-returned">心へ返した火</span>}
           </div>
           {f.pain&&<p className="jfv-pain">その奥にあったもの：{f.pain}</p>}
+          {(f.memo||f.bodyText||f.reaction)&&<div className="jfv-extra">
+            {f.memo&&<p className="jfv-extra-line"><span className="jfv-extra-label">メモ</span>{f.memo}</p>}
+            {f.bodyText&&<p className="jfv-extra-line"><span className="jfv-extra-label">言葉</span>{f.bodyText}</p>}
+            {f.reaction&&<p className="jfv-extra-line"><span className="jfv-extra-label">反応</span>{f.reaction}</p>}
+          </div>}
           <div className="jfv-strata">
             <p className="jfv-strata-h">これまで会った層</p>
             {meetings.map(function(m,i){return <div key={i} className="jfv-layer">

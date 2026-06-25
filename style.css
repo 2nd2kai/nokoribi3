@@ -4600,3 +4600,17 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .ev-shelf-empty-legacy{padding:18px 16px;border:1px solid var(--line);border-radius:12px;margin-bottom:12px}
 .esel-text{font-family:var(--serif);font-size:13px;color:var(--dim);margin:0 0 6px;line-height:1.7}
 .esel-sub{font-family:var(--serif);font-size:12px;color:var(--faint);margin:0;line-height:1.7}
+
+/* EmberJourney deposit 追加フィールド */
+.ej-metric-box{margin:14px 0;padding:14px 14px 10px;background:rgba(219,164,94,.05);border:1px solid rgba(219,164,94,.18);border-radius:10px}
+.ej-metric-title{font-family:var(--sans);font-size:11px;font-weight:600;color:var(--faint);letter-spacing:.06em;margin-bottom:6px}
+.ej-metric-desc{font-family:var(--serif);font-size:12px;color:var(--dim);line-height:1.65;margin:0 0 10px}
+
+/* JourneyFireView 追加フィールド表示 */
+.jfv-extra{margin:10px 0;padding:10px 13px;background:rgba(219,164,94,.04);border-left:2px solid rgba(219,164,94,.25);border-radius:0 8px 8px 0}
+.jfv-extra-line{display:flex;gap:8px;margin:0 0 5px;font-family:var(--serif);font-size:12.5px;color:var(--dim);line-height:1.65}
+.jfv-extra-line:last-child{margin-bottom:0}
+.jfv-extra-label{flex-shrink:0;font-family:var(--sans);font-size:11px;color:var(--faint);padding-top:1px;min-width:28px}
+
+/* CertificateView タイトル行 */
+.cert-title-line{font-family:var(--serif);font-size:14px;color:var(--ember2);margin-bottom:8px;font-weight:600;line-height:1.5}
