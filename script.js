@@ -1985,7 +1985,7 @@ function getNextAction(game){
   var waiting=cards.find(function(c){return c.unitState==="waiting"||c.status==="awaiting";});
   if(waiting)return{screen:"ember",action:"depart",cardId:waiting.id};
   /* カードが何もない */
-  if(cards.length===0)return{screen:"home",action:"create",cardId:null};
+  if(cards.length===0)return MVP_MODE?{screen:"ember",action:"journey",cardId:null}:{screen:"home",action:"create",cardId:null};
   return null;
 }
 function getEmberNeed(card){return Math.max(0,100-Math.round(card.progress||0));}
@@ -4815,7 +4815,7 @@ function App(){
         <Header title="みんな" day={game.world.day}/>
         <div className="scroll"><div className="cg">{getMetCharIds(game).map(function(id){return <CharCard key={id} id={id} c={game.characters[id]} prog={prog[id]} game={game} expanded={expanded===id} onToggle={function(){setExpanded(function(v){return v===id?null:id;});}}/>;})} </div></div>
       </>}
-      {screen==="ember"&&<><Header title="残り火" day={game.world.day}/><EmberView game={game} onReceive={receiveEmberCb} onDepart={departEmberCb} onDelete={deleteEmberCb} onAdvance={advanceEmberCb} onBurnReceipt={burnReceiptCb} onEditEmber={editEmberCb} onOpenCreate={function(){setShowCreate(true);}} onOpenBattle={function(){setBattleFrom("ember");setScreen("battle");}} onJourney={function(){setShowJourney(true);}} onOpenFire={function(id){setFireDetailId(id);}}/></>}
+      {screen==="ember"&&<><Header title="残り火" day={game.world.day}/><EmberView game={game} onReceive={receiveEmberCb} onDepart={departEmberCb} onDelete={deleteEmberCb} onAdvance={advanceEmberCb} onBurnReceipt={burnReceiptCb} onEditEmber={editEmberCb} onOpenCreate={function(){if(MVP_MODE)setShowJourney(true);else setShowCreate(true);}} onOpenBattle={function(){setBattleFrom("ember");setScreen("battle");}} onJourney={function(){setShowJourney(true);}} onOpenFire={function(id){setFireDetailId(id);}}/></>}
       {screen==="titles"&&<>
         <Header title="称号帳" day={game.world.day}/>
         <TitlesView game={game}/>
@@ -4849,7 +4849,7 @@ function App(){
     {showGlossary&&<GlossaryModal onClose={function(){setShowGlossary(false);}}/>}
     {closingPreview&&<ClosingPreviewOverlay text={closingPreview} onClose={function(){setClosingPreview(null);closeWorld(true);}}/>}
     {philAnswerOpen&&<PhilAnswerModal question={getPhilosophicalQuestion(game).text} onClose={function(){setPhilAnswerOpen(false);}} onSave={function(a){savePhilAnswer(a);setPhilAnswerOpen(false);}}/>}
-    {showCreate&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber}/>}
+    {showCreate&&!MVP_MODE&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber}/>}
     {showJourney&&<EmberJourney game={game} onClose={function(){setShowJourney(false);}} onChange={function(ns){setGame(ns);persistSave(ns);}}/>}
     {journeyRevisit&&<EmberJourney key={journeyRevisit.fire.id+journeyRevisit.intent} game={game} existing={journeyRevisit.fire} intent={journeyRevisit.intent} onClose={function(){setJourneyRevisit(null);}} onChange={function(ns){setGame(ns);persistSave(ns);}}/>}
     {fireDetailId&&!journeyRevisit&&(function(){var f=((game&&game.sentFires)||[]).find(function(x){return x.id===fireDetailId;});if(!f)return null;return <JourneyFireView game={game} fire={f} onClose={function(){setFireDetailId(null);}} onChange={function(ns){setGame(ns);persistSave(ns);}} onRevisit={function(fire,intent){setFireDetailId(null);setJourneyRevisit({fire:fire,intent:intent});}}/>;})()}
