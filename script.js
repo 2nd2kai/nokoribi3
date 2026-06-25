@@ -957,7 +957,7 @@ function makeJourneyGoals(game){
   /* 会い直せる：受領証 ＆ まだ1層 ＆ 今日ロックされていない */
   var remeet=unlocked.filter(function(f){return f.form==="certificate"&&(f.meetings||[]).length<2;});
   /* 置き札・預かり札で、もう一度送り出せる */
-  var resend=unlocked.filter(function(f){return f.form!=="certificate";});
+  var resend=unlocked.filter(function(f){return f.form!=="certificate"&&f.form!=="azukari";});
   if(grad.length>0){
     goals.push({id:"jg_grad",icon:"🤲",done:false,type:"journey",
       label:"残り火を、心へ返す",
@@ -4714,7 +4714,7 @@ function App(){
     if(fields.bodyText!==undefined)card.bodyText=fields.bodyText.trim();
     if(fields.reaction!==undefined)card.reaction=fields.reaction.trim();
     var hasSoul=!!((card.title&&card.title.trim())||(card.memo&&card.memo.trim())||(card.bodyText&&card.bodyText.trim())||(card.reaction&&card.reaction.trim()));
-    if(hasSoul&&!card.soul){card.soul=true;showToast("この残り火に、あなたの魂が入りました。");}
+    if(hasSoul&&!card.soul){card.soul=true;showToast("この残り火に、手がかりが増えました。");}
     else showToast("情報を追加しました。");
     ns.lastSavedAt=nowISO();
     setGame(ns);persistSave(ns);
@@ -4958,7 +4958,7 @@ function BurnConfirmModal(p){
       <div className="burn-sheet" onClick={function(e){e.stopPropagation();}}>
         <div className="burn-title">この受領証を、心へ返しますか</div>
         <div className="burn-receipt-name">「{r.title}」</div>
-        <p className="burn-desc">心へ返すのは、消すことではありません。<br/>受け取りきったものを、自分の中へ戻す行為です。<br/>戻したあとは、この受領証の一覧からは消えます。<br/>もうこの世界では、見ることができなくなります。</p>
+        <p className="burn-desc">心へ返すのは、消すことではありません。<br/>受け取りきったものを、自分の中へ戻す行為です。<br/>戻したあとは、この受領証の一覧からは消えます。<br/>心へ返した記録として、ここに残ります。</p>
         <p className="burn-confirm-q">それでもいいですか？</p>
         <div className="burn-actions">
           <button className="btn btn-g" onClick={p.onCancel}>まだ持っておく</button>
@@ -6177,7 +6177,7 @@ function EmberCreate(p){
       var isFulfilled=total>=240;
       return <div className="ec-extra">
         <p className="ec-q">追加情報</p>
-        <div className="ec-note soul-note">ここは空欄でも預けられます。<br/>ただ、情報を入れることで、この残り火はあなたの魂になります。</div>
+        <div className="ec-note soul-note">ここは空欄でも預けられます。<br/>ただ、情報を入れることで、この残り火はより深く汲み取られます。</div>
         <div className="ec-metric-box">
           <div className="ec-metric-title">最初の残り火</div>
           <p>数字は判決ではありません。今この瞬間の、あなたの正直な感覚を記録するだけです。あとで変化を見るときの、目印になります。</p>
@@ -6195,7 +6195,7 @@ function EmberCreate(p){
           <label className="ec-field"><span>メモ 任意</span><input type="text" value={memo} placeholder="例：公開したあと、何度も通知を見た" onChange={function(e){setMemo(e.target.value);}}/></label>
           <label className="ec-field"><span>あなたの言葉 任意</span><textarea value={body} placeholder="読まれなかったことより、何も返ってこなかったことが痛かった。" onChange={function(e){setBody(e.target.value);}}/></label>
           <label className="ec-field"><span>反応・評価・スキの数など 任意</span><textarea value={reaction} placeholder="例：いいね3件、コメントなし／スキ0だった／読了率は良かったらしい" onChange={function(e){setReaction(e.target.value);}}/></label>
-          <div className={"soul-preview"+(hasSoul?" soul-on":"")}>{hasSoul?"この残り火は、あなたの魂になっています。":"通常の残り火として預けられます。"}</div>
+          <div className={"soul-preview"+(hasSoul?" soul-on":"")}>{hasSoul?"この残り火には、手がかりが残っています。":"通常の残り火として預けられます。"}</div>
         </>}
       </div>;
     })()}
