@@ -4383,6 +4383,7 @@ function EmberJourney(p){
     if(!ns.sentFires)ns.sentFires=[];
     ns.sentFires=[releasedFire].concat(ns.sentFires);
     if(ns.characters&&ns.characters.toyman){ns.characters.toyman.location="unexplored_forest";ns.characters.toyman.lastAction="exploring";}
+    unlockPlace(ns,"unexplored_forest",false);
     appendEventLog(ns,"「"+jTitleOf(releasedFire)+"」が灯った。トイマンが未受領の森へ向かった","placed");
     ns.lastSavedAt=releasedAt;
     p.onChange&&p.onChange(ns);
