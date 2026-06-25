@@ -766,7 +766,7 @@ function getUnlockedPlaceKeys(game){
 }
 function getVisibleTabs(game){
   if(!game)return[];
-  if(MVP_MODE){var showNiwata=(game.sentFires||[]).some(function(f){return f.returnedAt;});var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];if(showNiwata)mvpT.push({id:"peek",label:"箱庭"});return mvpT;}
+  if(MVP_MODE){var showNiwata=(game.sentFires||[]).some(function(f){return f.dest||f.companion||f.returnedAt||(f.meetings&&f.meetings.length>0);});var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];if(showNiwata)mvpT.push({id:"peek",label:"箱庭"});return mvpT;}
   ensureProgressiveUnlockShell(game);
   var tabs=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];
   if(game.unlocks.tabs.garden)tabs.push({id:"peek",label:"箱庭"});
@@ -4107,15 +4107,15 @@ function HomeView(p){
       return <section className="home-card home-badnight-section">
         {todayAzukari
           ?<div className="hbn-received">
-            <p className="hbn-rcv-msg">今夜の預かり札を、棚に置きました。</p>
-            <p className="hbn-rcv-sub">答えを求めずに、預かっています。</p>
+            <p className="hbn-rcv-msg">今夜は、何も書かずに預かりました。</p>
+            <p className="hbn-rcv-sub">これは作品の残り火ではなく、書けない夜の預かり札です。<br/>言葉にできる日が来たら、あらためて残り火を預けられます。</p>
           </div>
           :<>
-            <div className="lh">今夜のこと</div>
-            <p className="hbn-desc">今夜、書くのが難しいと感じていますか？</p>
+            <div className="lh">書けない夜の避難口</div>
+            <p className="hbn-desc">タイトルも、意味も、価値も、まだ書けない夜のための場所です。<br/>何も入力せず、今夜だけ預けられます。</p>
             <div className="hbn-btns">
-              <button className="btn btn-p hbn-btn-azukari" onClick={function(){p.onAzukari&&p.onAzukari();}}>今夜は預ける</button>
-              <button className="btn hbn-btn-dismiss" onClick={function(){setBnDismissed(true);}}>まだ大丈夫</button>
+              <button className="btn btn-p hbn-btn-azukari" onClick={function(){p.onAzukari&&p.onAzukari();}}>何も書かずに預ける</button>
+              <button className="btn hbn-btn-dismiss" onClick={function(){p.onJourney&&p.onJourney();}}>本命の残り火を書く</button>
             </div>
           </>
         }
@@ -4520,7 +4520,8 @@ function EmberJourney(p){
           <p className="ej-next-now">{g.now}</p>
         </div>;
       })()}
-      <button className="btn btn-p ej-go" onClick={p.onClose}>棚へ戻る</button>
+      {result.fire.dest&&p.onGoGarden&&<button className="btn btn-g ej-go" onClick={function(){p.onGoGarden(result.fire.dest);}}>箱庭を見る</button>}
+      <button className="btn btn-g ej-cancel" onClick={p.onClose}>棚へ戻る</button>
     </div>}
 
     {phase==="kept"&&result&&<div className="ej-in ej-kept">
@@ -4915,7 +4916,7 @@ function App(){
     {closingPreview&&<ClosingPreviewOverlay text={closingPreview} onClose={function(){setClosingPreview(null);closeWorld(true);}}/>}
     {philAnswerOpen&&<PhilAnswerModal question={getPhilosophicalQuestion(game).text} onClose={function(){setPhilAnswerOpen(false);}} onSave={function(a){savePhilAnswer(a);setPhilAnswerOpen(false);}}/>}
     {showCreate&&!MVP_MODE&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber}/>}
-    {showJourney&&<EmberJourney game={game} onClose={function(){setShowJourney(false);}} onChange={function(ns){setGame(ns);persistSave(ns);}}/>}
+    {showJourney&&<EmberJourney game={game} onClose={function(){setShowJourney(false);}} onChange={function(ns){setGame(ns);persistSave(ns);}} onGoGarden={function(dest){setShowJourney(false);setPeekTargetLoc(dest||"unexplored_forest");setPeekMode("scene");setScreen("peek");}}/>}
     {journeyRevisit&&<EmberJourney key={journeyRevisit.fire.id+journeyRevisit.intent} game={game} existing={journeyRevisit.fire} intent={journeyRevisit.intent} onClose={function(){setJourneyRevisit(null);}} onChange={function(ns){setGame(ns);persistSave(ns);}}/>}
     {fireDetailId&&!journeyRevisit&&(function(){var f=((game&&game.sentFires)||[]).find(function(x){return x.id===fireDetailId;});if(!f)return null;return <JourneyFireView game={game} fire={f} onClose={function(){setFireDetailId(null);}} onChange={function(ns){setGame(ns);persistSave(ns);}} onRevisit={function(fire,intent){setFireDetailId(null);setJourneyRevisit({fire:fire,intent:intent});}}/>;})()}
     {showBadNight&&<BadNightMode onClose={function(){setShowBadNight(false);}} onSubmit={function(card){var res=addNewEmberToState(game,card);var ns=res.state;ns.logs=[{hours:0,events:[{text:"今夜の判決を、問いとして保留した。",kind:"record",pri:5},{text:"審査官：「今夜は受理しない」",kind:"auditor",pri:5},{text:"うつろ：「明日まで、捨てない」",kind:"record",pri:4}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);appendEventLog(ns,"今夜の判決を保留した。答えを探さず、ただ預けた。","badnight");ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);setShowBadNight(false);}}/>}
