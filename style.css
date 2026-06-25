@@ -4614,3 +4614,7 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 
 /* CertificateView タイトル行 */
 .cert-title-line{font-family:var(--serif);font-size:14px;color:var(--ember2);margin-bottom:8px;font-weight:600;line-height:1.5}
+
+/* EmberJourney released フェーズ */
+.ej-released-main{font-family:var(--serif);font-size:15px;color:var(--ember2);margin:16px 0 8px;line-height:1.6;font-weight:600}
+.ej-released-body{font-family:var(--serif);font-size:13.5px;color:var(--dim);line-height:1.8;margin:0 0 10px}

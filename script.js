@@ -4367,16 +4367,27 @@ function EmberJourney(p){
       commitFire(keptFire);
       setResult(keptFire);setPhase("kept");return;
     }
-    var placedFire=Object.assign({
+    var releasedAt=nowISO();
+    var releasedFire=Object.assign({
       id:"sf"+Date.now(),kindle:kindle.trim(),
       pain:noWords?null:(pain.trim()||null),noWords:noWords,danger:false,
-      dest:null,companion:null,retreated:false,form:"placed",meetings:[],voiceLine:null,
-      createdAt:nowISO(),lastTouch:nowISO(),shelved:false,returnedAt:null,
-      dates:{deposited:nowISO(),received:null,returned:null}
+      dest:"forest",companion:"toyman",
+      searchPlace:"unexplored_forest",searcher:"toyman",
+      releasedAt:releasedAt,sentAt:releasedAt,
+      retreated:false,form:"placed",meetings:[],voiceLine:null,
+      createdAt:releasedAt,lastTouch:releasedAt,shelved:false,returnedAt:null,
+      dates:{deposited:releasedAt,received:null,returned:null}
     },extraFields);
-    commitFire(placedFire,false);
-    setDepositedFire(placedFire);
-    setPhase("placed");
+    // トイマンが未受領の森へ
+    var ns=cloneS(p.game);
+    if(!ns.sentFires)ns.sentFires=[];
+    ns.sentFires=[releasedFire].concat(ns.sentFires);
+    if(ns.characters&&ns.characters.toyman){ns.characters.toyman.location="unexplored_forest";ns.characters.toyman.lastAction="exploring";}
+    appendEventLog(ns,"「"+jTitleOf(releasedFire)+"」が灯った。トイマンが未受領の森へ向かった","placed");
+    ns.lastSavedAt=releasedAt;
+    p.onChange&&p.onChange(ns);
+    setDepositedFire(releasedFire);
+    setPhase("released");
   }
   function sendOut(){
     if(!dest||!comp)return;
@@ -4474,18 +4485,19 @@ function EmberJourney(p){
       <label className="ej-field"><span>反応・評価・スキの数など（任意）</span>
         <textarea rows={2} value={reaction} placeholder="例：いいね3件、コメントなし" onChange={function(e){setReaction(e.target.value);}}/>
       </label>
-      <button className="btn btn-p ej-go" disabled={!kindle.trim()} onClick={proceedFromDeposit}>{tooHard?"預ける":"残り火を預ける"}</button>
+      <button className="btn btn-p ej-go" disabled={!kindle.trim()} onClick={proceedFromDeposit}>{tooHard?"預ける":"この残り火を灯す"}</button>
       <button className="btn btn-g ej-cancel" onClick={p.onClose}>今日はやめておく</button>
     </div>}
 
-    {phase==="placed"&&depositedFire&&<div className="ej-in ej-placed">
+    {phase==="released"&&depositedFire&&<div className="ej-in ej-released">
       <div className="ej-formed jf-placed">
         <span className="ej-formed-label">置き札</span>
         <span className="ej-formed-title">「{jTitleOf(depositedFire)}」</span>
-        <span className="ej-formed-note">棚に灯った。</span>
       </div>
-      <p className="ej-placed-body">残り火を預けました。<br/>このまま送り先を選ぶか、棚に置いておけます。</p>
-      <button className="btn btn-p ej-go" onClick={function(){setPhase("send");}}>送り先を選ぶ</button>
+      <p className="ej-released-main">トイマンが、火に気づいた。</p>
+      <p className="ej-released-body">まだ、誰かに受け取られたわけではありません。<br/>でも、その火はもう見失われていません。</p>
+      <p className="ej-released-body">トイマンは、未受領の森へ向かいました。<br/>この残り火が、何を待っているのかを探しに行きます。</p>
+      {p.onGoGarden&&<button className="btn btn-p ej-go" onClick={function(){p.onGoGarden("unexplored_forest");}}>箱庭を見る</button>}
       <button className="btn btn-g ej-cancel" onClick={p.onClose}>棚へ戻る</button>
     </div>}
 
