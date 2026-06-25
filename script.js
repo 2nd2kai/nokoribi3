@@ -4302,6 +4302,7 @@ function EmberJourney(p){
   var [emotion,setEmotion]=useState("");
   var [report,setReport]=useState("");
   var [result,setResult]=useState(null);
+  var [depositedFire,setDepositedFire]=useState(null);
 
   function commitFire(fire,isUpdate){
     var ns=cloneS(p.game);
@@ -4338,12 +4339,22 @@ function EmberJourney(p){
       commitFire(keptFire);
       setResult(keptFire);setPhase("kept");return;
     }
-    setPhase("send");
+    var placedFire={
+      id:"sf"+Date.now(),kindle:kindle.trim(),
+      pain:noWords?null:(pain.trim()||null),noWords:noWords,danger:false,
+      dest:null,companion:null,retreated:false,form:"placed",meetings:[],voiceLine:null,
+      createdAt:nowISO(),lastTouch:nowISO(),shelved:false,returnedAt:null,
+      dates:{deposited:nowISO(),received:null,returned:null}
+    };
+    commitFire(placedFire,false);
+    setDepositedFire(placedFire);
+    setPhase("placed");
   }
   function sendOut(){if(!dest||!comp)return;setPhase("travel");}
   function returnFire(didRetreat){
     var pm=noWords||didRetreat;
-    var depth=ex?((ex.meetings||[]).length):0; // 会い直すほど深い問いになる
+    var curEx=ex||depositedFire;
+    var depth=curEx?((curEx.meetings||[]).length):0; // 会い直すほど深い問いになる
     setRetreated(didRetreat);setPlaceMode(pm);
     setQ(pm?jPlaceQuestion(dest,comp,depth):jDigQuestion(dest,comp,depth));
     setReport(jReturnReport(comp,pm,didRetreat));
@@ -4354,15 +4365,16 @@ function EmberJourney(p){
     var thisForm=(pm||deferred)?"placed":"certificate";
     var ans=q&&q.picker?(emotion?(emotion+(answer.trim()?("／"+answer.trim()):"")):answer.trim()):answer.trim();
     var meeting={dest:dest,companion:comp,question:q?q.text:"",mode:pm?"place":"dig",picker:!!(q&&q.picker),emotion:emotion||null,answer:deferred?null:(ans||null),deferred:deferred,at:nowISO()};
-    if(ex){
+    var curEx=ex||depositedFire;
+    if(curEx){
       // 会い直し／送り直す：地層として積む。受領証になったら戻らない（昇格）。
-      var newForm=thisForm==="certificate"?"certificate":(ex.form==="certificate"?"certificate":"placed");
-      var upgraded=ex.form!=="certificate"&&newForm==="certificate";
-      var exDates=Object.assign({deposited:ex.createdAt},ex.dates||{});
+      var newForm=thisForm==="certificate"?"certificate":(curEx.form==="certificate"?"certificate":"placed");
+      var upgraded=curEx.form!=="certificate"&&newForm==="certificate";
+      var exDates=Object.assign({deposited:curEx.createdAt},curEx.dates||{});
       if(newForm==="certificate"&&!exDates.received)exDates.received=nowISO();
-      var updated=Object.assign({},ex,{
+      var updated=Object.assign({},curEx,{
         dest:dest,companion:comp,form:newForm,
-        meetings:[meeting].concat(ex.meetings||[]),
+        meetings:[meeting].concat(curEx.meetings||[]),
         voiceLine:jVoiceLine(comp),lastTouch:nowISO(),dates:exDates
       });
       commitFire(updated,true);
@@ -4397,8 +4409,19 @@ function EmberJourney(p){
       </label>
       <button className={"ej-chip"+(noWords?" ej-chip-on":"")} onClick={function(){setNoWords(function(v){return !v;});}}>まだ言葉にできない</button>
       <button className={"ej-chip ej-chip-soft"+(tooHard?" ej-chip-on":"")} onClick={function(){setTooHard(function(v){return !v;});}}>今夜は、これ以上ことばにしたくない（ただ預かってほしい）</button>
-      <button className="btn btn-p ej-go" disabled={!kindle.trim()} onClick={proceedFromDeposit}>{tooHard?"預ける":"送り先を選ぶ"}</button>
+      <button className="btn btn-p ej-go" disabled={!kindle.trim()} onClick={proceedFromDeposit}>{tooHard?"預ける":"残り火を預ける"}</button>
       <button className="btn btn-g ej-cancel" onClick={p.onClose}>今日はやめておく</button>
+    </div>}
+
+    {phase==="placed"&&depositedFire&&<div className="ej-in ej-placed">
+      <div className="ej-formed jf-placed">
+        <span className="ej-formed-label">置き札</span>
+        <span className="ej-formed-title">「{jTitleOf(depositedFire)}」</span>
+        <span className="ej-formed-note">棚に灯った。</span>
+      </div>
+      <p className="ej-placed-body">残り火を預けました。<br/>このまま送り先を選ぶか、棚に置いておけます。</p>
+      <button className="btn btn-p ej-go" onClick={function(){setPhase("send");}}>送り先を選ぶ</button>
+      <button className="btn btn-g ej-cancel" onClick={p.onClose}>棚へ戻る</button>
     </div>}
 
     {phase==="send"&&<div className="ej-in">
