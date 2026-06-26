@@ -903,6 +903,7 @@ function genSceneEvent(game,loc){
 }
 function pickBestLoc(game){
   if(!game||!game.world||!game.world.map)return"starting_room";
+  if(MVP_MODE){var asf=getActiveSentFire(game);if(asf)return"unexplored_forest";}
   var sc={};
   PKEYS.forEach(function(k){if(!game.world.map[k])return;var n=getCharsAtLoc(game,k).length;sc[k]=n*2+rnd()*3;});
   if(game.characters&&game.characters.toyman&&game.characters.toyman.lastAction==="exploring"&&sc.unexplored_forest!==undefined)sc.unexplored_forest+=5;
@@ -3790,7 +3791,7 @@ function NowSceneView(p){
 
       {/* タッチ説明（ステージ外） */}
       {/* アクション行：見守る（明示ボタン）＋キャラ説明 */}
-      <div className="now-action-bar">
+      {!MVP_MODE&&<div className="now-action-bar">
         {(function(){
           var mt=getMapTouchInfo(game);
           var canWatch=mt.cur>0;
@@ -3800,7 +3801,7 @@ function NowSceneView(p){
           </button><span className="watch-charges">見守りあと {(game.mapTouch&&game.mapTouch.cur)||0} 回（1時間ごとに回復）</span></>;
         })()}
         <span className="now-char-hint">キャラ →タップで声を聞く</span>
-      </div>
+      </div>}
       <div className="now-locs now-locs-safe">
         {getUnlockedPlaceKeys(game).map(function(k){
           var cnt=getCharsAtLoc(game,k).length;
@@ -3848,7 +3849,7 @@ function NowSceneView(p){
       </div>}
 
       {/* 次に起きそうな変化 */}
-      {upcomingChanges.length>0&&<div className="now-upcoming">
+      {!MVP_MODE&&upcomingChanges.length>0&&<div className="now-upcoming">
         <div className="now-upcoming-head">次に起きそうな変化</div>
         {upcomingChanges.map(function(uc,i){return(
           <div key={i} className="now-upcoming-row">
@@ -3861,7 +3862,7 @@ function NowSceneView(p){
       </div>}
 
       {/* 工程 */}
-      <div className="now-stage-panel">
+      {!MVP_MODE&&<div className="now-stage-panel">
         <div className="nsp-head">
           <span className="nsp-title">工程</span>
           <span className="nsp-pred">→ {getScenePrediction(loc,game)}</span>
@@ -3875,9 +3876,9 @@ function NowSceneView(p){
             </div>
           );
         })}
-      </div>
+      </div>}
 
-      <div className="now-prog">
+      {!MVP_MODE&&<div className="now-prog">
         <span>干渉ポイント {game.ip?game.ip.cur:0}</span>
         <span className="np-sep">|</span>
         {(function(){var mt=getMapTouchInfo(game);return <span className="now-wg">MAP操作 {mt.cur}/{mt.max}{mt.cur<=0?"・次"+mt.minToNext+"分":""}</span>;})()}
@@ -3886,9 +3887,9 @@ function NowSceneView(p){
         <span className="np-sep">|</span>
         <span className="now-wg">✉保管 {(game.mailArchive&&game.mailArchive[loc])||0}</span>
         {(function(){var d=getPlaceDelta(game,loc,"prev");return(d&&d>0.003)?<span className="now-delta">+{Math.round(d*100)}%↑</span>:null;})()}
-      </div>
+      </div>}
 
-      {careTarget&&((function(){
+      {!MVP_MODE&&careTarget&&((function(){
         var c=game.characters[careTarget];
         var st=c&&c.stats?c.stats:{};
         var abilityKey=UKEY[careTarget];
@@ -3976,7 +3977,7 @@ function NowSceneView(p){
         <LogConvPanel game={game} setGame={p.setGame}/>
       </div>}
 
-      {pressureOpen&&((function(){
+      {!MVP_MODE&&pressureOpen&&((function(){
         var a=game.characters.auditor||{};
         var st=a.stats||{};
         var ipCur=game.ip?game.ip.cur:0;
@@ -4173,14 +4174,14 @@ function HomeView(p){
     })()}
 
     {/* 4. 灯貨ミニ */}
-    {(game.toka&&game.toka.total>0)&&<div className="home-toka-mini">
+    {!MVP_MODE&&(game.toka&&game.toka.total>0)&&<div className="home-toka-mini">
       <span className="htm-label">灯貨</span>
       <span className="htm-count">{game.toka.total}</span>
       <span className="htm-note">捨てなかった火の記録。今は、ただ集まっていきます。</span>
     </div>}
 
     {/* 5. 箱庭の奥 */}
-    <section className="home-oku">
+    {!MVP_MODE&&<section className="home-oku">
       <button className="home-oku-toggle" onClick={function(){setOkuOpen(function(v){return !v;});}}>
         <span className="home-oku-icon">{okuOpen?"▲":"▼"}</span>
         <span className="home-oku-label">箱庭の奥</span>
@@ -4257,7 +4258,7 @@ function HomeView(p){
           <button className="glossary-btn" onClick={function(){p.onShowGlossary&&p.onShowGlossary();}}>この世界について</button>
         </div>
       </div>}
-    </section>
+    </section>}
 
     {/* 6. 安心文 */}
     <p className="home-reassure">今日は言葉にできなくても大丈夫です。書ける夜に、また灯せばいい。</p>
@@ -4608,7 +4609,7 @@ function EmberJourney(p){
         <input type="text" value={pain} disabled={noWords} placeholder="本当は…" onChange={function(e){setPain(e.target.value);}}/>
       </label>
       <button className={"ej-chip"+(noWords?" ej-chip-on":"")} onClick={function(){setNoWords(function(v){return !v;});}}>まだ言葉にできない</button>
-      <button className={"ej-chip ej-chip-soft"+(tooHard?" ej-chip-on":"")} onClick={function(){setTooHard(function(v){return !v;});}}>今日は問いにしないで、預かってほしい</button>
+      {!MVP_MODE&&<button className={"ej-chip ej-chip-soft"+(tooHard?" ej-chip-on":"")} onClick={function(){setTooHard(function(v){return !v;});}}>今日は問いにしないで、預かってほしい</button>}
       <div className="ej-metric-box">
         <div className="ej-metric-title">最初の残り火</div>
         <p className="ej-metric-desc">数字は判決ではありません。今この瞬間の、あなたの正直な感覚を記録するだけです。あとで変化を見るときの、目印になります。</p>
@@ -4991,7 +4992,7 @@ function App(){
   useEffect(function(){
     if(screen==="loading"||screen==="closed")return;
     var pt=setInterval(function(){var g=gameRef.current;if(!g)return;setProg(function(prev){var next=Object.assign({},prev);CHAR_IDS.forEach(function(id){next[id]=(prev[id]||0)+(ASPD[g.characters[id].lastAction]||2);if(next[id]>=100)next[id]=0;});return next;});},5000);
-    var et=setInterval(function(){var g=gameRef.current;if(!g)return;var ev=genLiveEvent(g);setLive(function(prev){return [{text:ev.text,kind:ev.kind,time:nowISO()}].concat(prev).slice(0,40);});setGame(function(prev){if(!prev)return prev;var ns=ev.su?applyLU(prev,ev.su):cloneS(prev);maybeSpawnToymanDiscoveryLetter(ns);tickLettersAmbient(ns);return ns;});},22000);
+    var et=setInterval(function(){var g=gameRef.current;if(!g)return;if(MVP_MODE){var asf=(g.sentFires||[]).find(function(f){return isWorldFire(f)&&f.dest==="forest"&&f.companion==="toyman";});if(!asf)return;var toyLines=["トイマンは、森の奥へ進んでいる。","トイマン：「まだある。もう少しだ。」","静かな森に、残り火が揺れている。","トイマン：「火は、ここにある。」"];var liveText=toyLines[Math.floor(rnd()*toyLines.length)];setLive(function(prev){return [{text:liveText,kind:"explore_detail",time:nowISO()}].concat(prev).slice(0,40);});setGame(function(prev){if(!prev)return prev;var ns=cloneS(prev);var sf=(ns.sentFires||[]).find(function(f){return isWorldFire(f)&&f.dest==="forest"&&f.companion==="toyman";});if(!sf)return ns;sf.progress=Math.min(100,(sf.progress||0)+1);if(sf.progress>=100&&!sf.questionPending){sf.questionPending=true;sf.foundBy="toyman";sf.foundAt=nowISO();sf.foundQuestion=makeSentFireQuestion(sf);unlockPlace(ns,"record_tower",false);appendEventLog(ns,"トイマンが「"+jTitleOf(sf)+"」の問いの欠片を見つけた","discover");}return ns;});return;}var ev=genLiveEvent(g);setLive(function(prev){return [{text:ev.text,kind:ev.kind,time:nowISO()}].concat(prev).slice(0,40);});setGame(function(prev){if(!prev)return prev;var ns=ev.su?applyLU(prev,ev.su):cloneS(prev);maybeSpawnToymanDiscoveryLetter(ns);tickLettersAmbient(ns);return ns;});},22000);
     var it=setInterval(function(){setGame(function(prev){if(!prev||!prev.ip)return prev;var ni=calcIP(prev,nowISO());var mtState=ensureMapTouchCharges(prev);if(ni.cur===prev.ip.cur&&JSON.stringify(mtState.mapTouch||{})===JSON.stringify(prev.mapTouch||{}))return prev;return Object.assign({},prev,{ip:ni,mapTouch:mtState.mapTouch});});},10000);
     return function(){clearInterval(pt);clearInterval(et);clearInterval(it);};
   },[screen]);
@@ -5049,7 +5050,7 @@ function App(){
   var addWatchGauge=useCallback(function(type,amount){var now2=Date.now();if((wgRef.current.last[type]||0)>now2-5000)return;wgRef.current.last[type]=now2;var ng=wgRef.current.gauge+amount;if(ng>=100){ng-=100;setGame(function(g){if(!g)return g;return Object.assign({},g,{ip:Object.assign({},g.ip,{cur:Math.min(g.ip.max,(g.ip.cur||0)+1)})});});showToast("見守り満タン — 干渉ポイント +1");}wgRef.current.gauge=ng;setWatchGauge(ng);},[showToast]);
   var withUnlock=useCallback(function(prev,next){var pu=getUnlockedConvIds(prev),nu=getUnlockedConvIds(next);var fresh=nu.filter(function(id){return pu.indexOf(id)===-1;});var s=Object.assign({},next,{unlockedConvs:nu});if(fresh.length>0)showToast("会話が解放された：「"+CBID[fresh[0]].title+"」");return s;},[showToast]);
 
-  var openWorld=useCallback(function(){if(!game)return;var el=(Date.now()-new Date(game.lastOpenedAt).getTime())/3600000;var hours=game.logs.length===0?Math.max(el,14):el;var preSnap0=captureSnap(game);var res=simulate(game,hours,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;res.newState.ip=calcIP(game,now);var pH=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH,res.newState,preSnap0);var checked=withUnlock(game,res.newState);if(!checked.dailyGoals||!checked.dailyGoals.date){checked.dailyGoals={date:now.slice(0,10),goals:makeGoals(checked)};}else{var prevGls=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(checked.dailyGoals.goals,checked,game);checked=checkGoalsAwardIP(prevGls,checked.dailyGoals.goals,checked);}var advancedEmbers=[];if(checked.receipts&&checked.receipts.length){checked.receipts=checked.receipts.map(function(r){var st=getReceiptCherishStage(r,checked);var prev=(r.lastSeenCherish===undefined||r.lastSeenCherish===null)?st:r.lastSeenCherish;if(st>prev&&st>=2)advancedEmbers.push({title:r.title,stage:st});return Object.assign({},r,{lastSeenCherish:st});});}setGame(checked);setDigest(res.summary);persistSave(checked);setFirst(false);setScreen("home");setTimeout(function(){var ev=genLiveEvent(checked);setLive([{text:ev.text,kind:ev.kind,time:nowISO()}]);},1800);if(advancedEmbers.length>0){var ae=advancedEmbers[0];setTimeout(function(){showToast(advancedEmbers.length>1?("留守の間に、"+advancedEmbers.length+"つの残り火が、より深く汲み取られた。"):("「"+ae.title+"」が、より深く汲み取られた。"));},2800);}if(el>1&&game.introSeen){var readIds=checked.readConvs||[];var availC=CONVS.filter(function(c){return isCharMet(checked,c.a)&&isCharMet(checked,c.b)&&(checked.characters[c.a].bonds[c.b]||0)>=c.th;});var unreadC=availC.filter(function(c){return readIds.indexOf(c.id)===-1;});var pool=unreadC.length>0?unreadC:availC;if(pool.length>0){var rConv=pool[Math.floor(Math.random()*pool.length)];setReturnConvId(rConv.id);}}if(el>48){setTimeout(function(){showToast("トイマン：「久しぶりだね。でも、置いていかなかった」");},3200);}var exploringEmbers=(checked.emberCards||[]).filter(function(c){return c.unitState==="exploring";});if(exploringEmbers.length>0){var ec=exploringEmbers[0];setTimeout(function(){var p2=Math.round(ec.progress||0);var line=p2<40?"「まだ深い。でも、見失っていない」":p2<80?"「触れた。もう少しだ」":"「もう届く。帰る」";showToast("トイマン："+line);},2400);}},[game,withUnlock,showToast]);
+  var openWorld=useCallback(function(){if(!game)return;var el=(Date.now()-new Date(game.lastOpenedAt).getTime())/3600000;var hours=game.logs.length===0?Math.max(el,14):el;var preSnap0=captureSnap(game);var res=simulate(game,hours,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;res.newState.ip=calcIP(game,now);var pH=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH,res.newState,preSnap0);var checked=withUnlock(game,res.newState);if(!checked.dailyGoals||!checked.dailyGoals.date){checked.dailyGoals={date:now.slice(0,10),goals:makeGoals(checked)};}else{var prevGls=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(checked.dailyGoals.goals,checked,game);checked=checkGoalsAwardIP(prevGls,checked.dailyGoals.goals,checked);}var advancedEmbers=[];if(checked.receipts&&checked.receipts.length){checked.receipts=checked.receipts.map(function(r){var st=getReceiptCherishStage(r,checked);var prev=(r.lastSeenCherish===undefined||r.lastSeenCherish===null)?st:r.lastSeenCherish;if(st>prev&&st>=2)advancedEmbers.push({title:r.title,stage:st});return Object.assign({},r,{lastSeenCherish:st});});}setGame(checked);setDigest(res.summary);persistSave(checked);setFirst(false);setScreen("home");setTimeout(function(){var ev=genLiveEvent(checked);setLive([{text:ev.text,kind:ev.kind,time:nowISO()}]);},1800);if(advancedEmbers.length>0){var ae=advancedEmbers[0];setTimeout(function(){showToast(advancedEmbers.length>1?("留守の間に、"+advancedEmbers.length+"つの残り火が、より深く汲み取られた。"):("「"+ae.title+"」が、より深く汲み取られた。"));},2800);}if(!MVP_MODE&&el>1&&game.introSeen){var readIds=checked.readConvs||[];var availC=CONVS.filter(function(c){return isCharMet(checked,c.a)&&isCharMet(checked,c.b)&&(checked.characters[c.a].bonds[c.b]||0)>=c.th;});var unreadC=availC.filter(function(c){return readIds.indexOf(c.id)===-1;});var pool=unreadC.length>0?unreadC:availC;if(pool.length>0){var rConv=pool[Math.floor(Math.random()*pool.length)];setReturnConvId(rConv.id);}}if(el>48){setTimeout(function(){showToast("トイマン：「久しぶりだね。でも、置いていかなかった」");},3200);}var exploringEmbers=(checked.emberCards||[]).filter(function(c){return c.unitState==="exploring";});if(exploringEmbers.length>0){var ec=exploringEmbers[0];setTimeout(function(){var p2=Math.round(ec.progress||0);var line=p2<40?"「まだ深い。でも、見失っていない」":p2<80?"「触れた。もう少しだ」":"「もう届く。帰る」";showToast("トイマン："+line);},2400);}},[game,withUnlock,showToast]);
   var advTime=useCallback(function(h){if(!game)return;var preSnap1=captureSnap(game);var res=simulate(game,h,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;var pH2=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH2,res.newState,preSnap1);var checked=withUnlock(game,res.newState);if(checked.dailyGoals&&checked.dailyGoals.goals){var pg3=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(pg3,checked,game);checked=checkGoalsAwardIP(pg3,checked.dailyGoals.goals,checked);}setGame(checked);setDigest(res.summary);persistSave(checked);setScreen("log");showToast("世界が"+h+"時間進んだ。");},[game,withUnlock,showToast]);
   var navigateTo=useCallback(function(screen,params){if(screen==="intv"&&params){setIntvConfig({target:params.target||"toyman",tier:params.tier||null,key:Date.now()});}setViewConv(null);setScreen(screen);},[]);
   var closeWorld=useCallback(function(skipPreview){
@@ -5941,8 +5942,8 @@ function EmberView(p){
       || c.status==="awaiting"
       || (c.unitState && c.unitState!=="completed" && c.unitState!=="waiting" && c.questionPending);
   });
-  var [legacyOpen,setLegacyOpen]=useState(legacyNeedsAction.length>0);
-  useEffect(function(){if(legacyNeedsAction.length>0)setLegacyOpen(true);},[legacyNeedsAction.length]);
+  var [legacyOpen,setLegacyOpen]=useState(!MVP_MODE&&legacyNeedsAction.length>0);
+  useEffect(function(){if(!MVP_MODE&&legacyNeedsAction.length>0)setLegacyOpen(true);},[legacyNeedsAction.length]);
   function openEdit(card){setEditingId(card.id);setEditTitle(card.title||"");setEditMemo(card.memo||"");setEditBody(card.bodyText||"");setEditReaction(card.reaction||"");}
   function saveEdit(id){onEditEmber&&onEditEmber(id,{title:editTitle,memo:editMemo,bodyText:editBody,reaction:editReaction});setEditingId(null);}
   var awaiting=cards.filter(function(c){return c.status==="awaiting"&&!c.unitState;});
