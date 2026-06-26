@@ -1084,7 +1084,8 @@ function applyHourly(s){CHAR_IDS.forEach(function(id){var c=s.characters[id],nat
 function tiredTgt(s){var best=null,bestF=49;CHAR_IDS.forEach(function(id){if(id==="kana")return;var f=s.characters[id].stats.fatigue;if(f>=50&&f>bestF){bestF=f;best=id;}});return best;}
 function applyAction(s,events){
   var p=s.policy,m=s.world.map;
-  var hasExploring=(s.emberCards||[]).some(function(c){return c.unitState==="exploring";});
+  var hasExploring=(s.emberCards||[]).some(function(c){return c.unitState==="exploring";})
+    ||(s.sentFires||[]).some(function(f){return f.form==="placed"&&f.dest==="forest"&&!f.returnedAt;});
   var t=s.characters.toyman,tSt=computeStatus(t);
   if(!hasExploring){
     /* 探索中の残り火がない時は、トイマンははじまりの部屋で待つ。森には行かない。 */
@@ -3980,8 +3981,9 @@ function HomeView(p){
   // 今夜の声：状態に応じてキャラと台詞を切り替える
   var voiceChar,voiceLine,nightCta;
   var hasReturned=canActFires.some(function(f){return (f.meetings||[]).length>0;});
+  var kanaMet=isCharMet(game,"kana");
   if(canGraduateFires.length>0){
-    voiceChar="kana";voiceLine="返せるところまで来た残り火がある。棚を見て。";nightCta="shelf";
+    voiceChar=kanaMet?"kana":"toyman";voiceLine=kanaMet?"返せるところまで来た残り火がある。棚を見て。":"ここまで来た。棚を見て。";nightCta="shelf";
   }else if(canActFires.length>0&&hasReturned){
     voiceChar="toyman";voiceLine="戻ってきた残り火がある。受け取るかは、あなたが決めていい。";nightCta="shelf";
   }else if(canActFires.length>0){
@@ -4001,7 +4003,7 @@ function HomeView(p){
       voiceLine="まだ残っているものがある。";nightCta="ember";
     }
   }else if(fires.length>0){
-    voiceChar="kana";voiceLine="今夜はここに置いておこう。日が変わったら、また会える。";nightCta=null;
+    voiceChar="toyman";voiceLine="今夜はここに置いておこう。日が変わったら、また会える。";nightCta=null;
   }else if(cards.length>0){
     voiceChar="toyman";voiceLine="まだ残っている。";nightCta=null;
   }else{
@@ -4637,9 +4639,20 @@ function JourneyFireView(p){
   var meta=J_FORM_META[f.form]||J_FORM_META.placed;
   var locked=jLockedToday(f);
   var meetings=f.meetings||[];
-  // 心へ返すのは「翌日以降の明示的な会い直し後のみ」。受領＝1層目、会い直し＝2層目以降。
   var canGraduate=f.form==="certificate"&&meetings.length>=2;
   var debugMode=typeof window!=="undefined"&&window.location&&window.location.search.indexOf("debug=1")>=0;
+  var [editing,setEditing]=useState(false);
+  var [editTitle,setEditTitle]=useState(f.title||"");
+  var [editMemo,setEditMemo]=useState(f.memo||"");
+  var [editBody,setEditBody]=useState(f.bodyText||"");
+  var [editReaction,setEditReaction]=useState(f.reaction||"");
+  function saveEdit(){
+    var ns=cloneS(p.game);
+    ns.sentFires=(ns.sentFires||[]).map(function(x){return x.id===f.id?Object.assign({},x,{title:editTitle.trim()||null,memo:editMemo.trim(),bodyText:editBody.trim(),reaction:editReaction.trim(),lastTouch:nowISO()}):x;});
+    ns.lastSavedAt=nowISO();
+    p.onChange&&p.onChange(ns);
+    setEditing(false);
+  }
   function debugYesterday(){
     var y=new Date();y.setDate(y.getDate()-1);
     var ns=cloneS(p.game);
@@ -4704,11 +4717,25 @@ function JourneyFireView(p){
             {f.returnedAt&&<span className="jfv-returned">心へ返した火</span>}
           </div>
           {f.pain&&<p className="jfv-pain">その奥にあったもの：{f.pain}</p>}
-          {(f.memo||f.bodyText||f.reaction)&&<div className="jfv-extra">
-            {f.memo&&<p className="jfv-extra-line"><span className="jfv-extra-label">メモ</span>{f.memo}</p>}
-            {f.bodyText&&<p className="jfv-extra-line"><span className="jfv-extra-label">言葉</span>{f.bodyText}</p>}
-            {f.reaction&&<p className="jfv-extra-line"><span className="jfv-extra-label">反応</span>{f.reaction}</p>}
-          </div>}
+          {editing
+            ?<div className="jfv-edit-form">
+              <label className="ec-field"><span>タイトル</span><input type="text" value={editTitle} placeholder="タイトル（任意）" onChange={function(e){setEditTitle(e.target.value);}}/></label>
+              <label className="ec-field"><span>補足情報</span><input type="text" value={editMemo} placeholder="メモ（任意）" onChange={function(e){setEditMemo(e.target.value);}}/></label>
+              <label className="ec-field"><span>あなたの言葉</span><textarea rows={3} value={editBody} placeholder="言葉（任意）" onChange={function(e){setEditBody(e.target.value);}}/></label>
+              <label className="ec-field"><span>反応・評価</span><textarea rows={2} value={editReaction} placeholder="反応（任意）" onChange={function(e){setEditReaction(e.target.value);}}/></label>
+              <div className="jfv-edit-btns">
+                <button className="btn btn-g" onClick={function(){setEditing(false);}}>やめる</button>
+                <button className="btn btn-p" onClick={saveEdit}>保存する</button>
+              </div>
+            </div>
+            :<>
+              {(f.memo||f.bodyText||f.reaction)&&<div className="jfv-extra">
+                {f.memo&&<p className="jfv-extra-line"><span className="jfv-extra-label">メモ</span>{f.memo}</p>}
+                {f.bodyText&&<p className="jfv-extra-line"><span className="jfv-extra-label">言葉</span>{f.bodyText}</p>}
+                {f.reaction&&<p className="jfv-extra-line"><span className="jfv-extra-label">反応</span>{f.reaction}</p>}
+              </div>}
+              {!f.returnedAt&&<button className="jfv-edit-btn" onClick={function(){setEditing(true);}}>編集</button>}
+            </>}
           <div className="jfv-strata">
             <p className="jfv-strata-h">これまで会った層</p>
             {meetings.map(function(m,i){return <div key={i} className="jfv-layer">
