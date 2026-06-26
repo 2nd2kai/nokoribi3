@@ -3672,11 +3672,7 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .home-today-end-section p{font-size:12.5px;color:var(--faint);line-height:1.8;margin:0 0 12px}
 .home-today-btn{width:100%;font-size:13px}
 
-/* ── BadNight独立セクション ── */
-.home-badnight-section{}
-.hbn-desc{font-family:var(--serif);font-size:13px;color:var(--dim);line-height:1.7;margin:0 0 14px}
-.hbn-btns{display:flex;gap:10px}
-.hbn-btn-azukari{flex:1;font-size:13px;padding:11px}
+.home-reassure{font-family:var(--serif);font-size:12px;color:var(--faint);line-height:1.8;text-align:center;padding:4px 0 8px;margin:0}
 .hbn-btn-dismiss{flex:1;font-size:13px;padding:11px;color:var(--faint);background:none;border:1px solid var(--line2)}
 .hbn-received{padding:4px 0}
 .hbn-rcv-msg{font-family:var(--serif);font-size:13px;color:var(--dim);margin:0 0 6px;line-height:1.65}

@@ -3959,7 +3959,6 @@ function HomeView(p){
   var game=p.game;
   var [okuOpen,setOkuOpen]=useState(false);
   var [noToast,setNoToast]=useState(false);
-  var [bnDismissed,setBnDismissed]=useState(false);
   var cards=game.emberCards||[];
   var fires=game.sentFires||[];
   var legacyNeedsAction=cards.filter(function(c){
@@ -3970,7 +3969,6 @@ function HomeView(p){
   });
   var hasLegacyAction=legacyNeedsAction.length>0;
   useEffect(function(){if(hasLegacyAction)setOkuOpen(true);},[legacyNeedsAction.length]);
-  var todayBadNight=(cards).find(function(c){return c.mode==="bad_night"&&c.createdAt&&c.createdAt.slice(0,10)===nowISO().slice(0,10);});
   var active=cards.find(function(c){return c.status!=="ready"&&c.status!=="awaiting";})||cards[0]||null;
   var openPlaces=getUnlockedPlaceKeys(game).filter(function(k){return game.unlocks&&game.unlocks.places&&game.unlocks.places[k];});
   var next=getNextAction(game);
@@ -4025,11 +4023,11 @@ function HomeView(p){
       {nightCta==="ember"&&<button className="btn btn-g hnv-cta" onClick={goToShelf}>残り火を見に行く</button>}
     </section>
 
-    {/* 2. 残り火を預ける */}
+    {/* 2. 残り火を灯す */}
     <section className="home-card home-fire-entry">
-      <div className="lh">残り火を預ける</div>
-      <p className="hfe-desc">書いたあとに残ったものを、まず棚に預けます。<br/>送り先と同行者は、今でも、あとでも選べます。</p>
-      <button className="btn btn-p hfe-main" onClick={function(){p.onJourney&&p.onJourney();}}>残り火を預ける</button>
+      <div className="lh">今日の残り火</div>
+      <p className="hfe-desc">書いたあとに残ったものを、ここに灯せます。<br/>タイトルも、意味も、価値も、まだ揺れていてかまいません。</p>
+      <button className="btn btn-p hfe-main" onClick={function(){p.onJourney&&p.onJourney();}}>残り火を灯す</button>
     </section>
 
     {/* 3. 棚サマリー */}
@@ -4129,17 +4127,8 @@ function HomeView(p){
       </div>}
     </section>
 
-    {/* 6. 今夜のこと（BadNight独立セクション） */}
-    {(function(){
-      if(bnDismissed)return null;
-      return <section className="home-card home-badnight-section">
-        <div className="lh">書けない夜の避難口</div>
-        <p className="hbn-desc">今日は、残り火を言葉にしなくても大丈夫です。<br/>タイトルも、意味も、価値も、まだ書けないなら、<br/>何も残さず閉じてもかまいません。</p>
-        <div className="hbn-btns">
-          <button className="btn hbn-btn-dismiss" onClick={function(){setBnDismissed(true);}}>今日は何もしないで閉じる</button>
-        </div>
-      </section>;
-    })()}
+    {/* 6. 安心文 */}
+    <p className="home-reassure">今日は言葉にできなくても大丈夫です。書ける夜に、また灯せばいい。</p>
 
     {/* 7. 今日はここまで */}
     <section className="home-card home-today-end-section">
