@@ -715,6 +715,7 @@ function ensureProgressiveUnlocks(s){
 }
 function unlockPlace(s,key,silent){
   ensureProgressiveUnlockShell(s);
+  if(s.world&&s.world.map&&s.world.map[key]){s.world.map[key].unlocked=true;}
   if(!s.unlocks.places[key]){
     s.unlocks.places[key]=true;
     s.unlocks.tabs.garden=true;
@@ -1018,8 +1019,8 @@ function checkGoals(goals,game,prevGame){
     return g2;
   });
 }
-function getUnlockedConvIds(game){return CONVS.filter(function(c){return(game.characters[c.a].bonds[c.b]||0)>=c.th;}).map(function(c){return c.id;});}
-function getNextUnlockInfo(game){var infos=[];CONVS.forEach(function(c){var bond=game.characters[c.a].bonds[c.b]||0;if(bond<c.th&&bond>=c.th-5){infos.push({id:c.id,a:c.a,b:c.b,title:c.title,need:c.th-bond});}});return infos;}
+function getUnlockedConvIds(game){return CONVS.filter(function(c){if(!isCharMet(game,c.a)||!isCharMet(game,c.b))return false;return(game.characters[c.a].bonds[c.b]||0)>=c.th;}).map(function(c){return c.id;});}
+function getNextUnlockInfo(game){var infos=[];CONVS.forEach(function(c){if(!isCharMet(game,c.a)||!isCharMet(game,c.b))return;var bond=game.characters[c.a].bonds[c.b]||0;if(bond<c.th&&bond>=c.th-5){infos.push({id:c.id,a:c.a,b:c.b,title:c.title,need:c.th-bond});}});return infos;}
 
 function initGame(){
   var now=nowISO();
@@ -1031,7 +1032,7 @@ function initGame(){
       kotae: {location:"record_tower",    stats:{fatigue:35,stability:55,record:70},    bonds:{toyman:10,kana:7,utsuro:9,auditor:6},lastAction:"recording"},
       auditor:{location:"inspection_bureau",stats:{pressure:50,pressureLimit:100},bonds:{toyman:3,kana:4,utsuro:2,kotae:6},mode:"normal"},
     },
-    world:{map:{starting_room:{unlocked:true,level:1,progress_rate:0.20},post_office:{unlocked:true,level:1,progress_rate:0.18},tears_spring:{unlocked:true,level:1,progress_rate:0.25},record_tower:{unlocked:true,level:1,progress_rate:0.16},unexplored_forest:{unlocked:true,level:1,progress_rate:0.12},inspection_bureau:{unlocked:true,level:1,progress_rate:0.10}},letters:{stored:3,unreceived:0},day:1,traces:{unexplored_forest:{footprints:0,ash_papers:0,shadows:0},post_office:{envelopes:0},tears_spring:{drops:0},record_tower:{papers:0,holds:0},starting_room:{lights:0,receipts:0},inspection_bureau:{tags:0,holds:0}}},
+    world:{map:{starting_room:{unlocked:true,level:1,progress_rate:0.20},post_office:{unlocked:false,level:1,progress_rate:0.18},tears_spring:{unlocked:false,level:1,progress_rate:0.25},record_tower:{unlocked:false,level:1,progress_rate:0.16},unexplored_forest:{unlocked:false,level:1,progress_rate:0.12},inspection_bureau:{unlocked:false,level:1,progress_rate:0.10}},letters:{stored:3,unreceived:0},day:1,traces:{unexplored_forest:{footprints:0,ash_papers:0,shadows:0},post_office:{envelopes:0},tears_spring:{drops:0},record_tower:{papers:0,holds:0},starting_room:{lights:0,receipts:0},inspection_bureau:{tags:0,holds:0}}},
     mailLetters:{unexplored_forest:[],starting_room:[],post_office:[],tears_spring:[],record_tower:[],inspection_bureau:[]},
     mailArchive:{unexplored_forest:0,starting_room:0,post_office:0,tears_spring:0,record_tower:0,inspection_bureau:0},
     battle:{watch:0,lastManualBattleAt:0,manualCount:0,lastLines:[],encounter:null},
@@ -1089,6 +1090,7 @@ function processSentFires(s,events){
     f.progress=Math.min(100,(f.progress||0)+gain);
     if(f.progress>=100){
       f.questionPending=true;f.foundBy="toyman";f.foundAt=nowISO();f.foundQuestion=makeSentFireQuestion(f);
+      unlockPlace(s,"record_tower",false);
       appendEventLog(s,"トイマンが「"+jTitleOf(f)+"」の問いの欠片を見つけた","discover");
       events.push({text:"トイマンが問いの欠片を見つけた：「"+f.foundQuestion+"」",kind:"discover",pri:5});
     }
@@ -1426,6 +1428,7 @@ function runToymanBattleIntervention(game,actionId,selfAnswer){
   if(card.progress>=100){
     if(isSentFire){
       card.questionPending=true;card.foundBy="toyman";card.foundAt=nowISO();card.foundQuestion=makeSentFireQuestion(card);
+      unlockPlace(ns,"record_tower",false);
       appendEventLog(ns,"トイマンが「"+jTitleOf(card)+"」の問いの欠片を見つけた","discover");
       events.push({text:"トイマンが問いの欠片を見つけた：「"+card.foundQuestion+"」",kind:"discover",pri:5});
     }else{var pq=advanceUnitStateByProgress(ns,card,"影との遭遇");events.push({text:"残り火に問い札が発生した。問い：「"+((pq&&pq.question)||card.currentQuestion||"次の問い")+"」",kind:"discover",pri:5});}
@@ -4454,7 +4457,7 @@ function EmberJourney(p){
     ns.sentFires=[releasedFire].concat(ns.sentFires);
     if(ns.characters&&ns.characters.toyman){ns.characters.toyman.location="unexplored_forest";ns.characters.toyman.lastAction="exploring";}
     unlockPlace(ns,"unexplored_forest",false);
-    unlockPlace(ns,"record_tower",false);
+    // record_tower は問いの欠片発見時に解放する
     appendEventLog(ns,"「"+jTitleOf(releasedFire)+"」が灯った。トイマンが未受領の森へ向かった","placed");
     ns.lastSavedAt=releasedAt;
     p.onChange&&p.onChange(ns);
@@ -4971,7 +4974,7 @@ function App(){
   var addWatchGauge=useCallback(function(type,amount){var now2=Date.now();if((wgRef.current.last[type]||0)>now2-5000)return;wgRef.current.last[type]=now2;var ng=wgRef.current.gauge+amount;if(ng>=100){ng-=100;setGame(function(g){if(!g)return g;return Object.assign({},g,{ip:Object.assign({},g.ip,{cur:Math.min(g.ip.max,(g.ip.cur||0)+1)})});});showToast("見守り満タン — 干渉ポイント +1");}wgRef.current.gauge=ng;setWatchGauge(ng);},[showToast]);
   var withUnlock=useCallback(function(prev,next){var pu=getUnlockedConvIds(prev),nu=getUnlockedConvIds(next);var fresh=nu.filter(function(id){return pu.indexOf(id)===-1;});var s=Object.assign({},next,{unlockedConvs:nu});if(fresh.length>0)showToast("会話が解放された：「"+CBID[fresh[0]].title+"」");return s;},[showToast]);
 
-  var openWorld=useCallback(function(){if(!game)return;var el=(Date.now()-new Date(game.lastOpenedAt).getTime())/3600000;var hours=game.logs.length===0?Math.max(el,14):el;var preSnap0=captureSnap(game);var res=simulate(game,hours,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;res.newState.ip=calcIP(game,now);var pH=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH,res.newState,preSnap0);var checked=withUnlock(game,res.newState);if(!checked.dailyGoals||!checked.dailyGoals.date){checked.dailyGoals={date:now.slice(0,10),goals:makeGoals(checked)};}else{var prevGls=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(checked.dailyGoals.goals,checked,game);checked=checkGoalsAwardIP(prevGls,checked.dailyGoals.goals,checked);}var advancedEmbers=[];if(checked.receipts&&checked.receipts.length){checked.receipts=checked.receipts.map(function(r){var st=getReceiptCherishStage(r,checked);var prev=(r.lastSeenCherish===undefined||r.lastSeenCherish===null)?st:r.lastSeenCherish;if(st>prev&&st>=2)advancedEmbers.push({title:r.title,stage:st});return Object.assign({},r,{lastSeenCherish:st});});}setGame(checked);setDigest(res.summary);persistSave(checked);setFirst(false);setScreen("home");setTimeout(function(){var ev=genLiveEvent(checked);setLive([{text:ev.text,kind:ev.kind,time:nowISO()}]);},1800);if(advancedEmbers.length>0){var ae=advancedEmbers[0];setTimeout(function(){showToast(advancedEmbers.length>1?("留守の間に、"+advancedEmbers.length+"つの残り火が、より深く汲み取られた。"):("「"+ae.title+"」が、より深く汲み取られた。"));},2800);}if(el>1&&game.introSeen){var readIds=checked.readConvs||[];var availC=CONVS.filter(function(c){return(checked.characters[c.a].bonds[c.b]||0)>=c.th;});var unreadC=availC.filter(function(c){return readIds.indexOf(c.id)===-1;});var pool=unreadC.length>0?unreadC:availC;if(pool.length>0){var rConv=pool[Math.floor(Math.random()*pool.length)];setReturnConvId(rConv.id);}}if(el>48){setTimeout(function(){showToast("トイマン：「久しぶりだね。でも、置いていかなかった」");},3200);}var exploringEmbers=(checked.emberCards||[]).filter(function(c){return c.unitState==="exploring";});if(exploringEmbers.length>0){var ec=exploringEmbers[0];setTimeout(function(){var p2=Math.round(ec.progress||0);var line=p2<40?"「まだ深い。でも、見失っていない」":p2<80?"「触れた。もう少しだ」":"「もう届く。帰る」";showToast("トイマン："+line);},2400);}},[game,withUnlock,showToast]);
+  var openWorld=useCallback(function(){if(!game)return;var el=(Date.now()-new Date(game.lastOpenedAt).getTime())/3600000;var hours=game.logs.length===0?Math.max(el,14):el;var preSnap0=captureSnap(game);var res=simulate(game,hours,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;res.newState.ip=calcIP(game,now);var pH=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH,res.newState,preSnap0);var checked=withUnlock(game,res.newState);if(!checked.dailyGoals||!checked.dailyGoals.date){checked.dailyGoals={date:now.slice(0,10),goals:makeGoals(checked)};}else{var prevGls=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(checked.dailyGoals.goals,checked,game);checked=checkGoalsAwardIP(prevGls,checked.dailyGoals.goals,checked);}var advancedEmbers=[];if(checked.receipts&&checked.receipts.length){checked.receipts=checked.receipts.map(function(r){var st=getReceiptCherishStage(r,checked);var prev=(r.lastSeenCherish===undefined||r.lastSeenCherish===null)?st:r.lastSeenCherish;if(st>prev&&st>=2)advancedEmbers.push({title:r.title,stage:st});return Object.assign({},r,{lastSeenCherish:st});});}setGame(checked);setDigest(res.summary);persistSave(checked);setFirst(false);setScreen("home");setTimeout(function(){var ev=genLiveEvent(checked);setLive([{text:ev.text,kind:ev.kind,time:nowISO()}]);},1800);if(advancedEmbers.length>0){var ae=advancedEmbers[0];setTimeout(function(){showToast(advancedEmbers.length>1?("留守の間に、"+advancedEmbers.length+"つの残り火が、より深く汲み取られた。"):("「"+ae.title+"」が、より深く汲み取られた。"));},2800);}if(el>1&&game.introSeen){var readIds=checked.readConvs||[];var availC=CONVS.filter(function(c){return isCharMet(checked,c.a)&&isCharMet(checked,c.b)&&(checked.characters[c.a].bonds[c.b]||0)>=c.th;});var unreadC=availC.filter(function(c){return readIds.indexOf(c.id)===-1;});var pool=unreadC.length>0?unreadC:availC;if(pool.length>0){var rConv=pool[Math.floor(Math.random()*pool.length)];setReturnConvId(rConv.id);}}if(el>48){setTimeout(function(){showToast("トイマン：「久しぶりだね。でも、置いていかなかった」");},3200);}var exploringEmbers=(checked.emberCards||[]).filter(function(c){return c.unitState==="exploring";});if(exploringEmbers.length>0){var ec=exploringEmbers[0];setTimeout(function(){var p2=Math.round(ec.progress||0);var line=p2<40?"「まだ深い。でも、見失っていない」":p2<80?"「触れた。もう少しだ」":"「もう届く。帰る」";showToast("トイマン："+line);},2400);}},[game,withUnlock,showToast]);
   var advTime=useCallback(function(h){if(!game)return;var preSnap1=captureSnap(game);var res=simulate(game,h,game.policy);var now=nowISO();res.newState.lastOpenedAt=now;res.newState.lastSavedAt=now;var pH2=game.history||{prevOpen:null,lastOpen:null,hourly:[],daily:[]};res.newState.history=updateHistory(pH2,res.newState,preSnap1);var checked=withUnlock(game,res.newState);if(checked.dailyGoals&&checked.dailyGoals.goals){var pg3=checked.dailyGoals.goals.slice();checked.dailyGoals.goals=checkGoals(pg3,checked,game);checked=checkGoalsAwardIP(pg3,checked.dailyGoals.goals,checked);}setGame(checked);setDigest(res.summary);persistSave(checked);setScreen("log");showToast("世界が"+h+"時間進んだ。");},[game,withUnlock,showToast]);
   var navigateTo=useCallback(function(screen,params){if(screen==="intv"&&params){setIntvConfig({target:params.target||"toyman",tier:params.tier||null,key:Date.now()});}setViewConv(null);setScreen(screen);},[]);
   var closeWorld=useCallback(function(skipPreview){
