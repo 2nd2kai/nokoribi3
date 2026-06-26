@@ -766,7 +766,7 @@ function getUnlockedPlaceKeys(game){
 }
 function getVisibleTabs(game){
   if(!game)return[];
-  if(MVP_MODE){var showNiwata=(game.sentFires||[]).some(function(f){return f.form!=="azukari";});var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"}];if(showNiwata)mvpT.push({id:"peek",label:"箱庭"});return mvpT;}
+  if(MVP_MODE){var showNiwata=(game.sentFires||[]).some(isWorldFire);var mvpT=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"}];if(showNiwata)mvpT.push({id:"peek",label:"箱庭"});return mvpT;}
   ensureProgressiveUnlockShell(game);
   var tabs=[{id:"home",label:"ホーム"},{id:"ember",label:"残り火"},{id:"log",label:"記録塔"}];
   if(game.unlocks.tabs.garden)tabs.push({id:"peek",label:"箱庭"});
@@ -1082,6 +1082,18 @@ function checkLvl(s,key,events,rewards){var m=s.world.map[key];if(m.progress_rat
 function snapshot(s){var chars={},places={};ALL_IDS.forEach(function(id){var c=s.characters[id];chars[id]=id==="auditor"?{fatigue:null,stability:null,unique:Math.round(c.stats.pressure),status:c.mode==="inspection"?"inspection":"normal"}:{fatigue:Math.round(c.stats.fatigue),stability:Math.round(c.stats.stability),unique:Math.round(c.stats[UKEY[id]]),status:computeStatus(c)};});PKEYS.forEach(function(k){var m=s.world.map[k];places[k]={progress:m.progress_rate||0,level:m.level||1};});return{chars:chars,places:places,letters:{stored:s.world.letters.stored,unreceived:s.world.letters.unreceived},day:s.world.day};}
 function applyHourly(s){CHAR_IDS.forEach(function(id){var c=s.characters[id],nat=NFAT[c.lastAction]||35;if(c.stats.fatigue<nat)c.stats.fatigue+=1;else if(c.stats.fatigue>nat)c.stats.fatigue-=1;if(c.stats.stability<54.4)c.stats.stability+=0.5;else if(c.stats.stability>55.6)c.stats.stability-=0.5;});}
 function tiredTgt(s){var best=null,bestF=49;CHAR_IDS.forEach(function(id){if(id==="kana")return;var f=s.characters[id].stats.fatigue;if(f>=50&&f>bestF){bestF=f;best=id;}});return best;}
+function processSentFires(s,events){
+  (s.sentFires||[]).forEach(function(f){
+    if(!isWorldFire(f)||f.dest!=="forest"||f.companion!=="toyman"||f.questionPending)return;
+    var gain=2+Math.floor(rnd()*4);
+    f.progress=Math.min(100,(f.progress||0)+gain);
+    if(f.progress>=100){
+      f.questionPending=true;f.foundBy="toyman";f.foundAt=nowISO();f.foundQuestion=makeSentFireQuestion(f);
+      appendEventLog(s,"トイマンが「"+jTitleOf(f)+"」の問いの欠片を見つけた","discover");
+      events.push({text:"トイマンが問いの欠片を見つけた：「"+f.foundQuestion+"」",kind:"discover",pri:5});
+    }
+  });
+}
 function applyAction(s,events){
   var p=s.policy,m=s.world.map;
   var hasExploring=(s.emberCards||[]).some(function(c){return c.unitState==="exploring";})
@@ -1136,6 +1148,9 @@ function applyDaily(s,events){var p=s.policy;if(p==="care"){CHAR_IDS.forEach(fun
 function clampAll(s){CHAR_IDS.forEach(function(id){var st=s.characters[id].stats;st.fatigue=cn(st.fatigue);st.stability=cn(st.stability);st[UKEY[id]]=cn(st[UKEY[id]]);Object.keys(s.characters[id].bonds).forEach(function(k){s.characters[id].bonds[k]=cn(s.characters[id].bonds[k]);});});s.characters.auditor.stats.pressure=cn(s.characters.auditor.stats.pressure);PKEYS.forEach(function(k){var m=s.world.map[k];if(m.progress_rate<0)m.progress_rate=0;});}
 function buildSummary(before,after,events,hours,s){var perChar=ALL_IDS.map(function(id){return{id:id,name:NAMES[id],fatigue:id==="auditor"?null:{from:before.chars[id].fatigue,to:after.chars[id].fatigue},unique:{label:ULABEL[id],from:before.chars[id].unique,to:after.chars[id].unique},status:after.chars[id].status};});var places=PKEYS.map(function(k){var bf=before.places[k]||{progress:0,level:1},af=after.places[k]||{progress:0,level:1};return{id:k,name:PSHORT[k],label:PLBL[k],from:bf.progress,to:af.progress,delta:af.progress-bf.progress,level:af.level};});var high=events.filter(function(e){return e.pri>=3;}),low=events.filter(function(e){return e.pri<3;}).sort(function(){return rnd()-0.5;});var seen={},picked=[];[].concat(high,low).forEach(function(e){if(!seen[e.text]&&picked.length<6){seen[e.text]=true;picked.push(e);}});return{date:nowISO(),day:after.day,hours:Math.round(hours),policy:s.policy,perChar:perChar,places:places,events:picked.map(function(e){return{text:e.text,kind:e.kind};}),letters:{from:before.letters.stored,to:after.letters.stored}};}
 function simulate(state,hoursRaw,policy){var hours=Math.max(0,Math.min(hoursRaw,72));var s=cloneS(state);s.policy=policy;s._rw=[];var before=snapshot(s);var cy={hourly:Math.floor(hours),four:Math.floor(hours/4),eight:Math.floor(hours/8),daily:Math.floor(hours/24)};var events=[];for(var i=0;i<cy.hourly;i++)applyHourly(s);for(var j=0;j<cy.four;j++)applyAction(s,events);for(var k=0;k<cy.eight;k++)applyConv(s,events);for(var l=0;l<cy.daily;l++)applyDaily(s,events);
+  /* sentFires の放置進行 */
+  var sfCycles=Math.max(cy.four,Math.floor(hours/4));if(hours>0&&sfCycles===0)sfCycles=1;
+  for(var sf=0;sf<sfCycles;sf++)processSentFires(s,events);
   /* 残り火の放置進行：経過時間（4時間=1サイクル）に比例して確実に進める。
      applyAction/applyDaily 内の条件付き呼び出しに依存せず、ここで独立して回す。 */
   var emberCycles=Math.max(cy.four,Math.floor(hours/4));
@@ -1165,14 +1180,16 @@ const TOYMAN_BATTLE_LINES={
   read:["……声としてなら、記録できる","これは判決じゃない。影の声だ","言ったな。じゃあ、持って帰る"],
   retreat:["下がる。でも捨てない","今日はここまで。でも落としてない","帰る道は、まだ覚えてる"]
 };
+function getToymanBattleSentFire(game){
+  return (game.sentFires||[]).find(function(f){
+    return f.form==="placed"&&f.dest==="forest"&&f.companion==="toyman"&&!f.returnedAt&&!f.shelved&&!f.questionPending&&(f.progress||0)<100;
+  })||null;
+}
 function getToymanBattleEmber(game){
+  if(MVP_MODE){var sf=getToymanBattleSentFire(game);if(sf)return sf;}
   var fromCards=(game.emberCards||[]).find(function(c){return (c.unitState==="exploring"||c.status==="unreceived")&&!c.questionPending;})||null;
   if(fromCards)return fromCards;
-  var t=game.characters&&game.characters.toyman;
-  if(t&&t.lastAction==="exploring"){
-    var sf=(game.sentFires||[]).find(function(f){return f.form==="placed"&&f.dest==="forest"&&!f.returnedAt;});
-    if(sf)return sf;
-  }
+  if(!MVP_MODE){var t=game.characters&&game.characters.toyman;if(t&&t.lastAction==="exploring"){var sf2=(game.sentFires||[]).find(function(f){return f.form==="placed"&&f.dest==="forest"&&!f.returnedAt;});if(sf2)return sf2;}}
   return null;
 }
 function battleEnemyName(game){
@@ -1405,7 +1422,14 @@ function runToymanBattleIntervention(game,actionId,selfAnswer){
   enc.voiceIndex=(enc.voiceIndex||0)+1;
   var ipGain=grantBattleWatch(ns,watch);
   var events=[];
-  if(card.progress>=100){var pq=advanceUnitStateByProgress(ns,card,"影との遭遇");events.push({text:"残り火に問い札が発生した。問い：「"+((pq&&pq.question)||card.currentQuestion||"次の問い")+"」",kind:"discover",pri:5});}
+  var isSentFire=card&&(ns.sentFires||[]).some(function(f){return f.id===card.id;});
+  if(card.progress>=100){
+    if(isSentFire){
+      card.questionPending=true;card.foundBy="toyman";card.foundAt=nowISO();card.foundQuestion=makeSentFireQuestion(card);
+      appendEventLog(ns,"トイマンが「"+jTitleOf(card)+"」の問いの欠片を見つけた","discover");
+      events.push({text:"トイマンが問いの欠片を見つけた：「"+card.foundQuestion+"」",kind:"discover",pri:5});
+    }else{var pq=advanceUnitStateByProgress(ns,card,"影との遭遇");events.push({text:"残り火に問い札が発生した。問い：「"+((pq&&pq.question)||card.currentQuestion||"次の問い")+"」",kind:"discover",pri:5});}
+  }
   var afterProg=Math.min(100,Math.round(card.progress||0));
   var toymanLine=pick(TOYMAN_BATTLE_LINES[action.kind]||TOYMAN_BATTLE_LINES.hold);
   var reached100=card.progress>=100;
@@ -1976,6 +2000,7 @@ function checkGoalsAwardIP(prevGoals,newGoals,state){
 }
 
 function getActiveEmber(game){return (game.emberCards||[]).find(function(c){return c.status!=="ready"&&c.status!=="awaiting";})||null;}
+// MVP優先: sentFiresが正面導線
 /* 今ユーザーが押すべき次の1アクションを返す。
    返り値: {screen, action, cardId} または null
    screen: "home"|"ember"
@@ -2355,11 +2380,25 @@ function jDestToPlace(dest){
   if(dest==="post")return "post_office";
   return "starting_room";
 }
+function isWorldFire(f){
+  return f&&f.form==="placed"&&!!f.dest&&!f.returnedAt&&!f.shelved;
+}
+function makeSentFireQuestion(f){
+  var p=(f.pain||"").trim();
+  if(p)return "この痛みの奥にあるものは、なんだと思う？";
+  var k=(f.kindle||"").trim();
+  if(k.length>10)return "書いたあと、何が残った？";
+  return "この残り火を置いたあなたに、問いかける。これは、まだ続いている？";
+}
+function getActiveSentFire(game){
+  return (game.sentFires||[]).find(function(f){
+    return isWorldFire(f)&&f.dest==="forest"&&f.companion==="toyman";
+  })||null;
+}
 function getJourneyFiresAtPlace(game,place){
   return (game.sentFires||[]).filter(function(f){
-    if(f.returnedAt)return false;
-    if(f.form==="azukari")return false;
-    var pl=f.dest?jDestToPlace(f.dest):"starting_room";
+    if(!isWorldFire(f))return false;
+    var pl=jDestToPlace(f.dest);
     return pl===place;
   });
 }
@@ -3614,20 +3653,39 @@ function NowSceneView(p){
   return(
     <div className="now-wrap">
       {/* 現在進行中の残り火 — 最上部に移動（提案③：残り火ジャーニーを最優先表示） */}
-      {activeEmber&&<div className={"now-ember-panel nep-top"+(emberAtLoc?" nep-here":"")}>
-        <div className="nep-head">処理中の残り火</div>
-        <div className="nep-title">「{makeEmberTitle(activeEmber)}」</div>
-        {activeEmber.feeling&&<div className="nep-feeling">感情：{activeEmber.feeling}</div>}
-        {activeEmber.wanted&&<div className="nep-feeling">本当は：{activeEmber.wanted}</div>}
-        <div className="nep-status">
-          <span className={"nd cd-"+(EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].who||"kotae")}/>
-          <span className="nep-where">{EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].label}</span>
-          <span className="nep-pct">{Math.round(activeEmber.progress||0)}%</span>
-        </div>
-        <Bar value={activeEmber.progress||0} color="var(--ember)" h={4}/>
-        <div className="nep-next">あと{Math.max(0,100-Math.round(activeEmber.progress||0))}%で、{getEmberNextLabel(activeEmber.status)}</div>
-        {activeEmber.pendingQuestion&&activeEmber.pendingQuestion.question&&<div className="nep-question">問い：{activeEmber.pendingQuestion.question}</div>}
-      </div>}
+      {(function(){
+        if(MVP_MODE){
+          var asf=getActiveSentFire(game);
+          if(asf){return <div className="now-ember-panel nep-top nep-here">
+            <div className="nep-head">探索中の残り火</div>
+            <div className="nep-title">「{jTitleOf(asf)}」</div>
+            <div className="nep-status">
+              <span className="nd cd-toyman"/>
+              <span className="nep-where">トイマンが未受領の森で探しています。</span>
+              <span className="nep-pct">{Math.round(asf.progress||0)}%</span>
+            </div>
+            <Bar value={asf.progress||0} color="var(--ember)" h={4}/>
+            <div className="nep-next">探索の深さ　{Math.round(asf.progress||0)}%</div>
+            {asf.questionPending&&asf.foundQuestion&&<div className="nep-question">問いの欠片：{asf.foundQuestion}</div>}
+          </div>;}
+          return null;
+        }
+        if(!activeEmber)return null;
+        return <div className={"now-ember-panel nep-top"+(emberAtLoc?" nep-here":"")}>
+          <div className="nep-head">処理中の残り火</div>
+          <div className="nep-title">「{makeEmberTitle(activeEmber)}」</div>
+          {activeEmber.feeling&&<div className="nep-feeling">感情：{activeEmber.feeling}</div>}
+          {activeEmber.wanted&&<div className="nep-feeling">本当は：{activeEmber.wanted}</div>}
+          <div className="nep-status">
+            <span className={"nd cd-"+(EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].who||"kotae")}/>
+            <span className="nep-where">{EMBER_STATUS[activeEmber.status]&&EMBER_STATUS[activeEmber.status].label}</span>
+            <span className="nep-pct">{Math.round(activeEmber.progress||0)}%</span>
+          </div>
+          <Bar value={activeEmber.progress||0} color="var(--ember)" h={4}/>
+          <div className="nep-next">あと{Math.max(0,100-Math.round(activeEmber.progress||0))}%で、{getEmberNextLabel(activeEmber.status)}</div>
+          {activeEmber.pendingQuestion&&activeEmber.pendingQuestion.question&&<div className="nep-question">問い：{activeEmber.pendingQuestion.question}</div>}
+        </div>;
+      })()}
 
       {/* ヘッダー */}
       <div className="now-hdr">
@@ -3851,7 +3909,7 @@ function NowSceneView(p){
 
       {loc==="record_tower"&&MVP_MODE&&<div className="now-record-tower-panel">
         <EventLogPanel game={game}/>
-        <LogConvPanel game={game}/>
+        <LogConvPanel game={game} setGame={p.setGame}/>
       </div>}
 
       {pressureOpen&&((function(){
@@ -3982,7 +4040,13 @@ function HomeView(p){
   var voiceChar,voiceLine,nightCta;
   var hasReturned=canActFires.some(function(f){return (f.meetings||[]).length>0;});
   var kanaMet=isCharMet(game,"kana");
-  if(canGraduateFires.length>0){
+  var activeSF=getActiveSentFire(game);
+  var sfPending=(fires||[]).some(function(f){return isWorldFire(f)&&f.questionPending&&f.foundQuestion;});
+  if(sfPending){
+    voiceChar="toyman";voiceLine="問いの欠片が届いた。受け取りに来て。";nightCta="ember-sf-question";
+  }else if(activeSF){
+    voiceChar="toyman";voiceLine="火は見えている。森にいる。";nightCta="forest";
+  }else if(canGraduateFires.length>0){
     voiceChar=kanaMet?"kana":"toyman";voiceLine=kanaMet?"返せるところまで来た残り火がある。棚を見て。":"ここまで来た。棚を見て。";nightCta="shelf";
   }else if(canActFires.length>0&&hasReturned){
     voiceChar="toyman";voiceLine="戻ってきた残り火がある。受け取るかは、あなたが決めていい。";nightCta="shelf";
@@ -4023,6 +4087,8 @@ function HomeView(p){
       {nightCta==="ember-depart"&&<button className="btn btn-g hnv-cta" onClick={goToShelf}>出発させる</button>}
       {nightCta==="ember-question"&&<button className="btn btn-g hnv-cta" onClick={goToShelf}>問いを受け取る</button>}
       {nightCta==="ember"&&<button className="btn btn-g hnv-cta" onClick={goToShelf}>残り火を見に行く</button>}
+      {nightCta==="ember-sf-question"&&<button className="btn btn-g hnv-cta" onClick={goToShelf}>問いの欠片を受け取る</button>}
+      {nightCta==="forest"&&<button className="btn btn-g hnv-cta" onClick={function(){p.onOpenPlace&&p.onOpenPlace("unexplored_forest");}}>未受領の森を見る</button>}
     </section>
 
     {/* 2. 残り火を灯す */}
@@ -4173,6 +4239,13 @@ const J_FORM_META={
   kept:{label:"預かり札",cls:"jf-kept"},
   azukari:{label:"預かり札",cls:"jf-kept"}
 };
+function jFormLabel(f){
+  if(!f)return "残り火";
+  if(f.form==="certificate")return "受領証";
+  if(f.form==="kept"||f.form==="azukari")return "預かり札";
+  if(f.form==="placed"){return (!f.meetings||f.meetings.length===0)?"残り火":"置き札";}
+  return "残り火";
+}
 function jName(c){return ({toyman:"トイマン",kana:"かな",utsuro:"うつろ"})[c]||c;}
 function jHasDanger(s){s=s||"";return J_DANGER_WORDS.some(function(w){return s.indexOf(w)>=0;});}
 // 問いは (送り先 × 同行者 × 深さ) の決定論プール。深さ＝この火の過去 meeting 数（上限クランプ）。ランダムにしない。
@@ -4381,6 +4454,7 @@ function EmberJourney(p){
     ns.sentFires=[releasedFire].concat(ns.sentFires);
     if(ns.characters&&ns.characters.toyman){ns.characters.toyman.location="unexplored_forest";ns.characters.toyman.lastAction="exploring";}
     unlockPlace(ns,"unexplored_forest",false);
+    unlockPlace(ns,"record_tower",false);
     appendEventLog(ns,"「"+jTitleOf(releasedFire)+"」が灯った。トイマンが未受領の森へ向かった","placed");
     ns.lastSavedAt=releasedAt;
     p.onChange&&p.onChange(ns);
@@ -4454,8 +4528,8 @@ function EmberJourney(p){
     <div className="sh-handle"/>
 
     {phase==="deposit"&&<div className="ej-in">
-      <p className="ej-kicker">残り火を送り出す</p>
-      <h2 className="ej-title">残り火を、預ける</h2>
+      <p className="ej-kicker">残り火を世界へ</p>
+      <h2 className="ej-title">残り火を灯す</h2>
       <label className="ej-field"><span>タイトル（任意）</span>
         <input type="text" value={title} placeholder="例：読まれなかった記事の残り火" onChange={function(e){setTitle(e.target.value);}}/>
       </label>
@@ -4489,14 +4563,14 @@ function EmberJourney(p){
 
     {phase==="released"&&depositedFire&&<div className="ej-in ej-released">
       <div className="ej-formed jf-placed">
-        <span className="ej-formed-label">置き札</span>
+        <span className="ej-formed-label">残り火</span>
         <span className="ej-formed-title">「{jTitleOf(depositedFire)}」</span>
       </div>
       <p className="ej-released-main">トイマンが、火に気づいた。</p>
       <p className="ej-released-body">まだ、誰かに受け取られたわけではありません。<br/>でも、その火はもう見失われていません。</p>
       <p className="ej-released-body">トイマンは、未受領の森へ向かいました。<br/>この残り火が、何を待っているのかを探しに行きます。</p>
-      {p.onGoGarden&&<button className="btn btn-p ej-go" onClick={function(){p.onGoGarden("unexplored_forest");}}>箱庭を見る</button>}
-      <button className="btn btn-g ej-cancel" onClick={p.onClose}>棚へ戻る</button>
+      {p.onGoGarden&&<button className="btn btn-p ej-go" onClick={function(){p.onGoGarden("unexplored_forest");}}>未受領の森を見る</button>}
+      <button className="btn btn-g ej-cancel" onClick={function(){p.onGoShelf?p.onGoShelf():p.onClose&&p.onClose();}}>棚を見る</button>
     </div>}
 
     {phase==="send"&&<div className="ej-in">
@@ -4594,7 +4668,7 @@ function JourneyShelf(p){
     var m=(f.meetings||[])[0];
     var layers=(f.meetings||[]).length;
     return <button key={f.id} className={"jfire jfire-tap "+meta.cls} onClick={function(){p.onOpen&&p.onOpen(f.id);}}>
-      <div className="jfire-top"><span className="jfire-form">{meta.label}</span><span className="jfire-title">「{jTitleOf(f)}」</span></div>
+      <div className="jfire-top"><span className="jfire-form">{jFormLabel(f)}</span><span className="jfire-title">「{jTitleOf(f)}」</span></div>
       {m&&m.question&&<div className="jfire-q">{m.question}</div>}
       {m&&m.answer&&<div className="jfire-a">{m.answer}</div>}
       {m&&m.deferred&&<div className="jfire-a jfire-defer">まだ答えていない。そばに置いてある。</div>}
@@ -4712,7 +4786,7 @@ function JourneyFireView(p){
         ?<CertificateView fire={f} inline={true}/>
         :<>
           <div className={"jfv-head "+meta.cls}>
-            <span className="ej-formed-label">{meta.label}</span>
+            <span className="ej-formed-label">{jFormLabel(f)}</span>
             <span className="jfv-title">「{jTitleOf(f)}」</span>
             {f.returnedAt&&<span className="jfv-returned">心へ返した火</span>}
           </div>
@@ -4746,6 +4820,40 @@ function JourneyFireView(p){
             </div>;})}
             {f.form==="kept"&&!meetings.length&&<div className="jfv-layer"><div className="jfv-layer-a jfv-defer">答えを求めずに預かった。落ち着いた日に、送り先を選べます。</div></div>}
           </div>
+          {f.questionPending&&f.foundQuestion&&f.form!=="certificate"&&<div className="jfv-question-pending">
+            <div className="jfvqp-head">
+              <span className="nd cd-toyman"/>
+              <span className="jfvqp-label">トイマンが問いの欠片を見つけた</span>
+            </div>
+            <div className="jfvqp-q">「{f.foundQuestion}」</div>
+            <div className="jfvqp-btns">
+              <button className="btn btn-p jfvqp-receive" onClick={function(){
+                var ns=cloneS(p.game);
+                ns.sentFires=(ns.sentFires||[]).map(function(x){
+                  if(x.id!==f.id)return x;
+                  var m={companion:"toyman",question:x.foundQuestion,answeredAt:nowISO(),deferred:false};
+                  return Object.assign({},x,{
+                    form:"certificate",questionPending:false,
+                    meetings:(x.meetings||[]).concat([m]),
+                    lastTouch:nowISO()
+                  });
+                });
+                appendEventLog(ns,"「"+jTitleOf(f)+"」の問いの欠片を受け取った","receive");
+                ns.lastSavedAt=nowISO();
+                p.onChange&&p.onChange(ns);
+              }}>問いの欠片を受け取る</button>
+              <button className="btn btn-g jfvqp-defer" onClick={function(){
+                var ns=cloneS(p.game);
+                ns.sentFires=(ns.sentFires||[]).map(function(x){
+                  if(x.id!==f.id)return x;
+                  return Object.assign({},x,{questionPending:false,lastTouch:nowISO()});
+                });
+                ns.lastSavedAt=nowISO();
+                p.onChange&&p.onChange(ns);
+                p.onClose&&p.onClose();
+              }}>まだ置いておく</button>
+            </div>
+          </div>}
         </>}
 
       {locked?<div className="jfv-lock">
@@ -4936,7 +5044,7 @@ function App(){
             <button className={"ptb"+(peekMode==="map"?" ptb-on":"")} onClick={function(){setPeekMode("map");}}>世界地図</button>
           </div>
         }/>
-        {peekMode==="scene"&&<NowSceneView game={game} targetLoc={peekTargetLoc} watchGauge={watchGauge} onWatch={stageWatchCb} onCharCare={charCareCb} onPressureAction={pressureActionCb} onToymanMove={toymanMoveCb} onManualBattle={manualBattleCb} onOpenBattle={function(){setBattleFrom("peek");setPeekTargetLoc("unexplored_forest");setPeekMode("scene");setScreen("battle");}} onClickLetter={clickLetterCb}/>}
+        {peekMode==="scene"&&<NowSceneView game={game} setGame={function(ns){setGame(ns);persistSave(ns);}} targetLoc={peekTargetLoc} watchGauge={watchGauge} onWatch={stageWatchCb} onCharCare={charCareCb} onPressureAction={pressureActionCb} onToymanMove={toymanMoveCb} onManualBattle={manualBattleCb} onOpenBattle={function(){setBattleFrom("peek");setPeekTargetLoc("unexplored_forest");setPeekMode("scene");setScreen("battle");}} onClickLetter={clickLetterCb}/>}
         {peekMode==="map"&&<div className="peek-wrap peek-wrap-readable"><CardWorldMap game={game} onPlaceSelect={function(k){setPeekTargetLoc(k);setPeekMode("scene");}}/><div className="peek-sec"><span className="sec-lbl">次に起きそうな変化</span><NextChangesPanel game={game}/></div></div>}
       </>}
       {screen==="battle"&&<>
@@ -4983,7 +5091,7 @@ function App(){
     {closingPreview&&<ClosingPreviewOverlay text={closingPreview} onClose={function(){setClosingPreview(null);closeWorld(true);}}/>}
     {philAnswerOpen&&<PhilAnswerModal question={getPhilosophicalQuestion(game).text} onClose={function(){setPhilAnswerOpen(false);}} onSave={function(a){savePhilAnswer(a);setPhilAnswerOpen(false);}}/>}
     {showCreate&&!MVP_MODE&&<EmberCreate onClose={function(){setShowCreate(false);}} onSubmit={addEmber}/>}
-    {showJourney&&<EmberJourney game={game} onClose={function(){setShowJourney(false);}} onChange={function(ns){setGame(ns);persistSave(ns);}} onGoGarden={function(dest){setShowJourney(false);setPeekTargetLoc(dest||"unexplored_forest");setPeekMode("scene");setScreen("peek");}}/>}
+    {showJourney&&<EmberJourney game={game} onClose={function(){setShowJourney(false);}} onChange={function(ns){setGame(ns);persistSave(ns);}} onGoGarden={function(dest){setShowJourney(false);setPeekTargetLoc(dest||"unexplored_forest");setPeekMode("scene");setScreen("peek");}} onGoShelf={function(){setShowJourney(false);setScreen("ember");}}/>}
     {journeyRevisit&&<EmberJourney key={journeyRevisit.fire.id+journeyRevisit.intent} game={game} existing={journeyRevisit.fire} intent={journeyRevisit.intent} onClose={function(){setJourneyRevisit(null);}} onChange={function(ns){setGame(ns);persistSave(ns);}}/>}
     {fireDetailId&&!journeyRevisit&&(function(){var f=((game&&game.sentFires)||[]).find(function(x){return x.id===fireDetailId;});if(!f)return null;return <JourneyFireView game={game} fire={f} onClose={function(){setFireDetailId(null);}} onChange={function(ns){setGame(ns);persistSave(ns);}} onRevisit={function(fire,intent){setFireDetailId(null);setJourneyRevisit({fire:fire,intent:intent});}}/>;})()}
     {showBadNight&&<BadNightMode onClose={function(){setShowBadNight(false);}} onSubmit={function(card){var res=addNewEmberToState(game,card);var ns=res.state;ns.logs=[{hours:0,events:[{text:"今夜の判決を、問いとして保留した。",kind:"record",pri:5},{text:"審査官：「今夜は受理しない」",kind:"auditor",pri:5},{text:"うつろ：「明日まで、捨てない」",kind:"record",pri:4}],ts:nowISO()}].concat(ns.logs||[]).slice(0,30);appendEventLog(ns,"今夜の判決を保留した。答えを探さず、ただ預けた。","badnight");ns.lastSavedAt=nowISO();setGame(ns);persistSave(ns);setShowBadNight(false);}}/>}
@@ -5178,7 +5286,7 @@ function IntroScreen(p){
             <p className="op-q-sub">小説、記事、投稿、下書き。誰にも見せていない言葉。<br/>書いたあとに残った痛みや問い。<br/><br/>届いたかどうかではなく、<br/>まだ残っているものを預けられます。</p>
           </div>
           <div className="op-q-choices">
-            <button className="btn btn-p big touchable op-q-yes" onClick={p.onBeginJourney}>残り火を預ける</button>
+            <button className="btn btn-p big touchable op-q-yes" onClick={p.onBeginJourney}>残り火を灯す</button>
             <button className="btn btn-g op-q-no" onClick={goFarewell}>今はない</button>
           </div>
         </div>
@@ -5888,7 +5996,7 @@ function EmberView(p){
   }
   return(<div className="scroll"><div className="ev-wrap">
     <p className="facility-desc">捨てなかった残り火を、置いておく場所。</p>
-    {hasAny&&<button className="ev-create-btn touchable" onClick={p.onJourney}>+ 残り火を預ける</button>}
+    {hasAny&&<button className="ev-create-btn touchable" onClick={p.onJourney}>+ 残り火を灯す</button>}
     {hasAnyFires&&(function(){var bCard=getToymanBattleEmber(game);var isSF=bCard&&(game.sentFires||[]).some(function(f){return f.id===bCard.id;});if(!isSF||game.characters.toyman.lastAction!=="exploring")return null;return <div className="ev-battle-cta"><p className="ev-battle-cta-msg">トイマンが未受領の森にいます。「{jTitleOf(bCard)}」に影の声が届いています。</p><button className="btn btn-p touchable" onClick={function(){onOpenBattle&&onOpenBattle();}}>影と向き合う</button></div>;})()}
     {hasAnyFires
       ? <JourneyShelf game={game} onOpen={p.onOpenFire}/>
@@ -5906,7 +6014,7 @@ function EmberView(p){
       <p>ここには、あなたが預けた残り火だけが並びます。</p>
       <p>書いて満足できた日は、それで大丈夫です。<br/>その日は、ここに残すものはありません。</p>
       <p>また何かが残ってしまった日に、ここへ置きにきてください。</p>
-      <button className="btn btn-p touchable" onClick={p.onJourney}>残り火を預ける</button>
+      <button className="btn btn-p touchable" onClick={p.onJourney}>残り火を灯す</button>
     </div>}
     {hasLegacy&&<div className="legacy-section">
       <button className="legacy-toggle" onClick={function(){setLegacyOpen(function(v){return !v;});}}>

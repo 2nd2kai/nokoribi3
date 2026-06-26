@@ -4516,6 +4516,13 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .jfv-edit-form{display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
 .jfv-edit-btns{display:flex;gap:8px;margin-top:4px}
 .jfv-edit-btns .btn{flex:1;font-size:13px;padding:9px}
+.jfv-question-pending{background:rgba(219,164,94,.08);border:1px solid rgba(219,164,94,.3);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
+.jfvqp-head{display:flex;align-items:center;gap:7px}
+.jfvqp-label{font-size:12px;color:var(--ember2);letter-spacing:.04em}
+.jfvqp-q{font-size:15px;line-height:1.6;color:var(--text);padding:4px 0}
+.jfvqp-btns{display:flex;gap:8px}
+.jfvqp-receive{flex:2;font-size:13px}
+.jfvqp-defer{flex:1;font-size:13px}
 .jfv-strata{display:flex;flex-direction:column;gap:8px}
 .jfv-strata-h{font-size:12px;color:var(--dim);letter-spacing:.04em;margin:2px 0 0}
 .jfv-layer{background:rgba(255,255,255,.04);border-left:2px solid rgba(219,164,94,.4);border-radius:0 10px 10px 0;padding:9px 12px;display:flex;flex-direction:column;gap:4px}
