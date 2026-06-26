@@ -3942,6 +3942,8 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .now-ember-panel.nep-top{margin:0;border-top:none;border-bottom:1px solid rgba(219,164,94,.22);order:-1}
 .nep-feeling{font-family:var(--serif);font-size:12px;color:var(--dim);line-height:1.6}
 .nep-question{font-family:var(--serif);font-size:12px;color:var(--ember2);line-height:1.65;margin-top:3px;padding:6px 10px;border-left:2px solid rgba(219,164,94,.5);background:rgba(219,164,94,.06);border-radius:0 6px 6px 0}
+.nep-qp-notice{font-size:11px;color:var(--dim);margin-top:2px}
+.nep-shelf-btn{font-size:12px;padding:7px 14px;margin-top:6px;align-self:flex-start}
 
 /* リッチ手紙結果パネル */
 .lrp-rich{cursor:pointer;transition:opacity .2s}

@@ -941,11 +941,11 @@ function makeJourneyGoals(game){
   var goals=[];
   if(fires.length===0){
     goals.push({id:"jg_first",icon:"🔥",done:false,type:"journey",
-      label:"残り火を預ける",
-      what:"書いたあとに残ったものを、箱庭に預ける。",
-      rec:"行き先と同行者を選ぶと、残り火が旅に出ます。",
+      label:"残り火を灯す",
+      what:"書いたあとに残ったものを、ここに灯せます。",
+      rec:"火が灯ると、トイマンが未受領の森へ向かいます。",
       reward:"棚に、最初の残り火が灯る",
-      action:{screen:"journey",label:"預ける"}});
+      action:{screen:"journey",label:"灯す"}});
     return goals;
   }
   var front=fires.filter(function(f){return !f.returnedAt&&!f.shelved;});
@@ -1159,7 +1159,51 @@ function simulate(state,hoursRaw,policy){var hours=Math.max(0,Math.min(hoursRaw,
   if(hours>0&&emberCycles===0)emberCycles=1; /* 最低1サイクルは進める */
   for(var ec=0;ec<emberCycles;ec++)processEmbers(s,events);
   enforceToymanAutoTravel(s);clampAll(s);checkAndGrantAchievements(s,s._rw);checkUnlocks(s);var after=snapshot(s);var summary=buildSummary(before,after,events,hours,s);s.logs=[summary].concat(s.logs||[]).slice(0,30);s.recentRewards=s._rw.slice();delete s._rw;return{newState:s,summary:summary};}
-function genLiveEvent(g){var unrec=(g.emberCards||[]).filter(function(c){return c.status==="unreceived";});var toyEx=g.characters.toyman.lastAction==="exploring";if(toyEx&&unrec.length>0&&rnd()<0.24){var enemy=pick(EX.enemies),win=rnd()<0.62,outcome=win?pick(EX.winOut):pick(EX.loseOut),fatD=win?1+Math.floor(rnd()*2):2+Math.floor(rnd()*2);var card=unrec[0],title=makeEmberTitle(card),gain=Math.round((win?3+Math.floor(rnd()*3):2+Math.floor(rnd()*3)));return{text:["トイマンは未受領の森を進んだ。","黒い影「"+enemy+"」が現れた。── "+outcome+"。","「"+title+"」が "+gain+"% 進んだ。","疲労 +"+fatD,"結果：問いを落とさなかった"].join("\n"),kind:"explore_detail",su:{type:"tex_ember",emberId:card.id,gain:gain/100,fatD:fatD,expl:Math.min(100,g.characters.toyman.stats.exploration+(win?1:0))}};}var tired=CHAR_IDS.filter(function(id){return id!=="kana"&&g.characters[id].stats.fatigue>=45;});if(tired.length&&rnd()<0.62){var tgt=pick(tired);return{text:"かなが"+NAMES[tgt]+"のそばに来た。疲れが少しほどけた。",kind:"comfort",su:{type:"kh",target:tgt,amount:4}};}if(rnd()<0.72){var n=1+Math.floor(rnd()*3);return{text:"うつろが封筒を"+n+"通整理した。消えていない、と確認した。",kind:"store",su:{type:"us",n:n}};}if(rnd()<0.84)return{text:"コタエは今日のことを書いた。短くていい、と思いながら。",kind:"record",su:{type:"kr"}};return{text:"審査官は、ただ静かにしている。",kind:"auditor",su:null};}
+function genLiveEvent(g){
+  var kanaMet=isCharMet(g,"kana");
+  var utsuroMet=isCharMet(g,"utsuro");
+  var kotaeMet=isCharMet(g,"kotae");
+  var auditorMet=isCharMet(g,"auditor");
+  var toyEx=g.characters.toyman.lastAction==="exploring";
+  /* sentFires 探索中のトイマンイベント（MVP正面） */
+  var activeSF=(g.sentFires||[]).find(function(f){return isWorldFire(f)&&f.dest==="forest"&&f.companion==="toyman";});
+  if(toyEx&&activeSF&&rnd()<0.45){
+    var sfLines=[
+      "トイマンは未受領の森を進んだ。火は、まだ消えていない。",
+      "トイマンは未受領の森を進んだ。影の声が少し近づいた。",
+      "トイマンは未受領の森を進んだ。「"+jTitleOf(activeSF)+"」の気配を感じた。",
+      "トイマンは未受領の森を進んだ。足下に何かが光っていた。",
+    ];
+    return{text:pick(sfLines),kind:"explore_detail",su:null};
+  }
+  /* 旧 emberCards 探索イベント */
+  var unrec=(g.emberCards||[]).filter(function(c){return c.status==="unreceived";});
+  if(toyEx&&unrec.length>0&&rnd()<0.24){
+    var enemy=pick(EX.enemies),win=rnd()<0.62,outcome=win?pick(EX.winOut):pick(EX.loseOut),fatD=win?1+Math.floor(rnd()*2):2+Math.floor(rnd()*2);
+    var card=unrec[0],title=makeEmberTitle(card),gain=Math.round((win?3+Math.floor(rnd()*3):2+Math.floor(rnd()*3)));
+    return{text:["トイマンは未受領の森を進んだ。","黒い影「"+enemy+"」が現れた。── "+outcome+"。","「"+title+"」が "+gain+"% 進んだ。","疲労 +"+fatD,"結果：問いを落とさなかった"].join("\n"),kind:"explore_detail",su:{type:"tex_ember",emberId:card.id,gain:gain/100,fatD:fatD,expl:Math.min(100,g.characters.toyman.stats.exploration+(win?1:0))}};
+  }
+  /* 解放済みキャラのみイベントを出す */
+  var tired=CHAR_IDS.filter(function(id){return id!=="kana"&&isCharMet(g,id)&&g.characters[id].stats.fatigue>=45;});
+  if(kanaMet&&tired.length&&rnd()<0.62){
+    var tgt=pick(tired);
+    return{text:"かなが"+NAMES[tgt]+"のそばに来た。疲れが少しほどけた。",kind:"comfort",su:{type:"kh",target:tgt,amount:4}};
+  }
+  if(utsuroMet&&rnd()<0.72){
+    var n=1+Math.floor(rnd()*3);
+    return{text:"うつろが封筒を"+n+"通整理した。消えていない、と確認した。",kind:"store",su:{type:"us",n:n}};
+  }
+  if(kotaeMet&&rnd()<0.84)return{text:"コタエは今日のことを書いた。短くていい、と思いながら。",kind:"record",su:{type:"kr"}};
+  if(auditorMet)return{text:"審査官は、ただ静かにしている。",kind:"auditor",su:null};
+  /* 全員未解放時（初回体験）はトイマン台詞だけ */
+  var toyLines=[
+    "トイマンは、はじまりの部屋で待っている。",
+    "トイマン：「火は、まだそこにある。」",
+    "トイマン：「残っているなら、迎えに行く。」",
+    "トイマン：「消えていない。それだけで、十分だ。」",
+  ];
+  return{text:pick(toyLines),kind:"explore_detail",su:null};
+}
 
 /* ── 戦闘介入：v5.40 の emberCards / unitState 版 ── */
 const BATTLE_CFG={manualCooldown:6500,encounterMaxTurns:3,watchToIp:100,
@@ -2010,18 +2054,31 @@ function getActiveEmber(game){return (game.emberCards||[]).find(function(c){retu
    action: "create"|"depart"|"answer"|"receive"  */
 function getNextAction(game){
   if(!game)return null;
+  if(MVP_MODE){
+    var sfs=game.sentFires||[];
+    /* 1. 問いの欠片がある */
+    var sfQ=sfs.find(function(f){return isWorldFire(f)&&f.questionPending&&f.foundQuestion;});
+    if(sfQ)return{screen:"ember",action:"sf_question",cardId:sfQ.id};
+    /* 2. 探索中の火がある */
+    var sfEx=sfs.find(function(f){return isWorldFire(f);});
+    if(sfEx)return{screen:"peek",action:"forest",cardId:sfEx.id};
+    /* 3. 受け取れる受領証がある */
+    var sfCert=sfs.find(function(f){return f.form==="certificate"&&!f.returnedAt;});
+    if(sfCert)return{screen:"ember",action:"shelf",cardId:sfCert.id};
+    /* 4. 棚に火がある */
+    var sfShelf=sfs.find(function(f){return !f.returnedAt&&!f.shelved;});
+    if(sfShelf)return{screen:"ember",action:"shelf",cardId:sfShelf.id};
+    /* 5. 何もない → 灯す */
+    return{screen:"ember",action:"journey",cardId:null};
+  }
   var cards=game.emberCards||[];
-  /* 受け取れる残り火が最優先 */
   var ready=cards.find(function(c){return c.unitState==="completed"||c.status==="ready";});
   if(ready)return{screen:"ember",action:"receive",cardId:ready.id};
-  /* 問い札が出ているカード */
   var pending=cards.find(function(c){return c.questionPending&&c.pendingQuestion;});
   if(pending)return{screen:"ember",action:"answer",cardId:pending.id};
-  /* 出発待ち */
   var waiting=cards.find(function(c){return c.unitState==="waiting"||c.status==="awaiting";});
   if(waiting)return{screen:"ember",action:"depart",cardId:waiting.id};
-  /* カードが何もない */
-  if(cards.length===0)return MVP_MODE?{screen:"ember",action:"journey",cardId:null}:{screen:"home",action:"create",cardId:null};
+  if(cards.length===0)return{screen:"home",action:"create",cardId:null};
   return null;
 }
 function getEmberNeed(card){return Math.max(0,100-Math.round(card.progress||0));}
@@ -3669,7 +3726,11 @@ function NowSceneView(p){
             </div>
             <Bar value={asf.progress||0} color="var(--ember)" h={4}/>
             <div className="nep-next">探索の深さ　{Math.round(asf.progress||0)}%</div>
-            {asf.questionPending&&asf.foundQuestion&&<div className="nep-question">問いの欠片：{asf.foundQuestion}</div>}
+            {asf.questionPending&&asf.foundQuestion
+              ?<><div className="nep-question">問いの欠片：{asf.foundQuestion}</div>
+                <div className="nep-qp-notice">トイマンが問いの欠片を見つけました。棚で受け取れます。</div>
+                <button className="btn btn-p nep-shelf-btn" onClick={function(){p.onGoShelf&&p.onGoShelf();}}>棚を見る</button></>
+              :null}
           </div>;}
           return null;
         }
@@ -4055,7 +4116,7 @@ function HomeView(p){
     voiceChar="toyman";voiceLine="戻ってきた残り火がある。受け取るかは、あなたが決めていい。";nightCta="shelf";
   }else if(canActFires.length>0){
     voiceChar="toyman";voiceLine="棚の残り火を、送り出せる。行き先は、あなたが決めていい。";nightCta="shelf";
-  }else if(hasLegacyAction){
+  }else if(!MVP_MODE&&hasLegacyAction){
     var legacyReady=legacyNeedsAction.some(function(c){return c.status==="ready";});
     var legacyDepart=legacyNeedsAction.some(function(c){return c.status==="awaiting"||c.unitState==="waiting";});
     var legacyQuestion=legacyNeedsAction.some(function(c){return c.questionPending;});
@@ -4071,10 +4132,10 @@ function HomeView(p){
     }
   }else if(fires.length>0){
     voiceChar="toyman";voiceLine="今夜はここに置いておこう。日が変わったら、また会える。";nightCta=null;
-  }else if(cards.length>0){
+  }else if(!MVP_MODE&&cards.length>0){
     voiceChar="toyman";voiceLine="まだ残っている。";nightCta=null;
   }else{
-    voiceChar="toyman";voiceLine="残り火を、預けて。私が、探してくる。";nightCta=null;
+    voiceChar="toyman";voiceLine="残り火を、灯して。私が、探してくる。";nightCta=null;
   }
   function goToShelf(){p.onNav&&p.onNav("ember");}
   return <div className="scroll home-screen">
@@ -4849,7 +4910,7 @@ function JourneyFireView(p){
                 var ns=cloneS(p.game);
                 ns.sentFires=(ns.sentFires||[]).map(function(x){
                   if(x.id!==f.id)return x;
-                  return Object.assign({},x,{questionPending:false,lastTouch:nowISO()});
+                  return Object.assign({},x,{questionDeferredAt:nowISO(),lastTouch:nowISO()});
                 });
                 ns.lastSavedAt=nowISO();
                 p.onChange&&p.onChange(ns);
@@ -5047,7 +5108,7 @@ function App(){
             <button className={"ptb"+(peekMode==="map"?" ptb-on":"")} onClick={function(){setPeekMode("map");}}>世界地図</button>
           </div>
         }/>
-        {peekMode==="scene"&&<NowSceneView game={game} setGame={function(ns){setGame(ns);persistSave(ns);}} targetLoc={peekTargetLoc} watchGauge={watchGauge} onWatch={stageWatchCb} onCharCare={charCareCb} onPressureAction={pressureActionCb} onToymanMove={toymanMoveCb} onManualBattle={manualBattleCb} onOpenBattle={function(){setBattleFrom("peek");setPeekTargetLoc("unexplored_forest");setPeekMode("scene");setScreen("battle");}} onClickLetter={clickLetterCb}/>}
+        {peekMode==="scene"&&<NowSceneView game={game} setGame={function(ns){setGame(ns);persistSave(ns);}} targetLoc={peekTargetLoc} watchGauge={watchGauge} onWatch={stageWatchCb} onCharCare={charCareCb} onPressureAction={pressureActionCb} onToymanMove={toymanMoveCb} onManualBattle={manualBattleCb} onOpenBattle={function(){setBattleFrom("peek");setPeekTargetLoc("unexplored_forest");setPeekMode("scene");setScreen("battle");}} onClickLetter={clickLetterCb} onGoShelf={function(){setScreen("ember");}}/>}
         {peekMode==="map"&&<div className="peek-wrap peek-wrap-readable"><CardWorldMap game={game} onPlaceSelect={function(k){setPeekTargetLoc(k);setPeekMode("scene");}}/><div className="peek-sec"><span className="sec-lbl">次に起きそうな変化</span><NextChangesPanel game={game}/></div></div>}
       </>}
       {screen==="battle"&&<>
