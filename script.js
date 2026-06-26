@@ -1165,7 +1165,14 @@ const TOYMAN_BATTLE_LINES={
   retreat:["下がる。でも捨てない","今日はここまで。でも落としてない","帰る道は、まだ覚えてる"]
 };
 function getToymanBattleEmber(game){
-  return (game.emberCards||[]).find(function(c){return (c.unitState==="exploring"||c.status==="unreceived")&&!c.questionPending;})||null;
+  var fromCards=(game.emberCards||[]).find(function(c){return (c.unitState==="exploring"||c.status==="unreceived")&&!c.questionPending;})||null;
+  if(fromCards)return fromCards;
+  var t=game.characters&&game.characters.toyman;
+  if(t&&t.lastAction==="exploring"){
+    var sf=(game.sentFires||[]).find(function(f){return f.form==="placed"&&f.dest==="forest"&&!f.returnedAt;});
+    if(sf)return sf;
+  }
+  return null;
 }
 function battleEnemyName(game){
   var b=game&&game.battle?game.battle:null;
@@ -4130,7 +4137,6 @@ function HomeView(p){
         <p className="hbn-desc">今日は、残り火を言葉にしなくても大丈夫です。<br/>タイトルも、意味も、価値も、まだ書けないなら、<br/>何も残さず閉じてもかまいません。</p>
         <div className="hbn-btns">
           <button className="btn hbn-btn-dismiss" onClick={function(){setBnDismissed(true);}}>今日は何もしないで閉じる</button>
-          <button className="btn btn-p hbn-btn-azukari" onClick={function(){p.onJourney&&p.onJourney();}}>本命の残り火を書く</button>
         </div>
       </section>;
     })()}
