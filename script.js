@@ -3889,7 +3889,7 @@ function NowSceneView(p){
         {(function(){var d=getPlaceDelta(game,loc,"prev");return(d&&d>0.003)?<span className="now-delta">+{Math.round(d*100)}%↑</span>:null;})()}
       </div>}
 
-      {!MVP_MODE&&careTarget&&((function(){
+      {(!MVP_MODE||careTarget==="toyman")&&careTarget&&((function(){
         var c=game.characters[careTarget];
         var st=c&&c.stats?c.stats:{};
         var abilityKey=UKEY[careTarget];
@@ -4635,9 +4635,15 @@ function EmberJourney(p){
         <span className="ej-formed-label">残り火</span>
         <span className="ej-formed-title">「{jTitleOf(depositedFire)}」</span>
       </div>
-      <p className="ej-released-main">トイマンが、火に気づいた。</p>
-      <p className="ej-released-body">まだ、誰かに受け取られたわけではありません。<br/>でも、その火はもう見失われていません。</p>
-      <p className="ej-released-body">トイマンは、未受領の森へ向かいました。<br/>この残り火が、何を待っているのかを探しに行きます。</p>
+      <div className="ej-toyman-scene">
+        <div className="ets-namerow"><span className="isc-dot cd-toyman ets-dot"/><span className="ets-name">トイマン</span></div>
+        <p className="ets-say">「火が、見えた。」</p>
+        <p className="ets-say">「まだ、誰にも受け取られていない。」</p>
+        <p className="ets-say">「でも、ちゃんとある。」</p>
+        <p className="ets-stage">小さなランタンを確認した。</p>
+        <p className="ets-say">「未受領の森に、行く。」</p>
+        <p className="ets-say">「置いていかない。」</p>
+      </div>
       {p.onGoGarden&&<button className="btn btn-p ej-go" onClick={function(){p.onGoGarden("unexplored_forest");}}>未受領の森を見る</button>}
       <button className="btn btn-g ej-cancel" onClick={function(){p.onGoShelf?p.onGoShelf():p.onClose&&p.onClose();}}>棚を見る</button>
     </div>}
@@ -4984,7 +4990,7 @@ function App(){
   var [peekMode,setPeekMode]=useState("scene");var [peekTargetLoc,setPeekTargetLoc]=useState(null);var [battleFrom,setBattleFrom]=useState("peek");var [intvConfig,setIntvConfig]=useState({target:"auto",tier:null,key:0});var [showCreate,setShowCreate]=useState(false);var [receiveTargetId,setReceiveTargetId]=useState(null);var [departTargetId,setDepartTargetId]=useState(null);var [burnTargetId,setBurnTargetId]=useState(null);var [receiptAcceptance,setReceiptAcceptance]=useState(null);
   var gameRef=useRef(null),toastRef=useRef(null);
   var [watchGauge,setWatchGauge]=useState(0);var wgRef=useRef({gauge:0,last:{}});var [returnConvId,setReturnConvId]=useState(null);var [witnessTargetId,setWitnessTargetId]=useState(null);var [sendGiftOpen,setSendGiftOpen]=useState(false);var [utsuroEventActive,setUtsuroEventActive]=useState(false);var [closingPreview,setClosingPreview]=useState(null);var [philAnswerOpen,setPhilAnswerOpen]=useState(false);var [kotaeStuck,setKotaeStuck]=useState(false);
-  var [saveError,setSaveError]=useState(false);var [showBadNight,setShowBadNight]=useState(false);var [showJourney,setShowJourney]=useState(false);var [fireDetailId,setFireDetailId]=useState(null);var [journeyRevisit,setJourneyRevisit]=useState(null);var [showGlossary,setShowGlossary]=useState(false);
+  var [saveError,setSaveError]=useState(false);var [showBadNight,setShowBadNight]=useState(false);var [showJourney,setShowJourney]=useState(false);var [fireDetailId,setFireDetailId]=useState(null);var [journeyRevisit,setJourneyRevisit]=useState(null);var [showGlossary,setShowGlossary]=useState(false);var [devOpen,setDevOpen]=useState(false);
   useEffect(function(){gameRef.current=game;},[game]);
 
   useEffect(function(){var saved=loadSave();if(saved){setGame(migrateGame(saved));setFirst(false);}else{var f=initGame();setGame(f);setFirst(true);persistSave(f);}setScreen("closed");},[]); // eslint-disable-line
@@ -5208,6 +5214,34 @@ function App(){
       }
     }}/>}
     {toast&&<div className="toast">{toast}</div>}
+    {game&&screen!=="closed"&&<div className="dev-bar">
+      <button className="dev-toggle" onClick={function(){setDevOpen(function(v){return !v;});}}>🔧 {devOpen?"閉じる":"開発"}</button>
+      {devOpen&&<div className="dev-panel">
+        <div className="dev-section">
+          <div className="dev-section-head">時間操作</div>
+          <div className="dev-btns">
+            <button className="dev-btn" onClick={function(){advTime&&advTime(1);}}>+1時間</button>
+            <button className="dev-btn" onClick={function(){advTime&&advTime(8);}}>+8時間</button>
+            <button className="dev-btn" onClick={function(){advTime&&advTime(24);}}>+24時間</button>
+          </div>
+        </div>
+        <div className="dev-section">
+          <div className="dev-section-head">sentFires 操作</div>
+          {(function(){var sfs=game.sentFires||[];var active=sfs.find(function(f){return isWorldFire(f)&&f.dest==="forest"&&f.companion==="toyman";});return<>
+            <div className="dev-sf-status">{active?("「"+jTitleOf(active)+"」 進捗: "+(active.progress||0)+"%"+(active.questionPending?" ✅問い欠片済み":"")):("探索中のsentFireなし")}</div>
+            {active&&!active.questionPending&&<button className="dev-btn" onClick={function(){setGame(function(prev){if(!prev)return prev;var ns=cloneS(prev);var sf=(ns.sentFires||[]).find(function(f){return isWorldFire(f)&&f.dest==="forest"&&f.companion==="toyman";});if(!sf)return ns;sf.progress=100;sf.questionPending=true;sf.foundBy="toyman";sf.foundAt=nowISO();sf.foundQuestion=makeSentFireQuestion(sf);unlockPlace(ns,"record_tower",false);appendEventLog(ns,"[DEV] 問いの欠片を強制発見","discover");return ns;});persistSave(game);}}>進捗→100%・問い強制発見</button>}
+          </>;})()}
+        </div>
+        <div className="dev-section">
+          <div className="dev-section-head">ゲーム情報</div>
+          <div className="dev-info">sentFires: {(game.sentFires||[]).length}件 / emberCards: {(game.emberCards||[]).length}件</div>
+          <div className="dev-info">IP: {game.ip?game.ip.cur:0}/{game.ip?game.ip.max:0} / 解放: {Object.keys((game.unlocks&&game.unlocks.places)||{}).join(", ")||"なし"}</div>
+        </div>
+        <div className="dev-section">
+          <button className="dev-btn dev-btn-danger" onClick={function(){if(window.confirm("本当にリセットしますか？"))resetWorld&&resetWorld();}}>ゲームリセット</button>
+        </div>
+      </div>}
+    </div>}
   </div></div>);
 }
 

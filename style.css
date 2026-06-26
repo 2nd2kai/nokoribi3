@@ -4634,3 +4634,24 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 /* EmberJourney released フェーズ */
 .ej-released-main{font-family:var(--serif);font-size:15px;color:var(--ember2);margin:16px 0 8px;line-height:1.6;font-weight:600}
 .ej-released-body{font-family:var(--serif);font-size:13.5px;color:var(--dim);line-height:1.8;margin:0 0 10px}
+
+/* EmberJourney released — トイマンシーン */
+.ej-toyman-scene{margin:16px 0;padding:14px 16px;background:rgba(108,89,140,.07);border:1px solid rgba(108,89,140,.18);border-radius:12px}
+.ets-namerow{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.ets-dot{flex-shrink:0}
+.ets-name{font-family:var(--sans);font-size:11px;color:var(--faint);letter-spacing:.06em}
+.ets-say{font-family:var(--serif);font-size:14px;color:var(--text);line-height:1.85;margin:0 0 4px;padding-left:4px}
+.ets-stage{font-family:var(--serif);font-size:12px;color:var(--faint);font-style:italic;line-height:1.7;margin:6px 0 8px;padding-left:4px}
+
+/* 開発パネル */
+.dev-bar{position:sticky;bottom:0;background:rgba(18,14,26,.95);border-top:1px solid rgba(108,89,140,.3);padding:6px 12px;z-index:900;backdrop-filter:blur(6px)}
+.dev-toggle{background:none;border:1px solid rgba(108,89,140,.4);border-radius:6px;color:var(--faint);font-size:12px;padding:4px 10px;cursor:pointer;font-family:var(--sans)}
+.dev-panel{margin-top:10px;display:flex;flex-wrap:wrap;gap:10px;padding-bottom:4px}
+.dev-section{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;min-width:180px;flex:1}
+.dev-section-head{font-family:var(--sans);font-size:10px;font-weight:600;color:var(--faint);letter-spacing:.08em;margin-bottom:8px;text-transform:uppercase}
+.dev-btns{display:flex;flex-wrap:wrap;gap:6px}
+.dev-btn{background:rgba(108,89,140,.2);border:1px solid rgba(108,89,140,.35);border-radius:6px;color:var(--calm);font-size:12px;padding:5px 10px;cursor:pointer;font-family:var(--sans)}
+.dev-btn:hover{background:rgba(108,89,140,.35)}
+.dev-btn-danger{background:rgba(180,60,60,.15);border-color:rgba(180,60,60,.3);color:rgba(220,120,120,.9)}
+.dev-sf-status{font-family:var(--serif);font-size:12px;color:var(--dim);margin-bottom:8px;line-height:1.6}
+.dev-info{font-family:var(--sans);font-size:11px;color:var(--faint);line-height:1.7}
