@@ -5873,6 +5873,7 @@ function EmberView(p){
   return(<div className="scroll"><div className="ev-wrap">
     <p className="facility-desc">捨てなかった残り火を、置いておく場所。</p>
     {hasAny&&<button className="ev-create-btn touchable" onClick={p.onJourney}>+ 残り火を預ける</button>}
+    {hasAnyFires&&(function(){var bCard=getToymanBattleEmber(game);var isSF=bCard&&(game.sentFires||[]).some(function(f){return f.id===bCard.id;});if(!isSF||game.characters.toyman.lastAction!=="exploring")return null;return <div className="ev-battle-cta"><p className="ev-battle-cta-msg">トイマンが未受領の森にいます。「{jTitleOf(bCard)}」に影の声が届いています。</p><button className="btn btn-p touchable" onClick={function(){onOpenBattle&&onOpenBattle();}}>影と向き合う</button></div>;})()}
     {hasAnyFires
       ? <JourneyShelf game={game} onOpen={p.onOpenFire}/>
       : hasLegacy
