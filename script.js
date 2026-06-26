@@ -4481,26 +4481,24 @@ function EmberJourney(p){
     ns.lastSavedAt=nowISO();
     p.onChange&&p.onChange(ns);
   }
-  function proceedFromDeposit(){
-    if(!kindle.trim())return;
-    var danger=tooHard||jHasDanger(kindle)||jHasDanger(pain);
-    var extraFields={
-      title:title.trim()||null,
-      memo:memo.trim(),
-      bodyText:bodyText.trim(),
-      reaction:reaction.trim(),
-      initialMetrics:normalizeMetrics({satisfaction:imS,meaning:imM,value:imV})
-    };
-    if(danger){
-      var keptFire=Object.assign({
-        id:"sf"+Date.now(),kindle:kindle.trim(),pain:noWords?null:(pain.trim()||null),noWords:noWords,danger:true,
-        dest:null,companion:null,retreated:false,form:"kept",meetings:[],voiceLine:null,
-        createdAt:nowISO(),lastTouch:nowISO(),
-        dates:{deposited:nowISO(),received:null,returned:null}
-      },extraFields);
-      commitFire(keptFire);
-      setResult(keptFire);setPhase("kept");return;
-    }
+  var extraFields={
+    title:title.trim()||null,
+    memo:memo.trim(),
+    bodyText:bodyText.trim(),
+    reaction:reaction.trim(),
+    initialMetrics:normalizeMetrics({satisfaction:imS,meaning:imM,value:imV})
+  };
+  function makeKeptFire(){
+    var keptFire=Object.assign({
+      id:"sf"+Date.now(),kindle:kindle.trim(),pain:noWords?null:(pain.trim()||null),noWords:noWords,danger:true,
+      dest:null,companion:null,retreated:false,form:"kept",meetings:[],voiceLine:null,
+      createdAt:nowISO(),lastTouch:nowISO(),
+      dates:{deposited:nowISO(),received:null,returned:null}
+    },extraFields);
+    commitFire(keptFire);
+    setResult(keptFire);setPhase("kept");
+  }
+  function releaseFireToForest(){
     var releasedAt=nowISO();
     var releasedFire=Object.assign({
       id:"sf"+Date.now(),kindle:kindle.trim(),
@@ -4512,7 +4510,6 @@ function EmberJourney(p){
       createdAt:releasedAt,lastTouch:releasedAt,shelved:false,returnedAt:null,
       dates:{deposited:releasedAt,received:null,returned:null}
     },extraFields);
-    // トイマンが未受領の森へ
     var ns=cloneS(p.game);
     if(!ns.sentFires)ns.sentFires=[];
     ns.sentFires=[releasedFire].concat(ns.sentFires);
@@ -4524,6 +4521,13 @@ function EmberJourney(p){
     p.onChange&&p.onChange(ns);
     setDepositedFire(releasedFire);
     setPhase("released");
+  }
+  function proceedFromDeposit(){
+    if(!kindle.trim())return;
+    if(tooHard){makeKeptFire();return;}
+    var hasDangerWord=jHasDanger(kindle)||jHasDanger(pain);
+    if(hasDangerWord){setPhase("dangerConfirm");return;}
+    releaseFireToForest();
   }
   function sendOut(){
     if(!dest||!comp)return;
@@ -4604,7 +4608,7 @@ function EmberJourney(p){
         <input type="text" value={pain} disabled={noWords} placeholder="本当は…" onChange={function(e){setPain(e.target.value);}}/>
       </label>
       <button className={"ej-chip"+(noWords?" ej-chip-on":"")} onClick={function(){setNoWords(function(v){return !v;});}}>まだ言葉にできない</button>
-      <button className={"ej-chip ej-chip-soft"+(tooHard?" ej-chip-on":"")} onClick={function(){setTooHard(function(v){return !v;});}}>今夜は、これ以上ことばにしたくない（ただ預かってほしい）</button>
+      <button className={"ej-chip ej-chip-soft"+(tooHard?" ej-chip-on":"")} onClick={function(){setTooHard(function(v){return !v;});}}>今日は問いにしないで、預かってほしい</button>
       <div className="ej-metric-box">
         <div className="ej-metric-title">最初の残り火</div>
         <p className="ej-metric-desc">数字は判決ではありません。今この瞬間の、あなたの正直な感覚を記録するだけです。あとで変化を見るときの、目印になります。</p>
@@ -4621,7 +4625,7 @@ function EmberJourney(p){
       <label className="ej-field"><span>反応・評価・スキの数など（任意）</span>
         <textarea rows={2} value={reaction} placeholder="例：いいね3件、コメントなし" onChange={function(e){setReaction(e.target.value);}}/>
       </label>
-      <button className="btn btn-p ej-go" disabled={!kindle.trim()} onClick={proceedFromDeposit}>{tooHard?"預ける":"この残り火を灯す"}</button>
+      <button className="btn btn-p ej-go" disabled={!kindle.trim()} onClick={proceedFromDeposit}>{tooHard?"今日は預かり札にする":"この残り火を灯す"}</button>
       <button className="btn btn-g ej-cancel" onClick={p.onClose}>今日はやめておく</button>
     </div>}
 
@@ -4703,9 +4707,19 @@ function EmberJourney(p){
       <button className="btn btn-g ej-cancel" onClick={p.onClose}>棚へ戻る</button>
     </div>}
 
+    {phase==="dangerConfirm"&&<div className="ej-in ej-danger-confirm">
+      <p className="ej-danger-head">この言葉には、今かなり危ない状態を含んでいるように見えます。</p>
+      <p className="ej-danger-body">今すぐ自分を傷つけてしまいそうな場合は、このアプリではなく、近くの人・緊急の窓口・医療機関につながってください。</p>
+      <p className="ej-danger-q">これは、今すぐの危険ですか？<br/>それとも、作品や過去の気持ちとしての残り火ですか？</p>
+      <button className="btn btn-p ej-go" onClick={releaseFireToForest}>作品や過去の気持ちとして、残り火を灯す</button>
+      <button className="btn btn-g" onClick={makeKeptFire}>今は危ない。今日は預かる</button>
+      <button className="btn btn-g ej-cancel" style={{marginTop:4}} onClick={function(){setPhase("deposit");}}>書き直す</button>
+    </div>}
+
     {phase==="kept"&&result&&<div className="ej-in ej-kept">
       <p className="ej-kept-title">この火は、今日は問いにしません。</p>
       <p className="ej-kept-body">答えを探さず、ただ預かります。<br/>送り先は、落ち着いた日に選べます。</p>
+      <p className="ej-kept-note">この火は、まだ未受領の森へは向かいません。<br/>落ち着いた日に、あらためて残り火として灯せます。</p>
       <p className="ej-kept-safety">いま自分を傷つけてしまいそうなときは、アプリではなく、近くの人・緊急の窓口・医療機関につながってください。ここは、危険が去ったあとに、言葉を預けるための場所です。</p>
       <div className="ej-formed jf-kept">
         <span className="ej-formed-label">預かり札</span>

@@ -4444,7 +4444,12 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .ej-kept{text-align:center}
 .ej-kept-title{font-size:16px;font-family:var(--serif);color:var(--p);margin:4px 0 0}
 .ej-kept-body{font-size:13.5px;color:var(--dim);line-height:1.7;margin:0}
+.ej-kept-note{font-size:12.5px;color:var(--dim);line-height:1.65;margin:0;font-family:var(--serif)}
 .ej-kept-safety{font-size:11.5px;color:var(--faint);line-height:1.6;background:rgba(255,255,255,.04);border-radius:10px;padding:10px 12px;margin:0}
+.ej-danger-confirm{display:flex;flex-direction:column;gap:14px}
+.ej-danger-head{font-size:15px;font-family:var(--serif);color:var(--p);line-height:1.7;margin:0}
+.ej-danger-body{font-size:12.5px;color:var(--faint);line-height:1.65;background:rgba(255,255,255,.04);border-radius:10px;padding:10px 12px;margin:0}
+.ej-danger-q{font-size:14px;color:var(--text);line-height:1.7;margin:0;font-family:var(--serif)}
 .ej-done-cert{align-items:stretch}
 /* 旅のあとの案内 */
 .ej-next{text-align:left;background:rgba(90,120,150,.1);border:1px solid rgba(120,150,180,.2);border-radius:12px;padding:13px 14px;display:flex;flex-direction:column;gap:5px}
