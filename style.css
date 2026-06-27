@@ -1,4 +1,4 @@
-html,body{margin:0;padding:0;background:#111318;height:auto!important;overflow-y:auto!important}
+html,body{margin:0;padding:0;background:#111318;height:auto!important;min-height:100%!important;overflow-x:hidden!important;overflow-y:auto!important}
 #root{min-height:100dvh}
 /* スマホキーボード展開時は overflow を auto に戻し、フォーカス要素を見せる */
 @media (max-height:500px){body{overflow:auto}}

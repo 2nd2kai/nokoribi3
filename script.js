@@ -1455,58 +1455,246 @@ function KotaeIntro({ onClose }) {
   );
 }
 
+var TINYFOLK_ACTIVITY = {
+  lightkeeper:      '火のそばで作業中',
+  paperCollector:   '焦げた紙片を探している',
+  waterCarrier:     '水を汲んでいる',
+  recordApprentice: '記録塔で写している',
+};
+
+function NowStatusPanel({ game }) {
+  var sf    = game.fires.find(function(f) { return f.status === 'searching'; });
+  var found = game.fires.find(function(f) { return f.status === 'found'; });
+  var receivedFires = game.fires.filter(function(f) { return f.status === 'received'; });
+  var mat   = safeMat(game.materials);
+  var toyman = game.toyman;
+
+  // ── 状態別メインテキスト ──
+  var mainLines;
+  if (sf) {
+    var qp = sf.questionProgress || 0;
+    if (qp >= 80) {
+      mainLines = ['問いが、もうすぐ形になる。', 'トイマンは、欠片の声を聞いている。'];
+    } else if (qp >= 50) {
+      mainLines = ['影は、問いかけを繰り返している。', 'トイマンは未受領の森にいる。'];
+    } else {
+      mainLines = ['火はまだ消えていません。', 'トイマンは未受領の森で、問いの欠片を探しています。'];
+    }
+  } else if (found) {
+    mainLines = ['トイマンが、問いの欠片を見つけました。', 'まだ受け取られてはいません。棚で受け取れます。'];
+  } else if (receivedFires.length > 0) {
+    mainLines = ['問いの欠片は受け取られました。', 'でも、この火にはまだ受け取れていないものがあります。'];
+  } else {
+    mainLines = ['今、探索中の火はありません。', '箱庭は静かです。新しい残り火を灯すと、トイマンが向かいます。'];
+  }
+
+  // ── 最新ログ3件（exploring fire または最近更新された fire から）──
+  var logsSource = sf || found || receivedFires[0] || null;
+  var recentLogs = logsSource ? (logsSource.logs || []).slice(-3) : [];
+
+  // ── 一番濃い未受領領域 ──
+  var bestUnreceived = null;
+  if (receivedFires.length > 0) {
+    var bestPct = -1;
+    receivedFires.forEach(function(f) {
+      var ur = f.unreceived || {};
+      [['meaning','意味の影'], ['value','価値の黒札'], ['satisfaction','満足の灰']].forEach(function(pair) {
+        var pct = ur[pair[0]] || 0;
+        if (pct > bestPct) { bestPct = pct; bestUnreceived = { label: pair[1], pct: pct }; }
+      });
+    });
+    if (bestUnreceived && bestUnreceived.pct <= 0) bestUnreceived = null;
+  }
+
+  // ── 小人 ──
+  var folk = game.tinyfolk || {};
+  var activeFolk = Object.keys(TINYFOLK_ACTIVITY).filter(function(k) { return folk[k]; });
+
+  // ── 次にできること ──
+  var nextHint;
+  if (sf) {
+    nextHint = '影と向き合う・ただ見守る・今日は無理';
+  } else if (found) {
+    nextHint = '棚で問いの欠片を受け取る';
+  } else if (receivedFires.length > 0) {
+    nextHint = '棚から再探索する（意味の影・価値の黒札・満足の灰）';
+  } else {
+    nextHint = '残り火を灯す';
+  }
+
+  return (
+    <div style={{
+      background: '#0f1119',
+      border: '1px solid #1e2230',
+      borderRadius: 14,
+      padding: '16px',
+      marginBottom: 14,
+    }}>
+      {/* ラベル */}
+      <p style={{ color: '#374151', fontSize: 9, margin: '0 0 10px', letterSpacing: 2, fontWeight: 700 }}>
+        今の箱庭
+      </p>
+
+      {/* メインテキスト */}
+      {mainLines.map(function(line, i) {
+        return (
+          <p key={i} style={{
+            color: i === 0 ? '#9ca3af' : '#6b7280',
+            fontSize: i === 0 ? 13 : 12,
+            lineHeight: 1.8, margin: '0 0 4px',
+          }}>
+            {line}
+          </p>
+        );
+      })}
+
+      {/* 探索中の進行バー */}
+      {sf && (
+        <div style={{ margin: '12px 0 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+            <span style={{ color: '#4b5563', fontSize: 10 }}>問いの深度</span>
+            <span style={{ color: '#a78bfa', fontSize: 10 }}>{sf.questionProgress || 0}%</span>
+          </div>
+          <ProgressBar value={sf.questionProgress || 0} color="linear-gradient(90deg,#7c3aed,#a78bfa)" />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, marginTop: 6 }}>
+            <span style={{ color: '#4b5563', fontSize: 10 }}>火の安定</span>
+            <span style={{ color: '#34d399', fontSize: 10 }}>{sf.gardenProgress || 0}%</span>
+          </div>
+          <ProgressBar value={sf.gardenProgress || 0} color="linear-gradient(90deg,#064e3b,#34d399)" />
+        </div>
+      )}
+
+      {/* 一番濃い未受領領域 */}
+      {bestUnreceived && (
+        <div style={{ margin: '12px 0 0', padding: '8px 10px', background: '#0d0f1a', borderRadius: 8 }}>
+          <p style={{ color: '#374151', fontSize: 9, margin: '0 0 4px', letterSpacing: 1 }}>
+            今いちばん濃く残っているもの
+          </p>
+          <p style={{ color: '#7c3aed', fontSize: 13, margin: 0 }}>
+            {bestUnreceived.label} {bestUnreceived.pct}%
+            <span style={{ color: '#4b5563', fontSize: 10, marginLeft: 8 }}>
+              {unreceivedStage(bestUnreceived.pct)}
+            </span>
+          </p>
+        </div>
+      )}
+
+      {/* 見ていない間のこと / 最近のログ */}
+      {recentLogs.length > 0 && (
+        <div style={{ margin: '12px 0 0', borderTop: '1px solid #1e2230', paddingTop: 10 }}>
+          <p style={{ color: '#374151', fontSize: 9, margin: '0 0 6px', letterSpacing: 1 }}>
+            最近の様子
+          </p>
+          {recentLogs.map(function(l, i) {
+            return (
+              <p key={i} style={{ color: '#374151', fontSize: 11, margin: '2px 0', lineHeight: 1.6 }}>
+                ・{l.text}
+              </p>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 小人 */}
+      {activeFolk.length > 0 && (
+        <div style={{ margin: '12px 0 0', borderTop: '1px solid #1e2230', paddingTop: 10 }}>
+          <p style={{ color: '#374151', fontSize: 9, margin: '0 0 6px', letterSpacing: 1 }}>
+            小人の様子
+          </p>
+          {activeFolk.map(function(k) {
+            var labels = { lightkeeper:'灯守り', paperCollector:'紙集め', waterCarrier:'水汲み', recordApprentice:'記録見習い' };
+            return (
+              <p key={k} style={{ color: '#4b6a54', fontSize: 11, margin: '2px 0' }}>
+                {labels[k] || k}：{TINYFOLK_ACTIVITY[k]}
+              </p>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 素材 */}
+      <div style={{ margin: '12px 0 0', borderTop: '1px solid #1e2230', paddingTop: 10 }}>
+        <p style={{ color: '#374151', fontSize: 9, margin: '0 0 6px', letterSpacing: 1 }}>素材</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          <span style={{ fontSize: 10, color: '#6b7280', padding: '2px 7px', borderRadius: 8, background: '#1a1e2c', border: '1px solid #2e3348' }}>
+            灯貨 {game.toka || 0}
+          </span>
+          {[
+            ['ash','灰片'],['paper','紙片'],['drop','水滴'],['wax','封蝋'],['stamp','受領印'],
+            ['meaningPiece','意味片'],['blackTag','黒札片'],['unfinishedSeed','未完の種'],
+          ].filter(function(p){ return (mat[p[0]]||0) > 0; }).map(function(p) {
+            return (
+              <span key={p[0]} style={{ fontSize: 10, color: '#6b7280', padding: '2px 7px', borderRadius: 8, background: '#1a1e2c', border: '1px solid #2e3348' }}>
+                {p[1]} {mat[p[0]] || 0}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 次にできること */}
+      <div style={{ margin: '12px 0 0', borderTop: '1px solid #1e2230', paddingTop: 10 }}>
+        <p style={{ color: '#374151', fontSize: 9, margin: '0 0 4px', letterSpacing: 1 }}>次にできること</p>
+        <p style={{ color: '#4b5563', fontSize: 11, margin: 0, lineHeight: 1.7 }}>{nextHint}</p>
+      </div>
+    </div>
+  );
+}
+
 function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen }) {
   var [recordOpen, setRecordOpen] = _useState(false);
-  var [lastAction, setLastAction] = _useState(null); // null | 'rest' | 'watch'
+  var [lastAction, setLastAction] = _useState(null); // null | 'rest' | 'watch' | 'battle'
   var [shadowOpen, setShadowOpen] = _useState(false);
 
-  var searching = game.fires.find(function(f) { return f.status === 'searching'; });
+  var sf    = game.fires.find(function(f) { return f.status === 'searching'; });
   var found = game.fires.find(function(f) { return f.status === 'found'; });
-  var toyman = game.toyman;
-  var inForest = toyman.location === 'unexplored_forest';
-  var mat = safeMat(game.materials);
 
-  // lastSeenAt を GardenView マウント時に更新
   _useEffect(function() {
     if (onUpdateLastSeen) onUpdateLastSeen();
   }, []);
 
-  // 前回閲覧以降のログ（unseenLogs）
-  var unseenLogs = [];
-  if (searching && game.lastSeenAt) {
-    var lastSeen = game.lastSeenAt;
-    unseenLogs = (searching.logs || []).filter(function(l) {
-      return l.at && l.at > lastSeen;
-    });
-  }
-
-  var toymanText;
-  if (toyman.state === 'exploring') {
-    toymanText = '残っているなら、迎えに行く';
-  } else if (toyman.state === 'returning') {
-    toymanText = '答えではない。欠片を探す';
-  } else {
-    toymanText = 'まだ、消えていない';
-  }
-
-  var sf = searching;
-  var qp = sf ? (sf.questionProgress || 0) : 0;
-  var gp = sf ? (sf.gardenProgress || 0) : 0;
-  var hint = sf ? gardenHint(gp) : null;
-
-  function gardenStatusText() {
-    if (!sf) {
-      if (found) return '問いの欠片が届いています。棚から受け取ってください。';
-      return 'すべての火が静かに眠っています。';
+  // 行動後テキスト
+  function actionResultContent() {
+    if (lastAction === 'rest') {
+      return {
+        lines: [
+          '今日は、ここまで。',
+          '問いは進まなかった。',
+          'でも、火は消えなかった。',
+          '',
+          'トイマンは火のそばに座った。',
+          '「消えないなら、それでいい」',
+        ],
+        note: '灯貨+1 / 水滴+1 / 火の安定+5',
+      };
     }
-    if (qp >= 80) return '問いが、もうすぐ形になる。';
-    if (qp >= 50) return '影は、問いかけを繰り返している。';
-    if (qp >= 20) return '火は揺れている。まだ消えていない。';
-    return '火が灯されたばかり。トイマンが向かっている。';
+    if (lastAction === 'watch') {
+      return {
+        lines: [
+          'トイマンは、ただ火を見ていた。',
+          '火はまだ消えていない。',
+          '灯守りが、小さな石を置いた。',
+        ],
+        note: '灯貨+1 / 灰片+1 / 火の安定+8',
+      };
+    }
+    if (lastAction === 'battle') {
+      return {
+        lines: [
+          '影の声が、少しだけ薄くなった。',
+          '問いが、少し深くなった。',
+        ],
+        note: '灯貨+2 / 紙片+1 / 問いの深度+15〜25',
+      };
+    }
+    return null;
   }
+
+  var actionResult = actionResultContent();
 
   return (
-    <div style={{ padding: '0 16px 100px' }}>
+    <div style={{ padding: '0 16px 120px' }}>
+      {/* ヘッダー */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0 12px' }}>
         <button onClick={onBack} style={{
           background: 'transparent', border: 'none', color: '#9ca3af',
@@ -1515,129 +1703,38 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
         <h2 style={{ color: '#e2e4ee', fontSize: 17, margin: 0 }}>箱庭</h2>
       </div>
 
-      {/* ── 今の様子 ── */}
-      <div style={{
-        background: '#111318', border: '1px solid #1e2230',
-        borderRadius: 12, padding: '14px 16px', marginBottom: 14,
-      }}>
-        <p style={{ color: '#374151', fontSize: 10, margin: '0 0 6px', letterSpacing: 1 }}>
-          {inForest ? '未受領の森' : 'はじまりの部屋'}
-        </p>
-        <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.8, margin: '0 0 10px' }}>
-          {gardenStatusText()}
-        </p>
-
-        {sf && (
-          <div>
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                <span style={{ color: '#6b7280', fontSize: 11 }}>問いの深度</span>
-                <span style={{ color: '#a78bfa', fontSize: 11 }}>{qp}%</span>
-              </div>
-              <ProgressBar value={qp} color="linear-gradient(90deg, #7c3aed, #a78bfa)" />
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                <span style={{ color: '#6b7280', fontSize: 11 }}>火の安定</span>
-                <span style={{ color: '#34d399', fontSize: 11 }}>{gp}%</span>
-              </div>
-              <ProgressBar value={gp} color="linear-gradient(90deg, #064e3b, #34d399)" />
-            </div>
-            {hint && (
-              <p style={{ color: '#374151', fontSize: 11, margin: '2px 0 0', lineHeight: 1.6 }}>
-                {hint}
-              </p>
-            )}
-          </div>
-        )}
-
-        <TinyfolkRow tinyfolk={game.tinyfolk} />
-      </div>
-
-      <ToymanVoice text={toymanText} />
-
-      {/* ── 最大未受領領域（受け取り済みの火） ── */}
-      {(function() {
-        var received = game.fires.filter(function(f) { return f.status === 'received'; });
-        if (received.length === 0) return null;
-        var best = null;
-        var bestPct = -1;
-        var bestKey = null;
-        received.forEach(function(f) {
-          var ur = f.unreceived || {};
-          [['meaning','意味の影'], ['value','価値の黒札'], ['satisfaction','満足の灰']].forEach(function(pair) {
-            var pct = ur[pair[0]] || 0;
-            if (pct > bestPct) { bestPct = pct; best = f; bestKey = pair[1]; }
-          });
-        });
-        if (!best || bestPct <= 0) return null;
-        return (
-          <div style={{
-            background: '#0d0f1a', border: '1px solid #2a2340',
-            borderRadius: 10, padding: '12px 14px', marginBottom: 12,
-          }}>
-            <p style={{ color: '#374151', fontSize: 10, margin: '0 0 6px', letterSpacing: 1 }}>
-              今、いちばん濃く残っているもの
-            </p>
-            <p style={{ color: '#7c3aed', fontSize: 14, margin: '0 0 2px' }}>
-              {bestKey} {bestPct}%
-            </p>
-            <p style={{ color: '#374151', fontSize: 11, margin: 0 }}>
-              {unreceivedStage(bestPct)} — 棚から再探索できます
-            </p>
-          </div>
-        );
-      })()}
-
-      {/* ── 見ていない間に起きたこと ── */}
-      {unseenLogs.length > 0 && (
+      {/* ── 行動後メッセージ（最上部）── */}
+      {actionResult && (
         <div style={{
-          background: '#0a0e0c', border: '1px solid #14532d',
-          borderRadius: 10, padding: '12px 14px', marginBottom: 12,
+          background: '#0a0f0c', border: '1px solid #14532d',
+          borderRadius: 10, padding: '14px 16px', marginBottom: 12,
         }}>
-          <p style={{ color: '#166534', fontSize: 10, margin: '0 0 6px', letterSpacing: 1 }}>
-            見ていない間に起きたこと
-          </p>
-          {unseenLogs.map(function(l, i) {
+          {actionResult.lines.filter(function(l) { return l; }).map(function(line, i) {
             return (
-              <p key={i} style={{ color: '#4b6a54', fontSize: 12, margin: '3px 0', lineHeight: 1.6 }}>
-                ・{l.text}
+              <p key={i} style={{ color: '#4b6a54', fontSize: 13, lineHeight: 1.9, margin: '2px 0' }}>
+                {line}
               </p>
             );
           })}
+          <p style={{ color: '#1f4024', fontSize: 11, margin: '8px 0 0' }}>{actionResult.note}</p>
+          <button onClick={function() { setLastAction(null); }} style={{
+            marginTop: 10, padding: '5px 12px', borderRadius: 5,
+            background: 'transparent', border: '1px solid #1e2e20',
+            color: '#374151', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+          }}>閉じる</button>
         </div>
       )}
 
-      {/* ── 探索中の火ログ ── */}
-      {sf && sf.logs && sf.logs.length > 0 && (
-        <div style={{
-          background: '#111318', border: '1px solid #1e2230',
-          borderRadius: 10, padding: '12px 14px', marginBottom: 12,
-        }}>
-          <p style={{ color: '#374151', fontSize: 10, margin: '0 0 6px' }}>最近の森</p>
-          {sf.logs.slice(-3).map(function(l, i) {
-            return (
-              <p key={i} style={{ color: '#4b5563', fontSize: 11, margin: '2px 0', lineHeight: 1.5 }}>
-                ・{l.text}
-              </p>
-            );
-          })}
-        </div>
-      )}
+      {/* ── 今の様子パネル ── */}
+      <NowStatusPanel game={game} />
 
-      {/* ── 素材・灯貨 ── */}
-      <div style={{ marginBottom: 12 }}>
-        <span style={{ color: '#4b5563', fontSize: 11 }}>灯貨 {game.toka || 0}</span>
-        <MatChips materials={mat} />
-      </div>
-
-      {/* ── 問いが見つかった ── */}
+      {/* ── 問いが見つかった（棚誘導）── */}
       {found && !sf && (
         <div style={{
           background: '#0f0b1a', border: '1px solid #7c3aed',
           borderRadius: 10, padding: '14px 16px', marginBottom: 14,
         }}>
-          <p style={{ color: '#a78bfa', fontSize: 13, margin: '0 0 6px' }}>問いの欠片が届いています</p>
+          <p style={{ color: '#a78bfa', fontSize: 12, margin: '0 0 4px' }}>問いの欠片が届いています</p>
           <p style={{ color: '#ede9fe', fontSize: 14, lineHeight: 1.7, margin: '0 0 8px' }}>
             {found.question}
           </p>
@@ -1647,53 +1744,52 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
         </div>
       )}
 
-      {/* ── できること（行動）── */}
+      {/* ── 行動ボタン（searching 中、行動後以外）── */}
       {sf && lastAction === null && !shadowOpen && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-          <button
-            onClick={function() { setShadowOpen(true); }}
-            style={{
-              padding: '12px 16px', borderRadius: 10, textAlign: 'left',
-              background: '#1e1a2e', border: '1px solid #4c1d95',
-              color: '#c4b5fd', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            <span style={{ color: '#a78bfa', marginRight: 8 }}>🌑</span>
-            影と向き合う
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+          <button onClick={function() { setShadowOpen(true); }} style={{
+            padding: '13px 16px', borderRadius: 10, textAlign: 'left',
+            background: '#1e1a2e', border: '1px solid #4c1d95',
+            color: '#c4b5fd', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            <span style={{ color: '#a78bfa', marginRight: 8 }}>🌑</span>影と向き合う
           </button>
-          <button
-            onClick={function() { onWatchFire(sf.id); setLastAction('watch'); }}
-            style={{
-              padding: '12px 16px', borderRadius: 10, textAlign: 'left',
-              background: '#111318', border: '1px solid #2e3348',
-              color: '#9ca3af', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            <span style={{ color: '#6b7280', marginRight: 8 }}>◎</span>
-            ただ見守る
+          <button onClick={function() { onWatchFire(sf.id); setLastAction('watch'); }} style={{
+            padding: '13px 16px', borderRadius: 10, textAlign: 'left',
+            background: '#111318', border: '1px solid #2e3348',
+            color: '#9ca3af', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            <span style={{ color: '#6b7280', marginRight: 8 }}>◎</span>ただ見守る
           </button>
-          <button
-            onClick={function() { onRestToday(sf.id); setLastAction('rest'); }}
-            style={{
-              padding: '12px 16px', borderRadius: 10, textAlign: 'left',
-              background: '#111318', border: '1px solid #1e2230',
-              color: '#6b7280', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            <span style={{ color: '#4b5563', marginRight: 8 }}>…</span>
-            今日は無理
+          <button onClick={function() { onRestToday(sf.id); setLastAction('rest'); }} style={{
+            padding: '13px 16px', borderRadius: 10, textAlign: 'left',
+            background: '#111318', border: '1px solid #1e2230',
+            color: '#6b7280', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            <span style={{ color: '#4b5563', marginRight: 8 }}>…</span>今日は無理
           </button>
         </div>
       )}
 
-      {/* ── 影パネル（開いた時だけ）── */}
-      {sf && shadowOpen && lastAction === null && (
-        <div>
+      {/* ── ShadowPanel（影と向き合う押下時のみ）── */}
+      {sf && shadowOpen && (
+        <div style={{
+          background: '#0f1119', border: '1px solid #3d2d5c',
+          borderRadius: 12, padding: '4px 0 0', marginBottom: 14,
+          maxHeight: 'calc(100dvh - 96px)', overflowY: 'auto',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px 0' }}>
+            <button onClick={function() { setShadowOpen(false); }} style={{
+              background: 'transparent', border: 'none', color: '#4b5563',
+              fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '4px 8px',
+            }}>× 閉じる</button>
+          </div>
           <ShadowPanel
             fire={sf}
             onAnswer={function(ans) {
               onDoBattle(sf.id, ans);
               setShadowOpen(false);
+              setLastAction('battle');
             }}
             onWatch={function() {
               onWatchFire(sf.id);
@@ -1709,77 +1805,32 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
         </div>
       )}
 
-      {/* ── 行動後の結果演出 ── */}
-      {lastAction === 'rest' && (
-        <div style={{
-          background: '#0d1117', border: '1px solid #1e2230',
-          borderRadius: 8, padding: '14px 16px', margin: '10px 0',
-        }}>
-          <p style={{ color: '#6b7280', fontSize: 13, lineHeight: 2, margin: 0 }}>
-            今日は、ここまで。<br /><br />
-            問いは進まなかった。<br />
-            でも、火は消えなかった。<br /><br />
-            トイマンは火のそばに座った。<br />
-            「消えないなら、それでいい」<br /><br />
-            <span style={{ color: '#374151', fontSize: 11 }}>
-              休息札を残しました。 灯貨+1 / 水滴+1 / 火の安定+5
-            </span>
-          </p>
-          <button onClick={function() { setLastAction(null); }} style={{
-            marginTop: 12, padding: '6px 14px', borderRadius: 6,
-            background: 'transparent', border: '1px solid #2e3348',
-            color: '#6b7280', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-          }}>閉じる</button>
-        </div>
-      )}
-      {lastAction === 'watch' && (
-        <div style={{
-          background: '#0d1117', border: '1px solid #1e2230',
-          borderRadius: 8, padding: '14px 16px', margin: '10px 0',
-        }}>
-          <p style={{ color: '#6b7280', fontSize: 13, lineHeight: 2, margin: 0 }}>
-            トイマンは、ただ火を見ていた。<br />
-            <span style={{ color: '#374151', fontSize: 11 }}>
-              灯貨+1 / 灰片+1 / 火の安定+8
-            </span>
-          </p>
-          <button onClick={function() { setLastAction(null); }} style={{
-            marginTop: 12, padding: '6px 14px', borderRadius: 6,
-            background: 'transparent', border: '1px solid #2e3348',
-            color: '#6b7280', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-          }}>閉じる</button>
-        </div>
-      )}
-
       {/* ── 記録塔 ── */}
       {game.unlocks.recordTower && (
-        <div style={{ marginTop: 20 }}>
+        <div style={{ marginTop: 8, marginBottom: 12 }}>
           {!recordOpen ? (
-            <div style={{
-              background: '#0f0f1a', border: '1px solid #312e81',
-              borderRadius: 10, padding: '14px 16px',
-            }}>
+            <div style={{ background: '#0f0f1a', border: '1px solid #312e81', borderRadius: 10, padding: '12px 14px' }}>
               <p style={{ color: '#6366f1', fontSize: 12, margin: '0 0 4px' }}>
                 遠くに、記録塔の灯りが見える。
               </p>
-              <p style={{ color: '#4b5563', fontSize: 12, margin: '0 0 10px', lineHeight: 1.6 }}>
+              <p style={{ color: '#4b5563', fontSize: 11, margin: '0 0 8px', lineHeight: 1.6 }}>
                 コタエが、問いの欠片を記録している。
               </p>
               <button onClick={function() { setRecordOpen(true); }} style={{
-                padding: '7px 14px', borderRadius: 8,
-                background: 'transparent', border: '1px solid #312e81',
-                color: '#818cf8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+                padding: '6px 12px', borderRadius: 7, background: 'transparent',
+                border: '1px solid #312e81', color: '#818cf8',
+                fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
               }}>
                 記録塔を見る
               </button>
             </div>
           ) : (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <span style={{ color: '#818cf8', fontSize: 14, fontWeight: 700 }}>🗼 記録塔</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <span style={{ color: '#818cf8', fontSize: 13, fontWeight: 700 }}>🗼 記録塔</span>
                 <button onClick={function() { setRecordOpen(false); }} style={{
                   marginLeft: 'auto', background: 'transparent', border: 'none',
-                  color: '#6b7280', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+                  color: '#6b7280', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
                 }}>閉じる</button>
               </div>
               <RecordTower game={game} />
@@ -1790,16 +1841,10 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
 
       {/* ── 涙の泉の気配 ── */}
       {game.unlocks.tearsSpring && (
-        <div style={{
-          background: '#0a0f14', border: '1px solid #164e63',
-          borderRadius: 10, padding: '12px 14px', marginTop: 16,
-        }}>
-          <p style={{ color: '#0e7490', fontSize: 12, margin: '0 0 4px' }}>
-            どこかで、水音がした。
-          </p>
+        <div style={{ background: '#0a0f14', border: '1px solid #164e63', borderRadius: 10, padding: '10px 13px', marginTop: 8 }}>
+          <p style={{ color: '#0e7490', fontSize: 12, margin: '0 0 2px' }}>どこかで、水音がした。</p>
           <p style={{ color: '#374151', fontSize: 11, margin: 0, lineHeight: 1.6 }}>
-            かなが、少し離れた場所から見ていた。<br />
-            「今は受け取れなくてもいいよ」
+            かなが、少し離れた場所から見ていた。「今は受け取れなくてもいいよ」
           </p>
         </div>
       )}
