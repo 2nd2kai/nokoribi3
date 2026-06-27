@@ -188,7 +188,7 @@ function loadSave() {
     if (!raw) return null;
     var parsed = JSON.parse(raw);
     if (parsed.version !== SAVE_VERSION) return null;
-    return parsed;
+    return migrateGame(parsed);
   } catch (e) {
     return null;
   }
@@ -207,6 +207,32 @@ function clearSave() {
 
 // ── Game Logic ─────────────────────────────────────────────────────────────
 
+function initMaterials() {
+  return { ash: 0, paper: 0, drop: 0, wax: 0, stamp: 0 };
+}
+
+function initTinyfolk() {
+  return {
+    lightkeeper: false,
+    paperCollector: false,
+    waterCarrier: false,
+    envelopeKeeper: false,
+    recordApprentice: false,
+  };
+}
+
+function safeMat(m) {
+  var d = initMaterials();
+  if (!m) return d;
+  return {
+    ash:   (m.ash   || 0),
+    paper: (m.paper || 0),
+    drop:  (m.drop  || 0),
+    wax:   (m.wax   || 0),
+    stamp: (m.stamp || 0),
+  };
+}
+
 function initGame() {
   return {
     version: SAVE_VERSION,
@@ -214,9 +240,19 @@ function initGame() {
     lastSavedAt: nowISO(),
     fires: [],
     toyman: { location: 'starting_room', state: 'waiting' },
-    unlocks: { recordTower: false },
+    unlocks: {
+      recordTower: false,
+      tearsSpring: false,
+      postOffice: false,
+      inspectionBureau: false,
+      lightMarket: false,
+    },
     battleCount: 0,
     toka: 0,
+    materials: initMaterials(),
+    tinyfolk: initTinyfolk(),
+    gardenItems: [],
+    lastAutoAt: nowISO(),
   };
 }
 
@@ -229,7 +265,8 @@ function createFire(kindle, pain, writeState, feeling, metrics) {
     feeling: feeling || '',
     metrics: metrics || { meaning: 50, value: 50, satisfaction: 50 },
     status: 'lit',
-    progress: 0,
+    questionProgress: 0,  // 問いの深度（手動行動のみ）
+    gardenProgress: 0,    // 火の安定（自動進行含む）
     question: null,
     answer: null,
     answers: [],
@@ -243,6 +280,41 @@ function createFire(kindle, pain, writeState, feeling, metrics) {
     updatedAt: nowISO(),
     heldNote: null,
   };
+}
+
+// 旧セーブの fire に新フィールドを補完する
+function migrateFire(f) {
+  if (f.questionProgress === undefined) {
+    f.questionProgress = f.progress || 0;
+  }
+  if (f.gardenProgress === undefined) {
+    f.gardenProgress = Math.min(50, f.questionProgress);
+  }
+  if (!f.logs) f.logs = [];
+  if (!f.restLogs) f.restLogs = [];
+  if (f.watchCount === undefined) f.watchCount = 0;
+  if (f.restCount === undefined) f.restCount = 0;
+  return f;
+}
+
+function migrateGame(g) {
+  if (!g) return g;
+  if (!g.materials) g.materials = initMaterials();
+  else g.materials = safeMat(g.materials);
+  if (!g.tinyfolk) g.tinyfolk = initTinyfolk();
+  if (!g.gardenItems) g.gardenItems = [];
+  if (!g.unlocks.tearsSpring) g.unlocks.tearsSpring = false;
+  if (!g.unlocks.postOffice) g.unlocks.postOffice = false;
+  if (!g.unlocks.inspectionBureau) g.unlocks.inspectionBureau = false;
+  if (!g.unlocks.lightMarket) g.unlocks.lightMarket = false;
+  if (!g.lastAutoAt) g.lastAutoAt = nowISO();
+  if (!g.toka) g.toka = 0;
+  g.fires = (g.fires || []).map(migrateFire);
+  // 既存の灯守り状態を推測
+  if (!g.tinyfolk.lightkeeper && g.fires.length > 0) {
+    g.tinyfolk.lightkeeper = true;
+  }
+  return g;
 }
 
 function getShadowVoice(fire) {
@@ -266,27 +338,39 @@ function addLog(fire, text) {
 }
 
 var BATTLE_LOGS = [
+  '影の声が、少しだけ形を持った。',
+  'トイマンは、火の奥を見た。',
+  '焦げた紙片に、まだ読めない言葉が残っていた。',
   'トイマンは、焦げた紙片を見つけた。',
   '影の声が、少しだけ薄くなった。',
   '森の奥で、言葉の欠片が揺れた。',
-  '火はまだ消えていない。',
-  'トイマンは、火の匂いをたどった。',
   '影は、問いを繰り返した。',
   '言葉の残り香が、ここにある。',
 ];
 
 var WATCH_LOGS = [
-  'トイマンは、火の匂いをたどった。',
-  '影の声が、少しだけ薄くなった。',
-  '森の奥で、言葉の欠片が揺れた。',
+  'トイマンは、火のそばに座っていた。',
+  '火はまだ消えていない。',
+  '森の入口に、小さな灯りが増えた。',
   'トイマンは、ただ火を見ていた。',
   '静かに、待つことにした。',
+  '灯守りが、小さな石を置いた。',
 ];
 
 var REST_LOGS = [
   '今日は、ここまで。',
   'トイマンは火のそばに座った。',
   '「消えないなら、それでいい」',
+  '火はまだ消えていない。',
+];
+
+var AUTO_LOGS = [
+  '火はまだ消えていない。',
+  'トイマンは、火のそばに座っている。',
+  '答えは出ていない。でも、火はここにある。',
+  '森の奥で、小さな灯りが揺れた。',
+  '灯守りが、火を確かめた。',
+  '火の周りに、小さな石が積まれている。',
 ];
 
 function lightFire(game, kindle, pain, writeState, feeling, metrics) {
@@ -299,6 +383,10 @@ function lightFire(game, kindle, pain, writeState, feeling, metrics) {
   }
   ns.fires = [fire].concat(ns.fires);
   ns.toka = (ns.toka || 0) + 1;
+  // 最初の火で灯守り出現
+  if (!ns.tinyfolk.lightkeeper) {
+    ns.tinyfolk.lightkeeper = true;
+  }
   return { game: ns, fire: fire };
 }
 
@@ -306,17 +394,24 @@ function doBattle(game, fireId, answer) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'searching') return { ok: false, game: game };
-  var gain = BATTLE_GAIN_MIN + Math.floor(rnd() * (BATTLE_GAIN_MAX - BATTLE_GAIN_MIN + 1));
-  fire.progress = Math.min(100, (fire.progress || 0) + gain);
+  var qGain = BATTLE_GAIN_MIN + Math.floor(rnd() * (BATTLE_GAIN_MAX - BATTLE_GAIN_MIN + 1));
+  fire.questionProgress = Math.min(100, (fire.questionProgress || 0) + qGain);
+  fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + 5);
   fire.battleCount = (fire.battleCount || 0) + 1;
   fire.shadowVoiceIdx = (fire.shadowVoiceIdx || 0) + 1;
   ns.battleCount = (ns.battleCount || 0) + 1;
+  ns.toka = (ns.toka || 0) + 2;
+  ns.materials = safeMat(ns.materials);
+  ns.materials.paper = (ns.materials.paper || 0) + 1;
   if (answer && answer.trim()) {
     fire.answers = (fire.answers || []).concat([{ text: answer.trim(), at: nowISO() }]);
   }
   addLog(fire, pick(BATTLE_LOGS));
-  ns.toka = (ns.toka || 0) + 2;
-  if (fire.progress >= 100) {
+  // 紙集めの小人解放条件
+  if (!ns.tinyfolk.paperCollector && ns.materials.paper >= 3) {
+    ns.tinyfolk.paperCollector = true;
+  }
+  if (fire.questionProgress >= 100) {
     fire.status = 'found';
     fire.question = makeQuestion(fire);
     fire.foundAt = nowISO();
@@ -326,17 +421,14 @@ function doBattle(game, fireId, answer) {
   return { ok: true, game: ns, fire: fire };
 }
 
+// 自動進行: gardenProgress のみ、questionProgress は触れない、found にしない
 function tickProgress(game) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.status === 'searching'; });
   if (!fire) return { changed: false, game: game };
-  fire.progress = Math.min(100, (fire.progress || 0) + PASSIVE_GAIN);
-  if (fire.progress >= 100) {
-    fire.status = 'found';
-    fire.question = makeQuestion(fire);
-    fire.foundAt = nowISO();
-    ns.toyman = { location: 'starting_room', state: 'returning' };
-  }
+  fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + 2);
+  addLog(fire, pick(AUTO_LOGS));
+  ns.lastAutoAt = nowISO();
   fire.updatedAt = nowISO();
   return { changed: true, game: ns };
 }
@@ -345,12 +437,16 @@ function watchFire(game, fireId) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'searching') return { ok: false, game: game };
-  var gain = 3 + Math.floor(rnd() * 3);
-  fire.progress = Math.min(100, (fire.progress || 0) + gain);
+  var qGain = Math.floor(rnd() * 4); // 0〜3
+  fire.questionProgress = Math.min(100, (fire.questionProgress || 0) + qGain);
+  fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + 8);
   fire.watchCount = (fire.watchCount || 0) + 1;
-  addLog(fire, pick(WATCH_LOGS));
   ns.toka = (ns.toka || 0) + 1;
-  if (fire.progress >= 100) {
+  ns.materials = safeMat(ns.materials);
+  ns.materials.ash = (ns.materials.ash || 0) + 1;
+  addLog(fire, pick(WATCH_LOGS));
+  // 水汲みの小人解放条件（watchでも関係しない → 後でrestで解放）
+  if (fire.questionProgress >= 100) {
     fire.status = 'found';
     fire.question = makeQuestion(fire);
     fire.foundAt = nowISO();
@@ -364,12 +460,23 @@ function restToday(game, fireId) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'searching') return { ok: false, game: game };
-  fire.progress = Math.min(100, (fire.progress || 0) + 1);
+  // questionProgress は進めない
+  fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + 5);
   fire.restCount = (fire.restCount || 0) + 1;
   var logText = pick(REST_LOGS);
   fire.restLogs = (fire.restLogs || []).concat([{ text: logText, at: nowISO() }]);
   addLog(fire, logText);
   ns.toka = (ns.toka || 0) + 1;
+  ns.materials = safeMat(ns.materials);
+  ns.materials.drop = (ns.materials.drop || 0) + 1;
+  // 水汲みの小人解放条件
+  if (!ns.tinyfolk.waterCarrier && fire.restCount >= 3) {
+    ns.tinyfolk.waterCarrier = true;
+  }
+  // 涙の泉解放条件
+  if (!ns.unlocks.tearsSpring && fire.restCount >= 5) {
+    ns.unlocks.tearsSpring = true;
+  }
   fire.updatedAt = nowISO();
   return { ok: true, game: ns };
 }
@@ -382,8 +489,11 @@ function receiveFire(game, fireId, answer) {
   fire.answer = (answer || '').trim() || null;
   fire.receivedAt = nowISO();
   ns.toka = (ns.toka || 0) + 3;
+  ns.materials = safeMat(ns.materials);
+  ns.materials.stamp = (ns.materials.stamp || 0) + 1;
   if (!ns.unlocks.recordTower) {
     ns.unlocks.recordTower = true;
+    ns.tinyfolk.recordApprentice = true;
   }
   var nextLit = ns.fires.find(function(f) { return f.status === 'lit'; });
   if (nextLit) {
@@ -402,18 +512,82 @@ var _useEffect = React.useEffect;
 var _useCallback = React.useCallback;
 var _useRef = React.useRef;
 
-function ProgressBar({ value }) {
+function ProgressBar({ value, color }) {
+  var bg = color || 'linear-gradient(90deg, #f97316, #fb923c)';
   return (
-    <div style={{ background: '#1e2230', borderRadius: 4, height: 8, overflow: 'hidden', margin: '8px 0' }}>
+    <div style={{ background: '#1e2230', borderRadius: 4, height: 6, overflow: 'hidden', margin: '4px 0' }}>
       <div style={{
         height: '100%',
         width: Math.max(0, Math.min(100, value)) + '%',
-        background: 'linear-gradient(90deg, #f97316, #fb923c)',
+        background: bg,
         borderRadius: 4,
-        transition: 'width 0.5s ease',
+        transition: 'width 0.6s ease',
       }} />
     </div>
   );
+}
+
+// 素材チップ表示
+function MatChips({ materials }) {
+  var m = materials || {};
+  var items = [
+    { key: 'toka', label: '灯貨', val: null }, // 別で渡す
+    { key: 'ash',  label: '灰片', val: m.ash  || 0 },
+    { key: 'paper',label: '紙片', val: m.paper|| 0 },
+    { key: 'drop', label: '水滴', val: m.drop || 0 },
+    { key: 'wax',  label: '封蝋', val: m.wax  || 0 },
+    { key: 'stamp',label: '受領印',val: m.stamp|| 0 },
+  ];
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0' }}>
+      {items.filter(function(i){ return i.val > 0; }).map(function(i) {
+        return (
+          <span key={i.key} style={{
+            fontSize: 11, padding: '2px 8px', borderRadius: 10,
+            background: '#1a1e2c', color: '#6b7280', border: '1px solid #2e3348',
+          }}>
+            {i.label} {i.val}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// 小人状態表示
+function TinyfolkRow({ tinyfolk }) {
+  if (!tinyfolk) return null;
+  var folk = [
+    { key: 'lightkeeper',     label: '灯守り',   active: tinyfolk.lightkeeper },
+    { key: 'paperCollector',  label: '紙集め',   active: tinyfolk.paperCollector },
+    { key: 'waterCarrier',    label: '水汲み',   active: tinyfolk.waterCarrier },
+    { key: 'recordApprentice',label: '記録見習い',active: tinyfolk.recordApprentice },
+  ];
+  var active = folk.filter(function(f){ return f.active; });
+  if (active.length === 0) return null;
+  return (
+    <div style={{ margin: '6px 0' }}>
+      {active.map(function(f) {
+        return (
+          <span key={f.key} style={{
+            display: 'inline-block', fontSize: 11, color: '#4b6a54',
+            marginRight: 10,
+          }}>
+            ◦ {f.label}：作業中
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// gardenProgress による気配テキスト
+function gardenHint(gp) {
+  if (gp >= 80) return 'どこかで、水音がした。';
+  if (gp >= 60) return '遠くに、塔の灯りが見えた。';
+  if (gp >= 40) return '森の入口に、灯りがひとつ増えた。';
+  if (gp >= 20) return '火のそばに、小さな石が置かれた。';
+  return null;
 }
 
 function ToymanVoice({ text, sub }) {
@@ -774,7 +948,18 @@ function FireCard({ fire, onSelect, selected }) {
         </span>
       </div>
       {fire.status === 'searching' && (
-        <ProgressBar value={fire.progress} />
+        <div style={{ marginTop: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+            <span style={{ color: '#6b7280', fontSize: 10 }}>問いの深度</span>
+            <span style={{ color: '#a78bfa', fontSize: 10 }}>{fire.questionProgress || 0}%</span>
+          </div>
+          <ProgressBar value={fire.questionProgress || 0} color="linear-gradient(90deg, #7c3aed, #a78bfa)" />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1, marginTop: 4 }}>
+            <span style={{ color: '#6b7280', fontSize: 10 }}>火の安定</span>
+            <span style={{ color: '#34d399', fontSize: 10 }}>{fire.gardenProgress || 0}%</span>
+          </div>
+          <ProgressBar value={fire.gardenProgress || 0} color="linear-gradient(90deg, #064e3b, #34d399)" />
+        </div>
       )}
       {fire.status === 'found' && (
         <p style={{ color: '#a78bfa', fontSize: 12, margin: '8px 0 0', lineHeight: 1.5 }}>
@@ -949,11 +1134,12 @@ function RecordTower({ game }) {
 
 function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday }) {
   var [recordOpen, setRecordOpen] = _useState(false);
-  var [lastAction, setLastAction] = _useState(null); // null | 'rest' | 'watch'
+  var [lastAction, setLastAction] = _useState(null);
   var searching = game.fires.find(function(f) { return f.status === 'searching'; });
   var found = game.fires.find(function(f) { return f.status === 'found'; });
   var toyman = game.toyman;
   var inForest = toyman.location === 'unexplored_forest';
+  var mat = safeMat(game.materials);
 
   var toymanText;
   if (toyman.state === 'exploring') {
@@ -964,12 +1150,13 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday }) {
     toymanText = 'まだ、消えていない';
   }
 
-  var hasReceived = game.fires.some(function(f) {
-    return f.status === 'received' || f.status === 'held' || f.status === 'returned';
-  });
+  var sf = searching;
+  var qp = sf ? (sf.questionProgress || 0) : 0;
+  var gp = sf ? (sf.gardenProgress || 0) : 0;
+  var hint = sf ? gardenHint(gp) : null;
 
   return (
-    <div style={{ padding: '0 16px 80px' }}>
+    <div style={{ padding: '0 16px 100px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0 12px' }}>
         <button onClick={onBack} style={{
           background: 'transparent', border: 'none', color: '#9ca3af',
@@ -978,13 +1165,13 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday }) {
         <h2 style={{ color: '#e2e4ee', fontSize: 17, margin: 0 }}>箱庭</h2>
       </div>
 
-      {/* Location panel */}
+      {/* 場所パネル */}
       {inForest ? (
         <div style={{
           background: '#0a0e0c', border: '1px solid #14532d',
-          borderRadius: 12, padding: '18px 16px', marginBottom: 16,
+          borderRadius: 12, padding: '16px', marginBottom: 14,
         }}>
-          <p style={{ color: '#166534', fontSize: 11, margin: '0 0 10px', letterSpacing: 1 }}>未受領の森</p>
+          <p style={{ color: '#166534', fontSize: 11, margin: '0 0 8px', letterSpacing: 1 }}>未受領の森</p>
           <p style={{ color: '#4b6a54', fontSize: 13, lineHeight: 1.9, margin: 0 }}>
             届かなかった言葉が、<br />
             まだ形にならないまま残っている場所。<br /><br />
@@ -995,8 +1182,8 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday }) {
       ) : (
         <div style={{
           background: '#0e1016', border: '1px solid #1e2230',
-          borderRadius: 12, padding: '16px', marginBottom: 16,
-          minHeight: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderRadius: 12, padding: '14px', marginBottom: 14,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 60,
         }}>
           <p style={{ color: '#374151', fontSize: 13, textAlign: 'center', margin: 0 }}>
             〜 はじまりの部屋 〜
@@ -1006,75 +1193,117 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday }) {
 
       <ToymanVoice text={toymanText} />
 
-      {searching && (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ color: '#9ca3af', fontSize: 12 }}>探索中: {fireTitle(searching)}</span>
-            <span style={{ color: '#f97316', fontSize: 12 }}>{searching.progress}%</span>
-          </div>
-          <ProgressBar value={searching.progress} />
+      {/* 小人 */}
+      <TinyfolkRow tinyfolk={game.tinyfolk} />
 
-          {/* 探索ログ（最新3件） */}
-          {searching.logs && searching.logs.length > 0 && (
-            <div style={{ margin: '8px 0 4px' }}>
-              {searching.logs.slice(-3).map(function(l, i) {
+      {/* 探索中の火 */}
+      {sf && (
+        <div style={{
+          background: '#111318', border: '1px solid #2e3348',
+          borderRadius: 10, padding: '14px 16px', marginTop: 12,
+        }}>
+          <p style={{ color: '#9ca3af', fontSize: 12, margin: '0 0 10px' }}>
+            探索中：{fireTitle(sf)}
+          </p>
+
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+              <span style={{ color: '#6b7280', fontSize: 11 }}>問いの深度</span>
+              <span style={{ color: '#a78bfa', fontSize: 11 }}>{qp}%</span>
+            </div>
+            <ProgressBar value={qp} color="linear-gradient(90deg, #7c3aed, #a78bfa)" />
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+              <span style={{ color: '#6b7280', fontSize: 11 }}>火の安定</span>
+              <span style={{ color: '#34d399', fontSize: 11 }}>{gp}%</span>
+            </div>
+            <ProgressBar value={gp} color="linear-gradient(90deg, #064e3b, #34d399)" />
+          </div>
+
+          <p style={{ color: '#4b5563', fontSize: 12, margin: '0 0 8px', lineHeight: 1.6 }}>
+            {qp < 100
+              ? '問いはまだ、形になっていない。でも、火はここで保たれている。'
+              : '問いの欠片が、形になりかけている。'}
+          </p>
+
+          {/* gardenProgress による気配 */}
+          {hint && (
+            <p style={{ color: '#374151', fontSize: 11, margin: '4px 0 8px', lineHeight: 1.6 }}>
+              {hint}
+            </p>
+          )}
+
+          {/* 探索ログ最新3件 */}
+          {sf.logs && sf.logs.length > 0 && (
+            <div style={{ borderTop: '1px solid #1e2230', paddingTop: 8, marginTop: 4 }}>
+              <p style={{ color: '#374151', fontSize: 10, margin: '0 0 4px' }}>最近の森</p>
+              {sf.logs.slice(-3).map(function(l, i) {
                 return (
                   <p key={i} style={{ color: '#4b5563', fontSize: 11, margin: '2px 0', lineHeight: 1.5 }}>
-                    {l.text}
+                    ・{l.text}
                   </p>
                 );
               })}
             </div>
           )}
-
-          {/* 行動後の結果演出 */}
-          {lastAction === 'rest' && (
-            <div style={{
-              background: '#0d1117', border: '1px solid #1e2230',
-              borderRadius: 8, padding: '12px 14px', margin: '8px 0',
-            }}>
-              <p style={{ color: '#6b7280', fontSize: 13, lineHeight: 1.8, margin: 0 }}>
-                今日は、ここまで。<br />
-                トイマンは火のそばに座った。<br />
-                「消えないなら、それでいい」<br />
-                <span style={{ color: '#374151', fontSize: 11 }}>休息札を残しました。灯貨+1</span>
-              </p>
-              <button onClick={function() { setLastAction(null); }} style={{
-                marginTop: 10, padding: '6px 14px', borderRadius: 6,
-                background: 'transparent', border: '1px solid #2e3348',
-                color: '#6b7280', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-              }}>閉じる</button>
-            </div>
-          )}
-          {lastAction === 'watch' && (
-            <div style={{
-              background: '#0d1117', border: '1px solid #1e2230',
-              borderRadius: 8, padding: '12px 14px', margin: '8px 0',
-            }}>
-              <p style={{ color: '#6b7280', fontSize: 13, lineHeight: 1.8, margin: 0 }}>
-                トイマンは、ただ火を見ていた。<br />
-                <span style={{ color: '#374151', fontSize: 11 }}>灯貨+1</span>
-              </p>
-              <button onClick={function() { setLastAction(null); }} style={{
-                marginTop: 10, padding: '6px 14px', borderRadius: 6,
-                background: 'transparent', border: '1px solid #2e3348',
-                color: '#6b7280', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-              }}>閉じる</button>
-            </div>
-          )}
-
-          {lastAction === null && (
-            <ShadowPanel
-              fire={searching}
-              onAnswer={function(ans) { onDoBattle(searching.id, ans); }}
-              onWatch={function() { onWatchFire(searching.id); setLastAction('watch'); }}
-              onSkip={function() { onRestToday(searching.id); setLastAction('rest'); }}
-            />
-          )}
         </div>
       )}
 
-      {found && !searching && (
+      {/* 行動後の結果演出 */}
+      {sf && lastAction === 'rest' && (
+        <div style={{
+          background: '#0d1117', border: '1px solid #1e2230',
+          borderRadius: 8, padding: '14px 16px', margin: '10px 0',
+        }}>
+          <p style={{ color: '#6b7280', fontSize: 13, lineHeight: 2, margin: 0 }}>
+            今日は、ここまで。<br /><br />
+            問いは進まなかった。<br />
+            でも、火は消えなかった。<br /><br />
+            トイマンは火のそばに座った。<br />
+            「消えないなら、それでいい」<br /><br />
+            <span style={{ color: '#374151', fontSize: 11 }}>
+              休息札を残しました。 灯貨+1 / 水滴+1 / 火の安定+5
+            </span>
+          </p>
+          <button onClick={function() { setLastAction(null); }} style={{
+            marginTop: 12, padding: '6px 14px', borderRadius: 6,
+            background: 'transparent', border: '1px solid #2e3348',
+            color: '#6b7280', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+          }}>閉じる</button>
+        </div>
+      )}
+      {sf && lastAction === 'watch' && (
+        <div style={{
+          background: '#0d1117', border: '1px solid #1e2230',
+          borderRadius: 8, padding: '14px 16px', margin: '10px 0',
+        }}>
+          <p style={{ color: '#6b7280', fontSize: 13, lineHeight: 2, margin: 0 }}>
+            トイマンは、ただ火を見ていた。<br />
+            <span style={{ color: '#374151', fontSize: 11 }}>
+              灯貨+1 / 灰片+1 / 火の安定+8
+            </span>
+          </p>
+          <button onClick={function() { setLastAction(null); }} style={{
+            marginTop: 12, padding: '6px 14px', borderRadius: 6,
+            background: 'transparent', border: '1px solid #2e3348',
+            color: '#6b7280', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+          }}>閉じる</button>
+        </div>
+      )}
+
+      {/* 影パネル（行動後演出がないときだけ） */}
+      {sf && lastAction === null && (
+        <ShadowPanel
+          fire={sf}
+          onAnswer={function(ans) { onDoBattle(sf.id, ans); }}
+          onWatch={function() { onWatchFire(sf.id); setLastAction('watch'); }}
+          onSkip={function() { onRestToday(sf.id); setLastAction('rest'); }}
+        />
+      )}
+
+      {/* 問いが見つかった */}
+      {found && !sf && (
         <div style={{
           background: '#0f0b1a', border: '1px solid #7c3aed',
           borderRadius: 10, padding: '14px 16px', marginTop: 16,
@@ -1089,22 +1318,30 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday }) {
         </div>
       )}
 
-      {/* Record tower — visible after first received fire */}
+      {/* 素材・灯貨 */}
+      <div style={{ marginTop: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <span style={{ color: '#4b5563', fontSize: 11 }}>灯貨 {game.toka || 0}</span>
+        </div>
+        <MatChips materials={mat} />
+      </div>
+
+      {/* 記録塔 */}
       {game.unlocks.recordTower && (
-        <div style={{ marginTop: 24 }}>
+        <div style={{ marginTop: 20 }}>
           {!recordOpen ? (
             <div style={{
               background: '#0f0f1a', border: '1px solid #312e81',
               borderRadius: 10, padding: '14px 16px',
             }}>
-              <p style={{ color: '#6366f1', fontSize: 12, margin: '0 0 6px' }}>
+              <p style={{ color: '#6366f1', fontSize: 12, margin: '0 0 4px' }}>
                 遠くに、記録塔の灯りが見える。
               </p>
-              <p style={{ color: '#4b5563', fontSize: 12, margin: '0 0 12px', lineHeight: 1.6 }}>
+              <p style={{ color: '#4b5563', fontSize: 12, margin: '0 0 10px', lineHeight: 1.6 }}>
                 コタエが、問いの欠片を記録している。
               </p>
               <button onClick={function() { setRecordOpen(true); }} style={{
-                padding: '8px 16px', borderRadius: 8,
+                padding: '7px 14px', borderRadius: 8,
                 background: 'transparent', border: '1px solid #312e81',
                 color: '#818cf8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
               }}>
@@ -1113,9 +1350,8 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday }) {
             </div>
           ) : (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <span style={{ color: '#6366f1', fontSize: 14 }}>🗼</span>
-                <span style={{ color: '#818cf8', fontSize: 14, fontWeight: 700 }}>記録塔</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <span style={{ color: '#818cf8', fontSize: 14, fontWeight: 700 }}>🗼 記録塔</span>
                 <button onClick={function() { setRecordOpen(false); }} style={{
                   marginLeft: 'auto', background: 'transparent', border: 'none',
                   color: '#6b7280', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
@@ -1127,16 +1363,20 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday }) {
         </div>
       )}
 
-      {/* 次施設の気配 */}
-      {!game.unlocks.recordTower && hasReceived && (
-        <p style={{ color: '#374151', fontSize: 12, textAlign: 'center', marginTop: 24, lineHeight: 1.8 }}>
-          遠くに、塔の灯りが見えた。
-        </p>
-      )}
-      {!searching && !found && game.fires.length > 0 && (
-        <p style={{ color: '#374151', fontSize: 12, textAlign: 'center', marginTop: 16, lineHeight: 1.8 }}>
-          どこかで、水音がした。
-        </p>
+      {/* 涙の泉の気配 */}
+      {game.unlocks.tearsSpring && (
+        <div style={{
+          background: '#0a0f14', border: '1px solid #164e63',
+          borderRadius: 10, padding: '12px 14px', marginTop: 16,
+        }}>
+          <p style={{ color: '#0e7490', fontSize: 12, margin: '0 0 4px' }}>
+            どこかで、水音がした。
+          </p>
+          <p style={{ color: '#374151', fontSize: 11, margin: 0, lineHeight: 1.6 }}>
+            かなが、少し離れた場所から見ていた。<br />
+            「今は受け取れなくてもいいよ」
+          </p>
+        </div>
       )}
     </div>
   );
@@ -1258,14 +1498,35 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
         <ToymanVoice text={toymanGreeting} />
       )}
 
+      {/* 灯守り初登場 */}
+      {!showForm && game.tinyfolk && game.tinyfolk.lightkeeper && totalFires === 1 && (
+        <div style={{
+          background: '#0a0e0c', border: '1px solid #14532d',
+          borderRadius: 8, padding: '12px 14px', margin: '8px 0',
+        }}>
+          <p style={{ color: '#4b6a54', fontSize: 12, lineHeight: 1.8, margin: 0 }}>
+            火のそばに、小さな影が動いた。<br />
+            灯守りが、石をひとつ置いた。
+          </p>
+        </div>
+      )}
+
       {!showForm && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '12px 0' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '10px 0' }}>
           {searching && (
             <span style={{
               fontSize: 12, padding: '4px 10px', borderRadius: 12,
-              background: '#f9731622', color: '#f97316',
+              background: '#7c3aed22', color: '#a78bfa',
             }}>
-              🔥 探索中 {searching.progress}%
+              問い {searching.questionProgress || 0}%
+            </span>
+          )}
+          {searching && (
+            <span style={{
+              fontSize: 12, padding: '4px 10px', borderRadius: 12,
+              background: '#06472222', color: '#34d399',
+            }}>
+              安定 {searching.gardenProgress || 0}%
             </span>
           )}
           {found && (
@@ -1387,7 +1648,10 @@ function DevBar({ game, onReset, onForceFound, onAddBattle }) {
 // ── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
-  var [game, setGame] = _useState(function() { return loadSave() || initGame(); });
+  var [game, setGame] = _useState(function() {
+    var saved = loadSave();
+    return saved ? saved : initGame();
+  });
   var [screen, setScreen] = _useState('home');
   var tickRef = _useRef(null);
 
