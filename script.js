@@ -837,21 +837,24 @@ function RecordTower({ game }) {
 }
 
 function GardenView({ game, onBack, onDoBattle }) {
+  var [recordOpen, setRecordOpen] = _useState(false);
   var searching = game.fires.find(function(f) { return f.status === 'searching'; });
   var found = game.fires.find(function(f) { return f.status === 'found'; });
   var toyman = game.toyman;
+  var inForest = toyman.location === 'unexplored_forest';
 
-  var toymanText, toymanSub;
+  var toymanText;
   if (toyman.state === 'exploring') {
-    toymanText = '未受領の森の中へ入っていった。影のそばで、静かに待っている。';
-    toymanSub = '残り火が届くのを待っているみたい。';
+    toymanText = '残っているなら、迎えに行く';
   } else if (toyman.state === 'returning') {
-    toymanText = '問いの欠片を見つけて戻ってきた。棚に届けにいくみたいだ。';
-    toymanSub = '「残り火の棚」で受け取ってみて。';
+    toymanText = '答えではない。欠片を探す';
   } else {
-    toymanText = '箱庭の入口で、静かに火を見ている。';
-    toymanSub = '新しい残り火が灯るのを待っているみたい。';
+    toymanText = 'まだ、消えていない';
   }
+
+  var hasReceived = game.fires.some(function(f) {
+    return f.status === 'received' || f.status === 'held' || f.status === 'returned';
+  });
 
   return (
     <div style={{ padding: '0 16px 80px' }}>
@@ -863,17 +866,33 @@ function GardenView({ game, onBack, onDoBattle }) {
         <h2 style={{ color: '#e2e4ee', fontSize: 17, margin: 0 }}>箱庭</h2>
       </div>
 
-      <div style={{
-        background: '#0e1016', border: '1px solid #1e2230',
-        borderRadius: 12, padding: '16px', marginBottom: 16,
-        minHeight: 80, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <p style={{ color: '#374151', fontSize: 13, textAlign: 'center', margin: 0 }}>
-          {toyman.location === 'unexplored_forest' ? '〜 未受領の森 〜' : '〜 はじまりの部屋 〜'}
-        </p>
-      </div>
+      {/* Location panel */}
+      {inForest ? (
+        <div style={{
+          background: '#0a0e0c', border: '1px solid #14532d',
+          borderRadius: 12, padding: '18px 16px', marginBottom: 16,
+        }}>
+          <p style={{ color: '#166534', fontSize: 11, margin: '0 0 10px', letterSpacing: 1 }}>未受領の森</p>
+          <p style={{ color: '#4b6a54', fontSize: 13, lineHeight: 1.9, margin: 0 }}>
+            届かなかった言葉が、<br />
+            まだ形にならないまま残っている場所。<br /><br />
+            トイマンはここで、<br />
+            問いの欠片を探している。
+          </p>
+        </div>
+      ) : (
+        <div style={{
+          background: '#0e1016', border: '1px solid #1e2230',
+          borderRadius: 12, padding: '16px', marginBottom: 16,
+          minHeight: 70, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <p style={{ color: '#374151', fontSize: 13, textAlign: 'center', margin: 0 }}>
+            〜 はじまりの部屋 〜
+          </p>
+        </div>
+      )}
 
-      <ToymanVoice text={toymanText} sub={toymanSub} />
+      <ToymanVoice text={toymanText} />
 
       {searching && (
         <div style={{ marginTop: 16 }}>
@@ -895,23 +914,115 @@ function GardenView({ game, onBack, onDoBattle }) {
           background: '#0f0b1a', border: '1px solid #7c3aed',
           borderRadius: 10, padding: '14px 16px', marginTop: 16,
         }}>
-          <p style={{ color: '#a78bfa', fontSize: 13, margin: '0 0 6px' }}>
-            問いの欠片が届いています
-          </p>
-          <p style={{ color: '#ede9fe', fontSize: 14, lineHeight: 1.7, margin: 0 }}>
+          <p style={{ color: '#a78bfa', fontSize: 13, margin: '0 0 6px' }}>問いの欠片が届いています</p>
+          <p style={{ color: '#ede9fe', fontSize: 14, lineHeight: 1.7, margin: '0 0 8px' }}>
             {found.question}
           </p>
-          <p style={{ color: '#6b7280', fontSize: 12, marginTop: 8 }}>
+          <p style={{ color: '#6b7280', fontSize: 12, margin: 0 }}>
             「残り火の棚」から受け取ってください
           </p>
         </div>
       )}
+
+      {/* Record tower — visible after first received fire */}
+      {game.unlocks.recordTower && (
+        <div style={{ marginTop: 24 }}>
+          {!recordOpen ? (
+            <div style={{
+              background: '#0f0f1a', border: '1px solid #312e81',
+              borderRadius: 10, padding: '14px 16px',
+            }}>
+              <p style={{ color: '#6366f1', fontSize: 12, margin: '0 0 6px' }}>
+                遠くに、記録塔の灯りが見える。
+              </p>
+              <p style={{ color: '#4b5563', fontSize: 12, margin: '0 0 12px', lineHeight: 1.6 }}>
+                コタエが、問いの欠片を記録している。
+              </p>
+              <button onClick={function() { setRecordOpen(true); }} style={{
+                padding: '8px 16px', borderRadius: 8,
+                background: 'transparent', border: '1px solid #312e81',
+                color: '#818cf8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                記録塔を見る
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <span style={{ color: '#6366f1', fontSize: 14 }}>🗼</span>
+                <span style={{ color: '#818cf8', fontSize: 14, fontWeight: 700 }}>記録塔</span>
+                <button onClick={function() { setRecordOpen(false); }} style={{
+                  marginLeft: 'auto', background: 'transparent', border: 'none',
+                  color: '#6b7280', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+                }}>閉じる</button>
+              </div>
+              <RecordTower game={game} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 次施設の気配 */}
+      {!game.unlocks.recordTower && hasReceived && (
+        <p style={{ color: '#374151', fontSize: 12, textAlign: 'center', marginTop: 24, lineHeight: 1.8 }}>
+          遠くに、塔の灯りが見えた。
+        </p>
+      )}
+      {!searching && !found && game.fires.length > 0 && (
+        <p style={{ color: '#374151', fontSize: 12, textAlign: 'center', marginTop: 16, lineHeight: 1.8 }}>
+          どこかで、水音がした。
+        </p>
+      )}
+    </div>
+  );
+}
+
+function FireLitResult({ onGoGarden, onGoShelf }) {
+  return (
+    <div style={{ padding: '24px 0' }}>
+      <p style={{ color: '#f97316', fontSize: 15, textAlign: 'center', margin: '0 0 20px', letterSpacing: 0.5 }}>
+        火が灯った。
+      </p>
+      <div style={{
+        background: '#1a1e2c', border: '1px solid #2e3348',
+        borderRadius: 10, padding: '18px 16px', marginBottom: 20,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 18 }}>🔥</span>
+          <span style={{ color: '#fb923c', fontSize: 13, fontWeight: 700 }}>トイマン</span>
+        </div>
+        <p style={{ color: '#e2e4ee', fontSize: 15, lineHeight: 1.8, margin: 0 }}>
+          ……見つけた
+        </p>
+      </div>
+      <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.9, margin: '0 0 24px' }}>
+        その火は、まだ誰かに受け取られたわけではありません。<br />
+        でも、もう見失われてはいません。<br /><br />
+        トイマンは、未受領の森へ向かいました。
+      </p>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button onClick={onGoGarden} style={{
+          flex: 1, padding: '12px 0', borderRadius: 8,
+          background: '#0e2a1a', border: '1px solid #166534',
+          color: '#86efac', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
+        }}>
+          未受領の森を見る
+        </button>
+        <button onClick={onGoShelf} style={{
+          flex: 1, padding: '12px 0', borderRadius: 8,
+          background: '#151820', border: '1px solid #2e3348',
+          color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
+        }}>
+          棚を見る
+        </button>
+      </div>
     </div>
   );
 }
 
 function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
   var [showForm, setShowForm] = _useState(false);
+  var [justLit, setJustLit] = _useState(false);
   var searching = game.fires.find(function(f) { return f.status === 'searching'; });
   var found = game.fires.find(function(f) { return f.status === 'found'; });
   var totalFires = game.fires.length;
@@ -919,17 +1030,33 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
   function handleLightFire(kindle, pain, writeState, feeling, metrics) {
     onLightFire(kindle, pain, writeState, feeling, metrics);
     setShowForm(false);
+    setJustLit(true);
   }
 
   var toymanGreeting;
   if (game.toyman.state === 'exploring') {
-    toymanGreeting = '未受領の森に入っていった。あなたの残り火を探している。';
+    toymanGreeting = '火は見えている';
   } else if (game.toyman.state === 'returning') {
-    toymanGreeting = '問いの欠片を見つけて戻ってきた。「残り火の棚」で受け取れるよ。';
+    toymanGreeting = '……さがしたよ';
   } else if (totalFires === 0) {
-    toymanGreeting = 'はじめまして。ここに残り火を置いていっていいよ。';
+    toymanGreeting = 'まだ、消えていない';
   } else {
-    toymanGreeting = 'また来たんだね。';
+    toymanGreeting = 'また来たんだね';
+  }
+
+  if (justLit) {
+    return (
+      <div style={{ padding: '0 16px 80px' }}>
+        <div style={{ padding: '20px 0 16px', textAlign: 'center' }}>
+          <h1 style={{ color: '#f97316', fontSize: 20, margin: '0 0 4px', letterSpacing: 1 }}>残り火の箱庭</h1>
+          <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>Nokoribi no Hakoniwa</p>
+        </div>
+        <FireLitResult
+          onGoGarden={function() { setJustLit(false); onGoGarden(); }}
+          onGoShelf={function() { setJustLit(false); onGoShelf(); }}
+        />
+      </div>
+    );
   }
 
   return (
@@ -1020,12 +1147,6 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
           }}>
             🌿 箱庭
           </button>
-        </div>
-      )}
-
-      {game.unlocks.recordTower && !showForm && (
-        <div style={{ marginTop: 28 }}>
-          <RecordTower game={game} />
         </div>
       )}
     </div>
