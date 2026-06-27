@@ -4697,3 +4697,61 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .garden-event-message-sub{color:#374151;font-size:12px;line-height:1.9;margin:0 0 2px}
 .garden-event-chips{display:flex;gap:6px;margin-top:8px}
 .garden-event-chip{font-size:10px;padding:2px 7px;border-radius:8px;background:#0d1018;border:1px solid #1e2230;color:#374151}
+
+/* ── 行動ボタン ── */
+.action-btns{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.btn-shadow,.btn-watch,.btn-rest{padding:13px 16px;border-radius:10px;text-align:left;font-size:14px;cursor:pointer;font-family:inherit;width:100%;display:block}
+.btn-shadow{background:#1e1a2e;border:1px solid #4c1d95;color:#c4b5fd}
+.btn-watch{background:#111318;border:1px solid #2e3348;color:#9ca3af}
+.btn-rest{background:#111318;border:1px solid #1e2230;color:#6b7280}
+.btn-shadow-icon{color:#a78bfa;margin-right:8px}
+.btn-watch-icon{color:#6b7280;margin-right:8px}
+.btn-rest-icon{color:#4b5563;margin-right:8px}
+
+/* ── ShadowPanel ラッパー ── */
+.shadow-panel-wrap{background:#0f1119;border:1px solid #3d2d5c;border-radius:12px;padding:4px 0 0;margin-bottom:14px;max-height:calc(100dvh - 96px);overflow-y:auto}
+.shadow-panel-close-row{display:flex;justify-content:flex-end;padding:8px 12px 0}
+.shadow-panel-close{background:transparent;border:none;color:#4b5563;font-size:13px;cursor:pointer;font-family:inherit;padding:4px 8px}
+
+/* ── 行動結果パネル ── */
+.action-result{background:#080d09;border:1px solid #14532d;border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.action-result-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.action-result-title{color:#2d6a35;font-size:12px;font-weight:600;margin:0}
+.action-result-close{background:transparent;border:1px solid #1e2e20;border-radius:5px;color:#374151;font-size:11px;cursor:pointer;font-family:inherit;padding:3px 8px}
+.action-result-section{margin-bottom:8px}
+.action-result-section:last-child{margin-bottom:0}
+.action-result-section-label{color:#1a3d1e;font-size:10px;letter-spacing:.08em;margin:0 0 4px}
+.action-result-gain{color:#2d6a35;font-size:12px;margin:2px 0;line-height:1.5}
+.action-result-trace{color:#374151;font-size:11px;margin:2px 0;line-height:1.6}
+
+/* ── 進度バーセクション ── */
+.progress-section{margin-bottom:12px;padding:10px 12px;background:#0a0c0f;border:1px solid #1e2230;border-radius:10px}
+.progress-row{display:flex;justify-content:space-between;margin-bottom:2px}
+.progress-label{color:#4b5563;font-size:10px}
+.progress-value-purple{color:#a78bfa;font-size:10px}
+.progress-value-green{color:#34d399;font-size:10px}
+.progress-gap{margin-top:8px}
+
+/* ── 最近のログ ── */
+.recent-logs{border-top:1px solid #1e2230;padding:8px 0;margin-bottom:12px}
+.recent-log-item{color:#374151;font-size:11px;margin:2px 0;line-height:1.6}
+
+/* ── 問いが見つかったバナー ── */
+.found-banner{background:#0f0b1a;border:1px solid #7c3aed;border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.found-banner-label{color:#a78bfa;font-size:12px;margin:0 0 4px}
+.found-banner-question{color:#ede9fe;font-size:14px;line-height:1.7;margin:0 0 8px}
+.found-banner-hint{color:#6b7280;font-size:12px;margin:0}
+
+/* ── 記録塔 ── */
+.record-tower-banner{background:#0f0f1a;border:1px solid #312e81;border-radius:10px;padding:12px 14px;margin-top:8px;margin-bottom:12px}
+.record-tower-banner-title{color:#6366f1;font-size:12px;margin:0 0 4px}
+.record-tower-banner-desc{color:#4b5563;font-size:11px;margin:0 0 8px;line-height:1.6}
+.record-tower-open-btn{padding:6px 12px;border-radius:7px;background:transparent;border:1px solid #312e81;color:#818cf8;font-size:12px;cursor:pointer;font-family:inherit}
+.record-tower-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.record-tower-header-title{color:#818cf8;font-size:13px;font-weight:700}
+.record-tower-close{margin-left:auto;background:transparent;border:none;color:#6b7280;font-size:12px;cursor:pointer;font-family:inherit}
+
+/* ── 涙の泉 ── */
+.tears-spring{background:#0a0f14;border:1px solid #164e63;border-radius:10px;padding:10px 13px;margin-top:8px}
+.tears-spring-title{color:#0e7490;font-size:12px;margin:0 0 2px}
+.tears-spring-text{color:#374151;font-size:11px;margin:0;line-height:1.6}

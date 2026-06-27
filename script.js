@@ -1874,26 +1874,79 @@ var TINYFOLK_ACTIVITY = {
   recordApprentice: '記録塔で写している',
 };
 
+var ACTION_RESULTS = {
+  watch: {
+    title: 'ただ見守った',
+    gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }],
+    traces: ['灯守りが、小さな石を置いた。'],
+  },
+  rest: {
+    title: '今日は無理にしなかった',
+    gains: [{ label: '灯貨', amount: 1 }, { label: '水滴', amount: 1 }],
+    traces: ['火のそばに、小さな椅子が置かれた。', '水滴が、火の近くに置かれた。'],
+  },
+  battle: {
+    title: '影と向き合った',
+    gains: [{ label: '灯貨', amount: 2 }, { label: '紙片', amount: 1 }],
+    traces: ['焦げた紙片が、森に残った。'],
+  },
+};
+
+function ActionResultPanel({ result, onClose }) {
+  if (!result) return null;
+  return (
+    <div className="action-result">
+      <div className="action-result-header">
+        <p className="action-result-title">{result.title}</p>
+        <button className="action-result-close" onClick={onClose}>✕</button>
+      </div>
+      <div className="action-result-section">
+        <p className="action-result-section-label">増えたもの</p>
+        {result.gains.map(function(g, i) {
+          return <p key={i} className="action-result-gain">{g.label} +{g.amount}</p>;
+        })}
+      </div>
+      <div className="action-result-section">
+        <p className="action-result-section-label">箱庭に残った痕跡</p>
+        {result.traces.map(function(t, i) {
+          return <p key={i} className="action-result-trace">{t}</p>;
+        })}
+      </div>
+    </div>
+  );
+}
+
 function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen, onBuyMarket }) {
   var [recordOpen, setRecordOpen] = _useState(false);
-  var [lastAction, setLastAction] = _useState(null);
+  var [actionResult, setActionResult] = _useState(null);
   var [shadowOpen, setShadowOpen] = _useState(false);
 
   var sf    = game.fires.find(function(f) { return f.status === 'searching'; });
   var found = game.fires.find(function(f) { return f.status === 'found'; });
+  var sfId  = sf ? sf.id : null;
 
   _useEffect(function() {
     if (onUpdateLastSeen) onUpdateLastSeen();
   }, []);
 
-  function actionNote() {
-    if (lastAction === 'rest')   return '灯貨+1 / 水滴+1 / 火の安定+5';
-    if (lastAction === 'watch')  return '灯貨+1 / 灰片+1 / 火の安定+8';
-    if (lastAction === 'battle') return '灯貨+2 / 紙片+1 / 問いの深度+15〜25';
-    return null;
-  }
+  // アクティブな fire が変わったら actionResult をリセット
+  _useEffect(function() {
+    setActionResult(null);
+  }, [sfId]);
 
-  var note = actionNote();
+  function doWatch() {
+    onWatchFire(sf.id);
+    setActionResult(ACTION_RESULTS.watch);
+  }
+  function doRest() {
+    onRestToday(sf.id);
+    setActionResult(ACTION_RESULTS.rest);
+  }
+  function doBattle(ans) {
+    onDoBattle(sf.id, ans);
+    setShadowOpen(false);
+    setActionResult(ACTION_RESULTS.battle);
+  }
 
   var logsSource = sf || found || (game.fires.filter(function(f) { return f.status === 'received'; })[0]) || null;
   var logLimit = 3 + ((game.gardenItems && game.gardenItems.includes('paper_box')) ? 2 : 0);
@@ -1915,110 +1968,59 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
       {/* 2. EventCard */}
       <EventCard event={game.lastVisualEvent} />
 
-      {/* 3. actionResult — 素材ゲインのみ */}
-      {note && (
-        <div style={{
-          background: '#0a0f0c', border: '1px solid #14532d',
-          borderRadius: 10, padding: '10px 14px', marginBottom: 12,
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <p style={{ color: '#1f4024', fontSize: 11, margin: 0 }}>{note}</p>
-          <button onClick={function() { setLastAction(null); }} style={{
-            padding: '4px 10px', borderRadius: 5,
-            background: 'transparent', border: '1px solid #1e2e20',
-            color: '#374151', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-          }}>✕</button>
-        </div>
-      )}
+      {/* 3. actionResult */}
+      <ActionResultPanel result={actionResult} onClose={function() { setActionResult(null); }} />
 
       {/* 4a. 行動ボタン */}
-      {sf && lastAction === null && !shadowOpen && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-          <button onClick={function() { setShadowOpen(true); }} style={{
-            padding: '13px 16px', borderRadius: 10, textAlign: 'left',
-            background: '#1e1a2e', border: '1px solid #4c1d95',
-            color: '#c4b5fd', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-          }}>
-            <span style={{ color: '#a78bfa', marginRight: 8 }}>🌑</span>影と向き合う
+      {sf && actionResult === null && !shadowOpen && (
+        <div className="action-btns">
+          <button className="btn-shadow" onClick={function() { setShadowOpen(true); }}>
+            <span className="btn-shadow-icon">🌑</span>影と向き合う
           </button>
-          <button onClick={function() { onWatchFire(sf.id); setLastAction('watch'); }} style={{
-            padding: '13px 16px', borderRadius: 10, textAlign: 'left',
-            background: '#111318', border: '1px solid #2e3348',
-            color: '#9ca3af', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-          }}>
-            <span style={{ color: '#6b7280', marginRight: 8 }}>◎</span>ただ見守る
+          <button className="btn-watch" onClick={doWatch}>
+            <span className="btn-watch-icon">◎</span>ただ見守る
           </button>
-          <button onClick={function() { onRestToday(sf.id); setLastAction('rest'); }} style={{
-            padding: '13px 16px', borderRadius: 10, textAlign: 'left',
-            background: '#111318', border: '1px solid #1e2230',
-            color: '#6b7280', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-          }}>
-            <span style={{ color: '#4b5563', marginRight: 8 }}>…</span>今日は無理
+          <button className="btn-rest" onClick={doRest}>
+            <span className="btn-rest-icon">…</span>今日は無理
           </button>
         </div>
       )}
 
       {/* 4b. ShadowPanel */}
       {sf && shadowOpen && (
-        <div style={{
-          background: '#0f1119', border: '1px solid #3d2d5c',
-          borderRadius: 12, padding: '4px 0 0', marginBottom: 14,
-          maxHeight: 'calc(100dvh - 96px)', overflowY: 'auto',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px 0' }}>
-            <button onClick={function() { setShadowOpen(false); }} style={{
-              background: 'transparent', border: 'none', color: '#4b5563',
-              fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '4px 8px',
-            }}>× 閉じる</button>
+        <div className="shadow-panel-wrap">
+          <div className="shadow-panel-close-row">
+            <button className="shadow-panel-close" onClick={function() { setShadowOpen(false); }}>× 閉じる</button>
           </div>
           <ShadowPanel
             fire={sf}
-            onAnswer={function(ans) {
-              onDoBattle(sf.id, ans);
-              setShadowOpen(false);
-              setLastAction('battle');
-            }}
-            onWatch={function() {
-              onWatchFire(sf.id);
-              setShadowOpen(false);
-              setLastAction('watch');
-            }}
-            onSkip={function() {
-              onRestToday(sf.id);
-              setShadowOpen(false);
-              setLastAction('rest');
-            }}
+            onAnswer={doBattle}
+            onWatch={function() { onWatchFire(sf.id); setShadowOpen(false); setActionResult(ACTION_RESULTS.watch); }}
+            onSkip={function()  { onRestToday(sf.id); setShadowOpen(false); setActionResult(ACTION_RESULTS.rest);  }}
           />
         </div>
       )}
 
       {/* 問いが見つかった（棚誘導） */}
       {found && !sf && (
-        <div style={{
-          background: '#0f0b1a', border: '1px solid #7c3aed',
-          borderRadius: 10, padding: '14px 16px', marginBottom: 14,
-        }}>
-          <p style={{ color: '#a78bfa', fontSize: 12, margin: '0 0 4px' }}>問いの欠片が届いています</p>
-          <p style={{ color: '#ede9fe', fontSize: 14, lineHeight: 1.7, margin: '0 0 8px' }}>
-            {found.question}
-          </p>
-          <p style={{ color: '#6b7280', fontSize: 12, margin: 0 }}>
-            「残り火の棚」から受け取ってください
-          </p>
+        <div className="found-banner">
+          <p className="found-banner-label">問いの欠片が届いています</p>
+          <p className="found-banner-question">{found.question}</p>
+          <p className="found-banner-hint">「残り火の棚」から受け取ってください</p>
         </div>
       )}
 
       {/* 5. 問いの深度・火の安定バー */}
       {sf && (
-        <div style={{ marginBottom: 12, padding: '10px 12px', background: '#0a0c0f', border: '1px solid #1e2230', borderRadius: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-            <span style={{ color: '#4b5563', fontSize: 10 }}>問いの深度</span>
-            <span style={{ color: '#a78bfa', fontSize: 10 }}>{sf.questionProgress || 0}%</span>
+        <div className="progress-section">
+          <div className="progress-row">
+            <span className="progress-label">問いの深度</span>
+            <span className="progress-value-purple">{sf.questionProgress || 0}%</span>
           </div>
           <ProgressBar value={sf.questionProgress || 0} color="linear-gradient(90deg,#7c3aed,#a78bfa)" />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, marginTop: 8 }}>
-            <span style={{ color: '#4b5563', fontSize: 10 }}>火の安定</span>
-            <span style={{ color: '#34d399', fontSize: 10 }}>{sf.gardenProgress || 0}%</span>
+          <div className="progress-row progress-gap">
+            <span className="progress-label">火の安定</span>
+            <span className="progress-value-green">{sf.gardenProgress || 0}%</span>
           </div>
           <ProgressBar value={sf.gardenProgress || 0} color="linear-gradient(90deg,#064e3b,#34d399)" />
         </div>
@@ -2026,58 +2028,39 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
 
       {/* 6. 最近のログ3件 */}
       {recentLogs.length > 0 && (
-        <div style={{ borderTop: '1px solid #1e2230', padding: '8px 0', marginBottom: 12 }}>
+        <div className="recent-logs">
           {recentLogs.map(function(l, i) {
-            return (
-              <p key={i} style={{ color: '#374151', fontSize: 11, margin: '2px 0', lineHeight: 1.6 }}>
-                ・{l.text}
-              </p>
-            );
+            return <p key={i} className="recent-log-item">・{l.text}</p>;
           })}
         </div>
       )}
 
       {/* 7a. 記録塔 */}
       {game.unlocks.recordTower && (
-        <div style={{ marginTop: 8, marginBottom: 12 }}>
-          {!recordOpen ? (
-            <div style={{ background: '#0f0f1a', border: '1px solid #312e81', borderRadius: 10, padding: '12px 14px' }}>
-              <p style={{ color: '#6366f1', fontSize: 12, margin: '0 0 4px' }}>
-                遠くに、記録塔の灯りが見える。
-              </p>
-              <p style={{ color: '#4b5563', fontSize: 11, margin: '0 0 8px', lineHeight: 1.6 }}>
-                コタエが、問いの欠片を記録している。
-              </p>
-              <button onClick={function() { setRecordOpen(true); }} style={{
-                padding: '6px 12px', borderRadius: 7, background: 'transparent',
-                border: '1px solid #312e81', color: '#818cf8',
-                fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-                記録塔を見る
-              </button>
+        !recordOpen ? (
+          <div className="record-tower-banner">
+            <p className="record-tower-banner-title">遠くに、記録塔の灯りが見える。</p>
+            <p className="record-tower-banner-desc">コタエが、問いの欠片を記録している。</p>
+            <button className="record-tower-open-btn" onClick={function() { setRecordOpen(true); }}>
+              記録塔を見る
+            </button>
+          </div>
+        ) : (
+          <div style={{ marginTop: 8, marginBottom: 12 }}>
+            <div className="record-tower-header">
+              <span className="record-tower-header-title">🗼 記録塔</span>
+              <button className="record-tower-close" onClick={function() { setRecordOpen(false); }}>閉じる</button>
             </div>
-          ) : (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <span style={{ color: '#818cf8', fontSize: 13, fontWeight: 700 }}>🗼 記録塔</span>
-                <button onClick={function() { setRecordOpen(false); }} style={{
-                  marginLeft: 'auto', background: 'transparent', border: 'none',
-                  color: '#6b7280', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-                }}>閉じる</button>
-              </div>
-              <RecordTower game={game} />
-            </div>
-          )}
-        </div>
+            <RecordTower game={game} />
+          </div>
+        )
       )}
 
       {/* 7b. 涙の泉 */}
       {game.unlocks.tearsSpring && (
-        <div style={{ background: '#0a0f14', border: '1px solid #164e63', borderRadius: 10, padding: '10px 13px', marginTop: 8 }}>
-          <p style={{ color: '#0e7490', fontSize: 12, margin: '0 0 2px' }}>どこかで、水音がした。</p>
-          <p style={{ color: '#374151', fontSize: 11, margin: 0, lineHeight: 1.6 }}>
-            かなが、少し離れた場所から見ていた。「今は受け取れなくてもいいよ」
-          </p>
+        <div className="tears-spring">
+          <p className="tears-spring-title">どこかで、水音がした。</p>
+          <p className="tears-spring-text">かなが、少し離れた場所から見ていた。「今は受け取れなくてもいいよ」</p>
         </div>
       )}
 
