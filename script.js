@@ -208,7 +208,7 @@ function clearSave() {
 // ── Game Logic ─────────────────────────────────────────────────────────────
 
 function initMaterials() {
-  return { ash: 0, paper: 0, drop: 0, wax: 0, stamp: 0 };
+  return { ash: 0, paper: 0, drop: 0, wax: 0, stamp: 0, meaningPiece: 0, blackTag: 0, unfinishedSeed: 0 };
 }
 
 function initTinyfolk() {
@@ -222,14 +222,16 @@ function initTinyfolk() {
 }
 
 function safeMat(m) {
-  var d = initMaterials();
-  if (!m) return d;
+  if (!m) return initMaterials();
   return {
-    ash:   (m.ash   || 0),
-    paper: (m.paper || 0),
-    drop:  (m.drop  || 0),
-    wax:   (m.wax   || 0),
-    stamp: (m.stamp || 0),
+    ash:           (m.ash           || 0),
+    paper:         (m.paper         || 0),
+    drop:          (m.drop          || 0),
+    wax:           (m.wax           || 0),
+    stamp:         (m.stamp         || 0),
+    meaningPiece:  (m.meaningPiece  || 0),
+    blackTag:      (m.blackTag      || 0),
+    unfinishedSeed:(m.unfinishedSeed|| 0),
   };
 }
 
@@ -258,17 +260,27 @@ function initGame() {
   };
 }
 
+function initUnreceived(metrics) {
+  var m = metrics || {};
+  return {
+    meaning:      Math.max(0, 100 - (m.meaning      !== undefined ? m.meaning      : 50)),
+    value:        Math.max(0, 100 - (m.value        !== undefined ? m.value        : 50)),
+    satisfaction: Math.max(0, 100 - (m.satisfaction !== undefined ? m.satisfaction : 50)),
+  };
+}
+
 function createFire(kindle, pain, writeState, feeling, metrics) {
+  var met = metrics || { meaning: 50, value: 50, satisfaction: 50 };
   return {
     id: 'f' + Date.now() + Math.floor(rnd() * 1000),
     kindle: kindle.trim(),
     pain: (pain || '').trim(),
     writeState: writeState || '',
     feeling: feeling || '',
-    metrics: metrics || { meaning: 50, value: 50, satisfaction: 50 },
+    metrics: met,
     status: 'lit',
-    questionProgress: 0,  // 問いの深度（手動行動のみ）
-    gardenProgress: 0,    // 火の安定（自動進行含む）
+    questionProgress: 0,
+    gardenProgress: 0,
     question: null,
     answer: null,
     answers: [],
@@ -278,6 +290,11 @@ function createFire(kindle, pain, writeState, feeling, metrics) {
     shadowVoiceIdx: 0,
     logs: [],
     restLogs: [],
+    unreceived: initUnreceived(met),
+    unreceivedLogs: [],
+    reexploreCounts: { meaning: 0, value: 0, satisfaction: 0 },
+    activeFocus: null,
+    reexploredAt: null,
     createdAt: nowISO(),
     updatedAt: nowISO(),
     heldNote: null,
@@ -296,6 +313,11 @@ function migrateFire(f) {
   if (!f.restLogs) f.restLogs = [];
   if (f.watchCount === undefined) f.watchCount = 0;
   if (f.restCount === undefined) f.restCount = 0;
+  if (!f.unreceived) f.unreceived = initUnreceived(f.metrics);
+  if (!f.unreceivedLogs) f.unreceivedLogs = [];
+  if (!f.reexploreCounts) f.reexploreCounts = { meaning: 0, value: 0, satisfaction: 0 };
+  if (f.activeFocus === undefined) f.activeFocus = null;
+  if (f.reexploredAt === undefined) f.reexploredAt = null;
   return f;
 }
 
@@ -376,6 +398,86 @@ var AUTO_LOGS = [
   '灯守りが、火を確かめた。',
   '火の周りに、小さな石が積まれている。',
 ];
+
+var REEXPLORE_MEANING_LOGS = [
+  'トイマンは、意味になりかけた紙片を拾った。「答えではない。でも、向きはある」',
+  '影が残したものの中に、まだ形を持とうとしている欠片があった。',
+  '言葉の向きだけが、かすかに残っていた。',
+  '意味の問いかけが、少し薄くなった。',
+];
+
+var REEXPLORE_VALUE_LOGS = [
+  '黒い札が落ちていた。トイマンは、それを判決ではなく、ただの札として拾った。',
+  '裁判官の徴収跡が、まだ火の端に残っていた。剥がせた。',
+  '価値の刻印が、少し薄れた。',
+  '「値段ではない」とトイマンは言った。',
+];
+
+var REEXPLORE_SATISFACTION_LOGS = [
+  '灰の中に、まだ熱い種が残っていた。「終わりではない。残りだ」',
+  '未完の欲が、ここにある。',
+  'トイマンは、手応えの小片を拾い上げた。',
+  '満たされなかった輪郭が、少しだけ形をなした。',
+];
+
+function unreceivedStage(pct) {
+  if (pct >= 70) return '濃い影';
+  if (pct >= 40) return '薄い影';
+  if (pct >= 15) return '残り火';
+  return '静かな痕跡';
+}
+
+function reexploreFire(game, fireId, type) {
+  var ns = cloneS(game);
+  var fire = ns.fires.find(function(f) { return f.id === fireId; });
+  if (!fire || fire.status !== 'received') return { ok: false, game: game };
+  ns.materials = safeMat(ns.materials);
+  var logText = '';
+  if (type === 'meaning') {
+    var mGain = 5 + Math.floor(rnd() * 8);
+    fire.unreceived.meaning = Math.max(0, fire.unreceived.meaning - mGain);
+    ns.materials.meaningPiece += 1;
+    ns.materials.paper += 1;
+    ns.toka = (ns.toka || 0) + 1;
+    fire.reexploreCounts.meaning = (fire.reexploreCounts.meaning || 0) + 1;
+    logText = pick(REEXPLORE_MEANING_LOGS);
+  } else if (type === 'value') {
+    var vGain = 3 + Math.floor(rnd() * 6);
+    fire.unreceived.value = Math.max(0, fire.unreceived.value - vGain);
+    ns.materials.blackTag += 1;
+    ns.toka = (ns.toka || 0) + 1;
+    fire.reexploreCounts.value = (fire.reexploreCounts.value || 0) + 1;
+    logText = pick(REEXPLORE_VALUE_LOGS);
+  } else if (type === 'satisfaction') {
+    var sGain = 5 + Math.floor(rnd() * 6);
+    fire.unreceived.satisfaction = Math.max(0, fire.unreceived.satisfaction - sGain);
+    ns.materials.ash += 1;
+    ns.materials.unfinishedSeed += 1;
+    ns.toka = (ns.toka || 0) + 1;
+    fire.reexploreCounts.satisfaction = (fire.reexploreCounts.satisfaction || 0) + 1;
+    logText = pick(REEXPLORE_SATISFACTION_LOGS);
+  } else {
+    return { ok: false, game: game };
+  }
+  fire.unreceivedLogs = [{ text: logText, at: nowISO() }].concat(
+    (fire.unreceivedLogs || []).slice(0, 9)
+  );
+  fire.reexploredAt = nowISO();
+  fire.updatedAt = nowISO();
+  return { ok: true, game: ns };
+}
+
+function restUnreceived(game, fireId) {
+  var ns = cloneS(game);
+  var fire = ns.fires.find(function(f) { return f.id === fireId; });
+  if (!fire || fire.status !== 'received') return { ok: false, game: game };
+  ns.toka = (ns.toka || 0) + 1;
+  ns.materials = safeMat(ns.materials);
+  ns.materials.drop += 1;
+  fire.logs = (fire.logs || []).concat([{ text: '今日は、ここに置いておく。', at: nowISO() }]);
+  fire.updatedAt = nowISO();
+  return { ok: true, game: ns };
+}
 
 function lightFire(game, kindle, pain, writeState, feeling, metrics) {
   var ns = cloneS(game);
@@ -536,12 +638,14 @@ function ProgressBar({ value, color }) {
 function MatChips({ materials }) {
   var m = materials || {};
   var items = [
-    { key: 'toka', label: '灯貨', val: null }, // 別で渡す
-    { key: 'ash',  label: '灰片', val: m.ash  || 0 },
-    { key: 'paper',label: '紙片', val: m.paper|| 0 },
-    { key: 'drop', label: '水滴', val: m.drop || 0 },
-    { key: 'wax',  label: '封蝋', val: m.wax  || 0 },
-    { key: 'stamp',label: '受領印',val: m.stamp|| 0 },
+    { key: 'ash',          label: '灰片',    val: m.ash           || 0 },
+    { key: 'paper',        label: '紙片',    val: m.paper         || 0 },
+    { key: 'drop',         label: '水滴',    val: m.drop          || 0 },
+    { key: 'wax',          label: '封蝋',    val: m.wax           || 0 },
+    { key: 'stamp',        label: '受領印',  val: m.stamp         || 0 },
+    { key: 'meaningPiece', label: '意味片',  val: m.meaningPiece  || 0 },
+    { key: 'blackTag',     label: '黒札片',  val: m.blackTag      || 0 },
+    { key: 'unfinishedSeed',label:'未完の種',val: m.unfinishedSeed|| 0 },
   ];
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0' }}>
@@ -978,7 +1082,169 @@ function FireCard({ fire, onSelect, selected }) {
   );
 }
 
-function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onReceive }) {
+function UnreceivedPanel({ fire, onReexplore, onRest }) {
+  var ur = fire.unreceived || { meaning: 0, value: 0, satisfaction: 0 };
+  var [lastResult, setLastResult] = _useState(null);
+
+  function doReexplore(type) {
+    onReexplore(fire.id, type);
+    setLastResult(type);
+  }
+
+  function doRest() {
+    onRest(fire.id);
+    setLastResult('rest');
+  }
+
+  var TYPES = [
+    {
+      key: 'meaning',
+      label: '意味の影',
+      desc: '意味として、まだ受け取れていないものがあります。',
+      btnLabel: '意味の影を追う',
+      pct: ur.meaning,
+    },
+    {
+      key: 'value',
+      label: '価値の黒札',
+      desc: '価値判定から、まだ切り離せていない黒札があります。',
+      btnLabel: '価値の黒札を拾う',
+      pct: ur.value,
+    },
+    {
+      key: 'satisfaction',
+      label: '満足の灰',
+      desc: '満足にならず、灰として残ったものがあります。',
+      btnLabel: '満足の灰を探す',
+      pct: ur.satisfaction,
+    },
+  ];
+
+  var allSettled = TYPES.every(function(t) { return t.pct <= 14; });
+
+  return (
+    <div style={{
+      background: '#0d0f1a', border: '1px solid #2a2340',
+      borderRadius: 12, padding: '18px 16px', marginTop: 12,
+    }}>
+      <p style={{ color: '#4b5563', fontSize: 10, margin: '0 0 10px', letterSpacing: 1 }}>
+        まだ受け取れていないもの
+      </p>
+
+      {/* トイマン */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 14px' }}>
+        <span style={{ fontSize: 16 }}>🔥</span>
+        <span style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.7 }}>
+          {allSettled ? '「静かに、置かれた」' : '「まだ、残っている」'}
+        </span>
+      </div>
+
+      {/* 3領域 */}
+      {TYPES.map(function(t) {
+        var stage = unreceivedStage(t.pct);
+        var settled = t.pct <= 14;
+        return (
+          <div key={t.key} style={{
+            marginBottom: 14,
+            background: '#111318', borderRadius: 8, padding: '12px 13px',
+            border: '1px solid ' + (settled ? '#1e2a1e' : '#2a2340'),
+            opacity: settled ? 0.7 : 1,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+              <span style={{ color: settled ? '#374151' : '#9ca3af', fontSize: 13 }}>{t.label}</span>
+              <span style={{ color: '#6b7280', fontSize: 11, fontFamily: 'monospace' }}>
+                {t.pct}% / {stage}
+              </span>
+            </div>
+            <ProgressBar
+              value={t.pct}
+              color={settled
+                ? 'linear-gradient(90deg, #1e2a1e, #374151)'
+                : 'linear-gradient(90deg, #4c1d95, #7c3aed)'}
+            />
+            <p style={{ color: '#4b5563', fontSize: 11, margin: '6px 0 8px', lineHeight: 1.6 }}>
+              {settled ? 'この領域は、もう火を支配するほどではありません。' : t.desc}
+            </p>
+            {!settled && (
+              <button
+                onClick={function() { doReexplore(t.key); }}
+                style={{
+                  padding: '7px 12px', borderRadius: 6, fontSize: 12,
+                  background: 'transparent', border: '1px solid #4c1d95',
+                  color: '#a78bfa', cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                {t.btnLabel}
+              </button>
+            )}
+          </div>
+        );
+      })}
+
+      {/* 最新再探索ログ */}
+      {fire.unreceivedLogs && fire.unreceivedLogs.length > 0 && (
+        <div style={{ margin: '4px 0 14px', borderTop: '1px solid #1e2230', paddingTop: 10 }}>
+          {fire.unreceivedLogs.slice(0, 3).map(function(l, i) {
+            return (
+              <p key={i} style={{ color: '#4b5563', fontSize: 11, margin: '3px 0', lineHeight: 1.6 }}>
+                ・{l.text}
+              </p>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 今日は置いておく */}
+      <button
+        onClick={doRest}
+        style={{
+          width: '100%', padding: '10px', borderRadius: 8,
+          background: 'transparent', border: '1px solid #1e2230',
+          color: '#4b5563', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+        }}
+      >
+        今日は置いておく
+      </button>
+
+      {/* 行動結果 */}
+      {lastResult && lastResult !== 'rest' && (
+        <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: '#0a0e18', border: '1px solid #1e2230' }}>
+          <p style={{ color: '#6b7280', fontSize: 12, margin: 0, lineHeight: 1.7 }}>
+            {fire.unreceivedLogs && fire.unreceivedLogs[0] ? fire.unreceivedLogs[0].text : '再探索しました。'}
+          </p>
+          <p style={{ color: '#374151', fontSize: 11, margin: '4px 0 0' }}>
+            灯貨+1
+            {lastResult === 'meaning' && ' / 意味片+1 / 紙片+1'}
+            {lastResult === 'value' && ' / 黒札片+1'}
+            {lastResult === 'satisfaction' && ' / 灰片+1 / 未完の種+1'}
+          </p>
+          <button onClick={function() { setLastResult(null); }} style={{
+            marginTop: 8, padding: '4px 10px', borderRadius: 5,
+            background: 'transparent', border: '1px solid #1e2230',
+            color: '#4b5563', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+          }}>閉じる</button>
+        </div>
+      )}
+      {lastResult === 'rest' && (
+        <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: '#0a0e18', border: '1px solid #1e2230' }}>
+          <p style={{ color: '#4b5563', fontSize: 12, margin: 0, lineHeight: 1.8 }}>
+            今日は、ここに置いておく。<br />
+            未受領領域は進まなかった。<br />
+            でも、火は消えなかった。
+          </p>
+          <p style={{ color: '#374151', fontSize: 11, margin: '4px 0 0' }}>灯貨+1 / 水滴+1</p>
+          <button onClick={function() { setLastResult(null); }} style={{
+            marginTop: 8, padding: '4px 10px', borderRadius: 5,
+            background: 'transparent', border: '1px solid #1e2230',
+            color: '#4b5563', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+          }}>閉じる</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onReceive, onReexplore, onRestUnreceived }) {
   var [selectedId, setSelectedId] = _useState(null);
   var [receiveAnswer, setReceiveAnswer] = _useState('');
   var [phase, setPhase] = _useState('list');
@@ -994,6 +1260,7 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
       var fire = game.fires.find(function(f) { return f.id === id; });
       if (fire && fire.status === 'searching') setPhase('battle');
       else if (fire && fire.status === 'found') setPhase('receive');
+      else if (fire && fire.status === 'received') setPhase('unreceived');
       else setPhase('list');
     }
   }
@@ -1003,7 +1270,8 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
     if (!selected) return;
     if (selected.status === 'searching' && phase !== 'battle') setPhase('battle');
     if (selected.status === 'found' && phase !== 'receive') setPhase('receive');
-    if (selected.status !== 'searching' && selected.status !== 'found') setPhase('list');
+    if (selected.status === 'received' && phase !== 'unreceived') setPhase('unreceived');
+    if (selected.status !== 'searching' && selected.status !== 'found' && selected.status !== 'received') setPhase('list');
   }, [selected && selected.status]);
 
   return (
@@ -1085,8 +1353,7 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
             onClick={function() {
               onReceive(selected.id, receiveAnswer);
               setReceiveAnswer('');
-              setPhase('list');
-              setSelectedId(null);
+              setPhase('unreceived');
             }}
             style={{
               width: '100%', marginTop: 12, padding: '11px 0', borderRadius: 8,
@@ -1097,6 +1364,14 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
             受け取る
           </button>
         </div>
+      )}
+
+      {selected && phase === 'unreceived' && selected.status === 'received' && (
+        <UnreceivedPanel
+          fire={selected}
+          onReexplore={onReexplore}
+          onRest={onRestUnreceived}
+        />
       )}
     </div>
   );
@@ -1280,6 +1555,39 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
       </div>
 
       <ToymanVoice text={toymanText} />
+
+      {/* ── 最大未受領領域（受け取り済みの火） ── */}
+      {(function() {
+        var received = game.fires.filter(function(f) { return f.status === 'received'; });
+        if (received.length === 0) return null;
+        var best = null;
+        var bestPct = -1;
+        var bestKey = null;
+        received.forEach(function(f) {
+          var ur = f.unreceived || {};
+          [['meaning','意味の影'], ['value','価値の黒札'], ['satisfaction','満足の灰']].forEach(function(pair) {
+            var pct = ur[pair[0]] || 0;
+            if (pct > bestPct) { bestPct = pct; best = f; bestKey = pair[1]; }
+          });
+        });
+        if (!best || bestPct <= 0) return null;
+        return (
+          <div style={{
+            background: '#0d0f1a', border: '1px solid #2a2340',
+            borderRadius: 10, padding: '12px 14px', marginBottom: 12,
+          }}>
+            <p style={{ color: '#374151', fontSize: 10, margin: '0 0 6px', letterSpacing: 1 }}>
+              今、いちばん濃く残っているもの
+            </p>
+            <p style={{ color: '#7c3aed', fontSize: 14, margin: '0 0 2px' }}>
+              {bestKey} {bestPct}%
+            </p>
+            <p style={{ color: '#374151', fontSize: 11, margin: 0 }}>
+              {unreceivedStage(bestPct)} — 棚から再探索できます
+            </p>
+          </div>
+        );
+      })()}
 
       {/* ── 見ていない間に起きたこと ── */}
       {unseenLogs.length > 0 && (
@@ -1816,6 +2124,20 @@ function App() {
     });
   }, []);
 
+  var handleReexplore = _useCallback(function(fireId, type) {
+    setGame(function(prev) {
+      var result = reexploreFire(prev, fireId, type);
+      return result.ok ? result.game : prev;
+    });
+  }, []);
+
+  var handleRestUnreceived = _useCallback(function(fireId) {
+    setGame(function(prev) {
+      var result = restUnreceived(prev, fireId);
+      return result.ok ? result.game : prev;
+    });
+  }, []);
+
   var handleWatchFire = _useCallback(function(fireId) {
     setGame(function(prev) {
       var result = watchFire(prev, fireId);
@@ -1891,6 +2213,8 @@ function App() {
           onWatchFire={handleWatchFire}
           onRestToday={handleRestToday}
           onReceive={handleReceive}
+          onReexplore={handleReexplore}
+          onRestUnreceived={handleRestUnreceived}
         />
       )}
       {screen === 'garden' && (
