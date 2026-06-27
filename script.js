@@ -216,6 +216,7 @@ function initGame() {
     toyman: { location: 'starting_room', state: 'waiting' },
     unlocks: { recordTower: false },
     battleCount: 0,
+    toka: 0,
   };
 }
 
@@ -233,7 +234,11 @@ function createFire(kindle, pain, writeState, feeling, metrics) {
     answer: null,
     answers: [],
     battleCount: 0,
+    watchCount: 0,
+    restCount: 0,
     shadowVoiceIdx: 0,
+    logs: [],
+    restLogs: [],
     createdAt: nowISO(),
     updatedAt: nowISO(),
     heldNote: null,
@@ -256,6 +261,34 @@ function makeQuestion(fire) {
   return gen(fire.writeState || '創作', fire.feeling || '');
 }
 
+function addLog(fire, text) {
+  fire.logs = (fire.logs || []).concat([{ text: text, at: nowISO() }]);
+}
+
+var BATTLE_LOGS = [
+  'トイマンは、焦げた紙片を見つけた。',
+  '影の声が、少しだけ薄くなった。',
+  '森の奥で、言葉の欠片が揺れた。',
+  '火はまだ消えていない。',
+  'トイマンは、火の匂いをたどった。',
+  '影は、問いを繰り返した。',
+  '言葉の残り香が、ここにある。',
+];
+
+var WATCH_LOGS = [
+  'トイマンは、火の匂いをたどった。',
+  '影の声が、少しだけ薄くなった。',
+  '森の奥で、言葉の欠片が揺れた。',
+  'トイマンは、ただ火を見ていた。',
+  '静かに、待つことにした。',
+];
+
+var REST_LOGS = [
+  '今日は、ここまで。',
+  'トイマンは火のそばに座った。',
+  '「消えないなら、それでいい」',
+];
+
 function lightFire(game, kindle, pain, writeState, feeling, metrics) {
   var ns = cloneS(game);
   var fire = createFire(kindle, pain, writeState, feeling, metrics);
@@ -265,6 +298,7 @@ function lightFire(game, kindle, pain, writeState, feeling, metrics) {
     ns.toyman = { location: 'unexplored_forest', state: 'exploring' };
   }
   ns.fires = [fire].concat(ns.fires);
+  ns.toka = (ns.toka || 0) + 1;
   return { game: ns, fire: fire };
 }
 
@@ -280,6 +314,8 @@ function doBattle(game, fireId, answer) {
   if (answer && answer.trim()) {
     fire.answers = (fire.answers || []).concat([{ text: answer.trim(), at: nowISO() }]);
   }
+  addLog(fire, pick(BATTLE_LOGS));
+  ns.toka = (ns.toka || 0) + 2;
   if (fire.progress >= 100) {
     fire.status = 'found';
     fire.question = makeQuestion(fire);
@@ -305,6 +341,39 @@ function tickProgress(game) {
   return { changed: true, game: ns };
 }
 
+function watchFire(game, fireId) {
+  var ns = cloneS(game);
+  var fire = ns.fires.find(function(f) { return f.id === fireId; });
+  if (!fire || fire.status !== 'searching') return { ok: false, game: game };
+  var gain = 3 + Math.floor(rnd() * 3);
+  fire.progress = Math.min(100, (fire.progress || 0) + gain);
+  fire.watchCount = (fire.watchCount || 0) + 1;
+  addLog(fire, pick(WATCH_LOGS));
+  ns.toka = (ns.toka || 0) + 1;
+  if (fire.progress >= 100) {
+    fire.status = 'found';
+    fire.question = makeQuestion(fire);
+    fire.foundAt = nowISO();
+    ns.toyman = { location: 'starting_room', state: 'returning' };
+  }
+  fire.updatedAt = nowISO();
+  return { ok: true, game: ns };
+}
+
+function restToday(game, fireId) {
+  var ns = cloneS(game);
+  var fire = ns.fires.find(function(f) { return f.id === fireId; });
+  if (!fire || fire.status !== 'searching') return { ok: false, game: game };
+  fire.progress = Math.min(100, (fire.progress || 0) + 1);
+  fire.restCount = (fire.restCount || 0) + 1;
+  var logText = pick(REST_LOGS);
+  fire.restLogs = (fire.restLogs || []).concat([{ text: logText, at: nowISO() }]);
+  addLog(fire, logText);
+  ns.toka = (ns.toka || 0) + 1;
+  fire.updatedAt = nowISO();
+  return { ok: true, game: ns };
+}
+
 function receiveFire(game, fireId, answer) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
@@ -312,6 +381,7 @@ function receiveFire(game, fireId, answer) {
   fire.status = 'received';
   fire.answer = (answer || '').trim() || null;
   fire.receivedAt = nowISO();
+  ns.toka = (ns.toka || 0) + 3;
   if (!ns.unlocks.recordTower) {
     ns.unlocks.recordTower = true;
   }
@@ -366,14 +436,16 @@ function ToymanVoice({ text, sub }) {
   );
 }
 
-function ShadowPanel({ fire, onAnswer, onSkip }) {
+function ShadowPanel({ fire, onAnswer, onWatch, onSkip }) {
   var [input, setInput] = _useState('');
+  var [mode, setMode] = _useState('choice'); // choice | confront
   var voice = getShadowVoice(fire);
   var softened = fire.battleCount >= 4;
 
   function handleSubmit() {
     onAnswer(input.trim());
     setInput('');
+    setMode('choice');
   }
 
   return (
@@ -392,41 +464,71 @@ function ShadowPanel({ fire, onAnswer, onSkip }) {
       <p style={{ color: '#c4b5fd', fontSize: 16, lineHeight: 1.8, margin: '0 0 16px' }}>
         {voice}
       </p>
-      <textarea
-        value={input}
-        onChange={function(e) { setInput(e.target.value); }}
-        placeholder="向き合う言葉を書いてみる（書かなくてもいい）"
-        rows={3}
-        style={{
-          width: '100%', boxSizing: 'border-box',
-          background: '#1a1a2e', border: '1px solid #3d2d5c',
-          borderRadius: 8, padding: '10px 12px',
-          color: '#e2e4ee', fontSize: 14, resize: 'vertical',
-          fontFamily: 'inherit', lineHeight: 1.6,
-        }}
-      />
-      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-        <button
-          onClick={handleSubmit}
-          style={{
-            flex: 1, padding: '10px 0', borderRadius: 8,
-            background: '#4c1d95', border: 'none', color: '#e9d5ff',
-            fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-          }}
-        >
-          {input.trim() ? '向き合う' : 'ただ、向き合う'}
-        </button>
-        <button
-          onClick={onSkip}
-          style={{
-            padding: '10px 14px', borderRadius: 8,
-            background: 'transparent', border: '1px solid #3d2d5c',
-            color: '#888', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-          }}
-        >
-          今日は無理
-        </button>
-      </div>
+
+      {mode === 'confront' ? (
+        <div>
+          <textarea
+            value={input}
+            onChange={function(e) { setInput(e.target.value); }}
+            placeholder="向き合う言葉を書いてみる（書かなくてもいい）"
+            rows={3}
+            autoFocus
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              background: '#1a1a2e', border: '1px solid #3d2d5c',
+              borderRadius: 8, padding: '10px 12px',
+              color: '#e2e4ee', fontSize: 14, resize: 'vertical',
+              fontFamily: 'inherit', lineHeight: 1.6,
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button onClick={handleSubmit} style={{
+              flex: 1, padding: '10px 0', borderRadius: 8,
+              background: '#4c1d95', border: 'none', color: '#e9d5ff',
+              fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              {input.trim() ? '向き合う' : 'ただ、向き合う'}
+            </button>
+            <button onClick={function() { setMode('choice'); setInput(''); }} style={{
+              padding: '10px 12px', borderRadius: 8,
+              background: 'transparent', border: '1px solid #3d2d5c',
+              color: '#666', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              戻る
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button onClick={function() { setMode('confront'); }} style={{
+            padding: '11px 14px', borderRadius: 8, textAlign: 'left',
+            background: '#1e1a2e', border: '1px solid #4c1d95',
+            color: '#c4b5fd', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            <span style={{ color: '#a78bfa', marginRight: 8 }}>▶</span>
+            影と向き合う
+            <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>+15〜25% / 灯貨+2</span>
+          </button>
+          <button onClick={function() { onWatch(); }} style={{
+            padding: '11px 14px', borderRadius: 8, textAlign: 'left',
+            background: '#111318', border: '1px solid #2e3348',
+            color: '#9ca3af', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            <span style={{ color: '#6b7280', marginRight: 8 }}>◎</span>
+            ただ見守る
+            <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>+3〜5% / 灯貨+1</span>
+          </button>
+          <button onClick={function() { onSkip(); }} style={{
+            padding: '11px 14px', borderRadius: 8, textAlign: 'left',
+            background: '#111318', border: '1px solid #1e2230',
+            color: '#6b7280', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            <span style={{ color: '#4b5563', marginRight: 8 }}>…</span>
+            今日は無理
+            <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>+1% / 灯貨+1</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -686,7 +788,7 @@ function FireCard({ fire, onSelect, selected }) {
   );
 }
 
-function ShelfView({ game, onBack, onDoBattle, onReceive }) {
+function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onReceive }) {
   var [selectedId, setSelectedId] = _useState(null);
   var [receiveAnswer, setReceiveAnswer] = _useState('');
   var [phase, setPhase] = _useState('list');
@@ -750,7 +852,16 @@ function ShelfView({ game, onBack, onDoBattle, onReceive }) {
               setPhase('list');
               setSelectedId(null);
             }}
-            onSkip={function() { setPhase('list'); setSelectedId(null); }}
+            onWatch={function() {
+              onWatchFire(selected.id);
+              setPhase('list');
+              setSelectedId(null);
+            }}
+            onSkip={function() {
+              onRestToday(selected.id);
+              setPhase('list');
+              setSelectedId(null);
+            }}
           />
         </div>
       )}
@@ -836,8 +947,9 @@ function RecordTower({ game }) {
   );
 }
 
-function GardenView({ game, onBack, onDoBattle }) {
+function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday }) {
   var [recordOpen, setRecordOpen] = _useState(false);
+  var [lastAction, setLastAction] = _useState(null); // null | 'rest' | 'watch'
   var searching = game.fires.find(function(f) { return f.status === 'searching'; });
   var found = game.fires.find(function(f) { return f.status === 'found'; });
   var toyman = game.toyman;
@@ -901,11 +1013,64 @@ function GardenView({ game, onBack, onDoBattle }) {
             <span style={{ color: '#f97316', fontSize: 12 }}>{searching.progress}%</span>
           </div>
           <ProgressBar value={searching.progress} />
-          <ShadowPanel
-            fire={searching}
-            onAnswer={function(ans) { onDoBattle(searching.id, ans); }}
-            onSkip={function() {}}
-          />
+
+          {/* 探索ログ（最新3件） */}
+          {searching.logs && searching.logs.length > 0 && (
+            <div style={{ margin: '8px 0 4px' }}>
+              {searching.logs.slice(-3).map(function(l, i) {
+                return (
+                  <p key={i} style={{ color: '#4b5563', fontSize: 11, margin: '2px 0', lineHeight: 1.5 }}>
+                    {l.text}
+                  </p>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 行動後の結果演出 */}
+          {lastAction === 'rest' && (
+            <div style={{
+              background: '#0d1117', border: '1px solid #1e2230',
+              borderRadius: 8, padding: '12px 14px', margin: '8px 0',
+            }}>
+              <p style={{ color: '#6b7280', fontSize: 13, lineHeight: 1.8, margin: 0 }}>
+                今日は、ここまで。<br />
+                トイマンは火のそばに座った。<br />
+                「消えないなら、それでいい」<br />
+                <span style={{ color: '#374151', fontSize: 11 }}>休息札を残しました。灯貨+1</span>
+              </p>
+              <button onClick={function() { setLastAction(null); }} style={{
+                marginTop: 10, padding: '6px 14px', borderRadius: 6,
+                background: 'transparent', border: '1px solid #2e3348',
+                color: '#6b7280', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+              }}>閉じる</button>
+            </div>
+          )}
+          {lastAction === 'watch' && (
+            <div style={{
+              background: '#0d1117', border: '1px solid #1e2230',
+              borderRadius: 8, padding: '12px 14px', margin: '8px 0',
+            }}>
+              <p style={{ color: '#6b7280', fontSize: 13, lineHeight: 1.8, margin: 0 }}>
+                トイマンは、ただ火を見ていた。<br />
+                <span style={{ color: '#374151', fontSize: 11 }}>灯貨+1</span>
+              </p>
+              <button onClick={function() { setLastAction(null); }} style={{
+                marginTop: 10, padding: '6px 14px', borderRadius: 6,
+                background: 'transparent', border: '1px solid #2e3348',
+                color: '#6b7280', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+              }}>閉じる</button>
+            </div>
+          )}
+
+          {lastAction === null && (
+            <ShadowPanel
+              fire={searching}
+              onAnswer={function(ans) { onDoBattle(searching.id, ans); }}
+              onWatch={function() { onWatchFire(searching.id); setLastAction('watch'); }}
+              onSkip={function() { onRestToday(searching.id); setLastAction('rest'); }}
+            />
+          )}
         </div>
       )}
 
@@ -1050,6 +1215,9 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
         <div style={{ padding: '20px 0 16px', textAlign: 'center' }}>
           <h1 style={{ color: '#f97316', fontSize: 20, margin: '0 0 4px', letterSpacing: 1 }}>残り火の箱庭</h1>
           <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>Nokoribi no Hakoniwa</p>
+          {game.toka > 0 && (
+            <p style={{ color: '#4b5563', fontSize: 11, margin: '6px 0 0' }}>灯貨 {game.toka}</p>
+          )}
         </div>
         <FireLitResult
           onGoGarden={function() { setJustLit(false); onGoGarden(); }}
@@ -1061,11 +1229,16 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
 
   return (
     <div style={{ padding: '0 16px 80px' }}>
-      <div style={{ padding: '20px 0 16px', textAlign: 'center' }}>
+      <div style={{ padding: '20px 0 16px', textAlign: 'center', position: 'relative' }}>
         <h1 style={{ color: '#f97316', fontSize: 20, margin: '0 0 4px', letterSpacing: 1 }}>
           残り火の箱庭
         </h1>
         <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>Nokoribi no Hakoniwa</p>
+        {game.toka > 0 && (
+          <p style={{ color: '#4b5563', fontSize: 11, margin: '6px 0 0' }}>
+            灯貨 {game.toka}
+          </p>
+        )}
       </div>
 
       {totalFires === 0 && !showForm && (
@@ -1171,8 +1344,8 @@ function DevBar({ game, onReset, onForceFound, onAddBattle }) {
           color: '#374151', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
         }}
       >
-        [DEV] {open ? '▲' : '▼'} fires:{game.fires.length} battles:{game.battleCount}
-        {searching ? ' | 探索中' + searching.progress + '%' : ''}
+        [DEV] {open ? '▲' : '▼'} fires:{game.fires.length} battles:{game.battleCount} 灯貨:{game.toka || 0}
+        {searching ? ' | ' + searching.progress + '%' : ''}
         {found ? ' | ★found' : ''}
       </button>
       {open && (
@@ -1250,6 +1423,20 @@ function App() {
     });
   }, []);
 
+  var handleWatchFire = _useCallback(function(fireId) {
+    setGame(function(prev) {
+      var result = watchFire(prev, fireId);
+      return result.ok ? result.game : prev;
+    });
+  }, []);
+
+  var handleRestToday = _useCallback(function(fireId) {
+    setGame(function(prev) {
+      var result = restToday(prev, fireId);
+      return result.ok ? result.game : prev;
+    });
+  }, []);
+
   var handleReset = _useCallback(function() {
     if (window.confirm('本当にリセットしますか？')) {
       clearSave();
@@ -1308,6 +1495,8 @@ function App() {
           game={game}
           onBack={function() { setScreen('home'); }}
           onDoBattle={handleDoBattle}
+          onWatchFire={handleWatchFire}
+          onRestToday={handleRestToday}
           onReceive={handleReceive}
         />
       )}
@@ -1316,6 +1505,8 @@ function App() {
           game={game}
           onBack={function() { setScreen('home'); }}
           onDoBattle={handleDoBattle}
+          onWatchFire={handleWatchFire}
+          onRestToday={handleRestToday}
         />
       )}
       <DevBar
