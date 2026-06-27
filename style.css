@@ -4655,3 +4655,13 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .dev-btn-danger{background:rgba(180,60,60,.15);border-color:rgba(180,60,60,.3);color:rgba(220,120,120,.9)}
 .dev-sf-status{font-family:var(--serif);font-size:12px;color:var(--dim);margin-bottom:8px;line-height:1.6}
 .dev-info{font-family:var(--sans);font-size:11px;color:var(--faint);line-height:1.7}
+
+/* ── 箱庭アニメーション ── */
+@keyframes garden-fire-pulse{0%,100%{transform:scale(0.97);opacity:.85}50%{transform:scale(1.03);opacity:1}}
+@keyframes garden-blink{0%,100%{opacity:.6}50%{opacity:1}}
+@keyframes garden-water{0%,100%{opacity:.5}50%{opacity:.9}}
+@keyframes garden-trace-appear{from{opacity:0;transform:translateY(-4px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+.garden-fire-pulse{animation:garden-fire-pulse 3.5s ease-in-out infinite}
+.garden-blink{animation:garden-blink 4.5s ease-in-out infinite}
+.garden-water{animation:garden-water 5s ease-in-out infinite}
+.garden-trace-appear{animation:garden-trace-appear 0.4s ease-out forwards}
