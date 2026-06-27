@@ -4665,3 +4665,35 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .garden-blink{animation:garden-blink 4.5s ease-in-out infinite}
 .garden-water{animation:garden-water 5s ease-in-out infinite}
 .garden-trace-appear{animation:garden-trace-appear 0.4s ease-out forwards}
+
+/* ── 箱庭レイアウト ── */
+.garden-stage{background:linear-gradient(160deg,#070910 0%,#0c0f1a 70%,#0e1220 100%);border:1px solid #181c28;border-radius:14px;padding:14px 14px 10px;margin-bottom:12px}
+.garden-stage-label{color:#1e2238;font-size:8px;margin:0 0 10px;letter-spacing:3px;font-weight:700}
+.garden-area-top-center{text-align:center;margin-bottom:6px;min-height:24px}
+.garden-area{display:flex;align-items:flex-end;gap:6px;margin:4px 0}
+.garden-area-left{flex:1;min-width:0}
+.garden-area-center{flex:0 0 auto;padding:0 8px;text-align:center}
+.garden-area-right{flex:1;min-width:0;text-align:right}
+.garden-area-bottom{display:flex;justify-content:space-between;align-items:flex-start;margin-top:6px;border-top:1px solid #12152a;padding-top:6px}
+.garden-area-bottom-left{/* left section of bottom row */}
+.garden-area-bottom-center{text-align:center}
+.garden-area-bottom-right{/* right section of bottom row */}
+.garden-stage-empty{color:#1a1e2c;font-size:11px;margin:8px 0 0;line-height:1.7;text-align:center}
+
+/* ── 箱庭アイテム ── */
+.garden-item{display:inline-flex;align-items:center;gap:4px;margin:3px 6px 3px 0}
+.garden-item-emoji{font-size:15px;line-height:1}
+.garden-item-label{color:#3d4260;font-size:10px}
+.garden-item-actor{display:flex;align-items:center;gap:4px;margin-bottom:3px}
+.garden-item-actor-right{display:flex;align-items:center;gap:4px;justify-content:flex-end;margin-bottom:3px}
+.garden-item-actor-emoji{font-size:13px}
+.garden-item-actor-label{color:#2e3560;font-size:10px}
+.garden-item-trace{display:inline-flex;align-items:center;gap:4px}
+.garden-fire-label{color:#2e3560;font-size:9px;margin-top:3px}
+
+/* ── 出来事カード ── */
+.garden-event-card{background:#080b12;border:1px solid #1a1d2a;border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.garden-event-message{color:#6b7280;font-size:13px;line-height:1.9;margin:0 0 2px}
+.garden-event-message-sub{color:#374151;font-size:12px;line-height:1.9;margin:0 0 2px}
+.garden-event-chips{display:flex;gap:6px;margin-top:8px}
+.garden-event-chip{font-size:10px;padding:2px 7px;border-radius:8px;background:#0d1018;border:1px solid #1e2230;color:#374151}

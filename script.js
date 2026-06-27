@@ -1621,14 +1621,14 @@ var GARDEN_ITEM_DEFS = {
 
 // GardenBoard のアイテム表示ヘルパー
 function GardenItem({ def, isNew }) {
-  var cls = 'garden-board-item';
+  var cls = 'garden-item';
   if (isNew) cls += ' garden-trace-appear';
   if (def.anim === 'blink') cls += ' garden-blink';
   if (def.anim === 'water') cls += ' garden-water';
   return (
-    <div className={cls} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, margin: '3px 6px 3px 0' }}>
-      <span style={{ fontSize: 15, lineHeight: 1 }}>{def.emoji}</span>
-      <span style={{ color: '#3d4260', fontSize: 10 }}>{def.label}</span>
+    <div className={cls}>
+      <span className="garden-item-emoji">{def.emoji}</span>
+      <span className="garden-item-label">{def.label}</span>
     </div>
   );
 }
@@ -1657,74 +1657,62 @@ function GardenBoard({ game }) {
   var showBR = (items.includes('black_tag') || mat.blackTag > 0);
 
   return (
-    <div className="garden-board" style={{
-      background: 'linear-gradient(160deg,#070910 0%,#0c0f1a 70%,#0e1220 100%)',
-      border: '1px solid #181c28',
-      borderRadius: 14,
-      padding: '14px 14px 10px',
-      marginBottom: 12,
-    }}>
-      <p style={{ color: '#1e2238', fontSize: 8, margin: '0 0 10px', letterSpacing: 3, fontWeight: 700 }}>
-        箱庭
-      </p>
+    <div className="garden-stage">
+      <p className="garden-stage-label">箱庭</p>
 
       {/* 上段：記録・意味 */}
       {showTop && (
-        <div style={{ textAlign: 'center', marginBottom: 6, minHeight: 24 }}>
+        <div className="garden-area-top-center">
           {(items.includes('record_light') || game.unlocks.recordTower) && Item('record_light')}
           {items.includes('meaning_fragment') && Item('meaning_fragment')}
           {folk.recordApprentice && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, margin: '3px 6px 3px 0' }}>
-              <span style={{ fontSize: 15 }}>📖</span>
-              <span style={{ color: '#2e3560', fontSize: 10 }}>記録見習い</span>
+            <div className="garden-item">
+              <span className="garden-item-emoji">📖</span>
+              <span className="garden-item-actor-label">記録見習い</span>
             </div>
           )}
         </div>
       )}
 
       {/* 中段：左・中央・右 */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, margin: '4px 0' }}>
+      <div className="garden-area">
         {/* 左列：探索・問い */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="garden-area-left">
           {folk.paperCollector && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-              <span style={{ fontSize: 13 }}>🧹</span>
-              <span style={{ color: '#2e3560', fontSize: 10 }}>紙集め</span>
+            <div className="garden-item-actor">
+              <span className="garden-item-actor-emoji">🧹</span>
+              <span className="garden-item-actor-label">紙集め</span>
             </div>
           )}
           {(items.includes('burnt_paper') || mat.paper > 0) && Item('burnt_paper')}
           {gp >= 40 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-              <span style={{ fontSize: 13 }}>🌲</span>
-              <span style={{ color: '#2e3560', fontSize: 10 }}>森の入口</span>
+            <div className="garden-item-actor">
+              <span className="garden-item-actor-emoji">🌲</span>
+              <span className="garden-item-actor-label">森の入口</span>
             </div>
           )}
           {items.includes('paper_box') && Item('paper_box')}
         </div>
 
         {/* 中央：残り火 */}
-        <div style={{ textAlign: 'center', flex: '0 0 auto', padding: '0 8px' }}>
+        <div className="garden-area-center">
           <span className="garden-fire-pulse" style={{ fontSize: 32, lineHeight: 1, display: 'block' }}>🔥</span>
-          <div style={{ color: '#2e3560', fontSize: 9, marginTop: 3 }}>残り火</div>
-          {game.toyman && (
-            <div style={{ color: '#2e3560', fontSize: 9, marginTop: 2 }}>トイマン</div>
-          )}
+          <div className="garden-fire-label">残り火</div>
+          {game.toyman && <div className="garden-fire-label">トイマン</div>}
         </div>
 
         {/* 右列：保全 */}
-        <div style={{ flex: 1, minWidth: 0, textAlign: 'right' }}>
+        <div className="garden-area-right">
           {folk.lightkeeper && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end', marginBottom: 3 }}>
-              <span style={{ color: '#2e3560', fontSize: 10 }}>灯守り</span>
-              <span style={{ fontSize: 13 }}>🧍</span>
+            <div className="garden-item-actor-right">
+              <span className="garden-item-actor-label">灯守り</span>
+              <span className="garden-item-actor-emoji">🧍</span>
             </div>
           )}
           {(items.includes('small_stone') || gp >= 20) && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end', marginBottom: 3 }}>
-              <span style={{ color: '#2e3560', fontSize: 10 }}>
-                {freshTrace === 'small_stone' ? <span className="garden-trace-appear">小さな石</span> : '小さな石'}
-              </span>
-              <span className={freshTrace === 'small_stone' ? 'garden-trace-appear' : ''} style={{ fontSize: 13 }}>🪨</span>
+            <div className="garden-item-actor-right">
+              <span className={['garden-item-actor-label', freshTrace === 'small_stone' ? 'garden-trace-appear' : ''].join(' ').trim()}>小さな石</span>
+              <span className={['garden-item-actor-emoji', freshTrace === 'small_stone' ? 'garden-trace-appear' : ''].join(' ').trim()}>🪨</span>
             </div>
           )}
           {items.includes('lamp_stand') && Item('lamp_stand')}
@@ -1733,24 +1721,21 @@ function GardenBoard({ game }) {
 
       {/* 下段 */}
       {(showBottom || showBL || showBR) && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 6, borderTop: '1px solid #12152a', paddingTop: 6 }}>
-          {/* 左下：未完・灰 */}
-          <div>
+        <div className="garden-area-bottom">
+          <div className="garden-area-bottom-left">
             {showBL && Item('small_seed')}
           </div>
-          {/* 下中：休息 */}
-          <div style={{ textAlign: 'center' }}>
+          <div className="garden-area-bottom-center">
             {items.includes('rest_chair') && Item('rest_chair')}
             {(items.includes('water_drop') || folk.waterCarrier) && Item('water_drop')}
             {game.unlocks.tearsSpring && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 13 }}>🌊</span>
-                <span style={{ color: '#2e3560', fontSize: 10 }}>水音</span>
+              <div className="garden-item">
+                <span className="garden-item-actor-emoji">🌊</span>
+                <span className="garden-item-actor-label">水音</span>
               </div>
             )}
           </div>
-          {/* 右下：価値判定 */}
-          <div>
+          <div className="garden-area-bottom-right">
             {showBR && Item('black_tag')}
           </div>
         </div>
@@ -1758,9 +1743,7 @@ function GardenBoard({ game }) {
 
       {/* 何もない状態 */}
       {!showTop && !showLeft && !showRight && !showBottom && !showBL && !showBR && items.length === 0 && (
-        <p style={{ color: '#1a1e2c', fontSize: 11, margin: '8px 0 0', lineHeight: 1.7, textAlign: 'center' }}>
-          火がある。それだけでいい。
-        </p>
+        <p className="garden-stage-empty">火がある。それだけでいい。</p>
       )}
     </div>
   );
@@ -1777,33 +1760,17 @@ function EventCard({ event }) {
   var lines = event.message.split('\n');
   var actorLabel = ACTOR_LABELS[event.actor] || event.actor;
   return (
-    <div style={{
-      background: '#080b12',
-      border: '1px solid #1a1d2a',
-      borderRadius: 10,
-      padding: '12px 14px',
-      marginBottom: 10,
-    }}>
+    <div className="garden-event-card">
       {lines.map(function(line, i) {
         return (
-          <p key={i} style={{
-            color: i === 0 ? '#6b7280' : '#374151',
-            fontSize: i === 0 ? 13 : 12,
-            lineHeight: 1.9, margin: '0 0 2px',
-          }}>
+          <p key={i} className={i === 0 ? 'garden-event-message' : 'garden-event-message-sub'}>
             {line}
           </p>
         );
       })}
-      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-        <span style={{
-          fontSize: 10, padding: '2px 7px', borderRadius: 8,
-          background: '#0d1018', border: '1px solid #1e2230', color: '#374151',
-        }}>{actorLabel}</span>
-        <span style={{
-          fontSize: 10, padding: '2px 7px', borderRadius: 8,
-          background: '#0d1018', border: '1px solid #1e2230', color: '#374151',
-        }}>{event.work}</span>
+      <div className="garden-event-chips">
+        <span className="garden-event-chip">{actorLabel}</span>
+        <span className="garden-event-chip">{event.work}</span>
       </div>
     </div>
   );
