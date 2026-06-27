@@ -363,6 +363,13 @@ function addLog(fire, text) {
   fire.logs = (fire.logs || []).concat([{ text: text, at: nowISO() }]);
 }
 
+function addGardenItem(game, item) {
+  if (!game.gardenItems) game.gardenItems = [];
+  if (!game.gardenItems.includes(item)) {
+    game.gardenItems = game.gardenItems.concat([item]);
+  }
+}
+
 var BATTLE_LOGS = [
   '影の声が、少しだけ形を持った。',
   'トイマンは、火の奥を見た。',
@@ -413,6 +420,30 @@ var REEXPLORE_VALUE_LOGS = [
   '「値段ではない」とトイマンは言った。',
 ];
 
+var LIGHT_MARKET_ITEMS = [
+  {
+    key: 'small_stone',
+    name: '小さな石',
+    desc: '灯守りが置いた石。火のそばに並べておく。',
+    cost: { toka: 1 },
+    gardenItem: 'small_stone',
+  },
+  {
+    key: 'lamp_stand',
+    name: '灯火台',
+    desc: '火の安定が、少し長続きするようになる。自動進行 +1。',
+    cost: { toka: 3, ash: 2 },
+    gardenItem: 'lamp_stand',
+  },
+  {
+    key: 'paper_box',
+    name: '焦げ紙箱',
+    desc: '紙片を収める箱。ここに来たとき、より多くの記録が見える。',
+    cost: { toka: 2, paper: 1 },
+    gardenItem: 'paper_box',
+  },
+];
+
 var REEXPLORE_SATISFACTION_LOGS = [
   '灰の中に、まだ熱い種が残っていた。「終わりではない。残りだ」',
   '未完の欲が、ここにある。',
@@ -440,6 +471,7 @@ function reexploreFire(game, fireId, type) {
     ns.materials.paper += 1;
     ns.toka = (ns.toka || 0) + 1;
     fire.reexploreCounts.meaning = (fire.reexploreCounts.meaning || 0) + 1;
+    addGardenItem(ns, 'meaning_fragment');
     logText = pick(REEXPLORE_MEANING_LOGS);
   } else if (type === 'value') {
     var vGain = 3 + Math.floor(rnd() * 6);
@@ -447,6 +479,7 @@ function reexploreFire(game, fireId, type) {
     ns.materials.blackTag += 1;
     ns.toka = (ns.toka || 0) + 1;
     fire.reexploreCounts.value = (fire.reexploreCounts.value || 0) + 1;
+    addGardenItem(ns, 'black_tag');
     logText = pick(REEXPLORE_VALUE_LOGS);
   } else if (type === 'satisfaction') {
     var sGain = 5 + Math.floor(rnd() * 6);
@@ -455,6 +488,7 @@ function reexploreFire(game, fireId, type) {
     ns.materials.unfinishedSeed += 1;
     ns.toka = (ns.toka || 0) + 1;
     fire.reexploreCounts.satisfaction = (fire.reexploreCounts.satisfaction || 0) + 1;
+    addGardenItem(ns, 'small_seed');
     logText = pick(REEXPLORE_SATISFACTION_LOGS);
   } else {
     return { ok: false, game: game };
@@ -464,6 +498,30 @@ function reexploreFire(game, fireId, type) {
   );
   fire.reexploredAt = nowISO();
   fire.updatedAt = nowISO();
+  return { ok: true, game: ns };
+}
+
+function buyMarketItem(game, key) {
+  var item = LIGHT_MARKET_ITEMS.find(function(i) { return i.key === key; });
+  if (!item) return { ok: false, reason: 'not_found', game: game };
+  if (game.gardenItems && game.gardenItems.includes(item.gardenItem)) {
+    return { ok: false, reason: 'already_owned', game: game };
+  }
+  var mat = safeMat(game.materials);
+  var cost = item.cost;
+  if ((cost.toka || 0) > (game.toka || 0)) return { ok: false, reason: 'not_enough', game: game };
+  if ((cost.ash || 0) > mat.ash) return { ok: false, reason: 'not_enough', game: game };
+  if ((cost.paper || 0) > mat.paper) return { ok: false, reason: 'not_enough', game: game };
+  var ns = cloneS(game);
+  ns.materials = safeMat(ns.materials);
+  ns.toka = (ns.toka || 0) - (cost.toka || 0);
+  ns.materials.ash -= (cost.ash || 0);
+  ns.materials.paper -= (cost.paper || 0);
+  addGardenItem(ns, item.gardenItem);
+  if (key === 'small_stone') {
+    var sf = ns.fires.find(function(f) { return f.status === 'searching'; });
+    if (sf) sf.gardenProgress = Math.min(100, (sf.gardenProgress || 0) + 2);
+  }
   return { ok: true, game: ns };
 }
 
@@ -513,6 +571,7 @@ function doBattle(game, fireId, answer) {
     fire.answers = (fire.answers || []).concat([{ text: answer.trim(), at: nowISO() }]);
   }
   addLog(fire, pick(BATTLE_LOGS));
+  addGardenItem(ns, 'burnt_paper');
   // 紙集めの小人解放条件
   if (!ns.tinyfolk.paperCollector && ns.materials.paper >= 3) {
     ns.tinyfolk.paperCollector = true;
@@ -532,7 +591,8 @@ function tickProgress(game) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.status === 'searching'; });
   if (!fire) return { changed: false, game: game };
-  fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + 2);
+  var autoGain = (ns.gardenItems && ns.gardenItems.includes('lamp_stand')) ? 3 : 2;
+  fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + autoGain);
   addLog(fire, pick(AUTO_LOGS));
   ns.lastAutoAt = nowISO();
   fire.updatedAt = nowISO();
@@ -551,6 +611,7 @@ function watchFire(game, fireId) {
   ns.materials = safeMat(ns.materials);
   ns.materials.ash = (ns.materials.ash || 0) + 1;
   addLog(fire, pick(WATCH_LOGS));
+  addGardenItem(ns, 'small_stone');
   // 水汲みの小人解放条件（watchでも関係しない → 後でrestで解放）
   if (fire.questionProgress >= 100) {
     fire.status = 'found';
@@ -575,6 +636,7 @@ function restToday(game, fireId) {
   ns.toka = (ns.toka || 0) + 1;
   ns.materials = safeMat(ns.materials);
   ns.materials.drop = (ns.materials.drop || 0) + 1;
+  addGardenItem(ns, 'rest_chair');
   // 水汲みの小人解放条件
   if (!ns.tinyfolk.waterCarrier && fire.restCount >= 3) {
     ns.tinyfolk.waterCarrier = true;
@@ -597,6 +659,7 @@ function receiveFire(game, fireId, answer) {
   ns.toka = (ns.toka || 0) + 3;
   ns.materials = safeMat(ns.materials);
   ns.materials.stamp = (ns.materials.stamp || 0) + 1;
+  addGardenItem(ns, 'record_light');
   if (!ns.unlocks.recordTower) {
     ns.unlocks.recordTower = true;
     ns.tinyfolk.recordApprentice = true;
@@ -1455,6 +1518,178 @@ function KotaeIntro({ onClose }) {
   );
 }
 
+var GARDEN_ITEM_DEFS = {
+  small_stone:      { emoji: '🪨', label: '小さな石' },
+  rest_chair:       { emoji: '🪑', label: '小さな椅子' },
+  burnt_paper:      { emoji: '📄', label: '焦げ紙片' },
+  record_light:     { emoji: '🗼', label: '塔の灯り' },
+  meaning_fragment: { emoji: '✦',  label: '意味片' },
+  black_tag:        { emoji: '▪',  label: '黒い札' },
+  small_seed:       { emoji: '🌱', label: '未完の種' },
+  lamp_stand:       { emoji: '🕯', label: '灯火台' },
+  paper_box:        { emoji: '📦', label: '焦げ紙箱' },
+};
+
+function GardenBoard({ game }) {
+  var sf = game.fires.find(function(f) { return f.status === 'searching'; });
+  var gp = sf ? (sf.gardenProgress || 0) : 0;
+  var items = game.gardenItems || [];
+  var folk = game.tinyfolk || {};
+  var mat = safeMat(game.materials);
+
+  var scenes = [];
+
+  scenes.push({ emoji: '🔥', label: '残り火' });
+  if (folk.lightkeeper) scenes.push({ emoji: '🧍', label: '灯守り' });
+  if (folk.paperCollector) scenes.push({ emoji: '👤', label: '紙集め' });
+  if (folk.waterCarrier) scenes.push({ emoji: '👤', label: '水汲み' });
+
+  if (gp >= 20 || items.includes('small_stone')) scenes.push(GARDEN_ITEM_DEFS.small_stone);
+  if (gp >= 40) scenes.push({ emoji: '🌲', label: '森の入口の灯り' });
+  if (gp >= 60 && !game.unlocks.recordTower) scenes.push({ emoji: '🔆', label: '遠くの塔の灯り' });
+  if (gp >= 80 || game.unlocks.tearsSpring) scenes.push({ emoji: '🌊', label: '水音の気配' });
+
+  if (mat.paper > 0 || items.includes('burnt_paper')) scenes.push(GARDEN_ITEM_DEFS.burnt_paper);
+  if (mat.drop > 0) scenes.push({ emoji: '💧', label: '水滴' });
+  if (mat.blackTag > 0 || items.includes('black_tag')) scenes.push(GARDEN_ITEM_DEFS.black_tag);
+  if (mat.unfinishedSeed > 0 || items.includes('small_seed')) scenes.push(GARDEN_ITEM_DEFS.small_seed);
+
+  if (items.includes('rest_chair')) scenes.push(GARDEN_ITEM_DEFS.rest_chair);
+  if (items.includes('record_light') || game.unlocks.recordTower) scenes.push(GARDEN_ITEM_DEFS.record_light);
+  if (items.includes('meaning_fragment')) scenes.push(GARDEN_ITEM_DEFS.meaning_fragment);
+  if (items.includes('lamp_stand')) scenes.push(GARDEN_ITEM_DEFS.lamp_stand);
+  if (items.includes('paper_box')) scenes.push(GARDEN_ITEM_DEFS.paper_box);
+
+  // dedup by label
+  var seen = {};
+  scenes = scenes.filter(function(s) {
+    if (seen[s.label]) return false;
+    seen[s.label] = true;
+    return true;
+  });
+
+  return (
+    <div style={{
+      background: 'linear-gradient(160deg,#080a0e 0%,#0d1018 70%,#0f1220 100%)',
+      border: '1px solid #1a1d2a',
+      borderRadius: 14,
+      padding: '14px 16px',
+      marginBottom: 12,
+      minHeight: 90,
+    }}>
+      <p style={{ color: '#22263a', fontSize: 9, margin: '0 0 12px', letterSpacing: 2, fontWeight: 700 }}>
+        箱庭
+      </p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 18px' }}>
+        {scenes.map(function(s, i) {
+          return (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: 16, lineHeight: 1 }}>{s.emoji}</span>
+              <span style={{ color: '#3d4260', fontSize: 11 }}>{s.label}</span>
+            </div>
+          );
+        })}
+      </div>
+      {scenes.length <= 1 && (
+        <p style={{ color: '#1e2230', fontSize: 12, margin: '10px 0 0', lineHeight: 1.7 }}>
+          火がある。それだけでいい。
+        </p>
+      )}
+    </div>
+  );
+}
+
+function LightMarket({ game, onBuyNewGame }) {
+  var [result, setResult] = _useState(null);
+  var items = game.gardenItems || [];
+  var mat = safeMat(game.materials);
+
+  function canAfford(cost) {
+    if ((cost.toka || 0) > (game.toka || 0)) return false;
+    if ((cost.ash || 0) > mat.ash) return false;
+    if ((cost.paper || 0) > mat.paper) return false;
+    return true;
+  }
+
+  function handleBuy(key) {
+    var r = buyMarketItem(game, key);
+    setResult(r);
+    if (r.ok) onBuyNewGame(r.game);
+  }
+
+  return (
+    <div style={{
+      background: '#0a0b10',
+      border: '1px solid #1a1d2a',
+      borderRadius: 14,
+      padding: '14px 16px',
+      marginBottom: 12,
+    }}>
+      <p style={{ color: '#22263a', fontSize: 9, margin: '0 0 4px', letterSpacing: 2, fontWeight: 700 }}>
+        灯市
+      </p>
+      <p style={{ color: '#2e3348', fontSize: 11, lineHeight: 1.7, margin: '0 0 12px' }}>
+        灯貨で小さなものを交換できます。
+        灯貨は火の価値ではなく、火を消さずに置いておいた痕跡です。
+      </p>
+
+      {result && (
+        <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: '#0d1018', border: '1px solid #1e2230' }}>
+          <p style={{ color: result.ok ? '#4b6a54' : '#4b5563', fontSize: 12, margin: '0 0 4px' }}>
+            {result.ok ? '受け取りました。' : result.reason === 'already_owned' ? 'すでに持っています。' : '素材が足りません。'}
+          </p>
+          <button onClick={function() { setResult(null); }} style={{
+            padding: '3px 8px', borderRadius: 4,
+            background: 'transparent', border: '1px solid #1e2230',
+            color: '#374151', fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+          }}>閉じる</button>
+        </div>
+      )}
+
+      {LIGHT_MARKET_ITEMS.map(function(item) {
+        var owned = items.includes(item.gardenItem);
+        var affordable = !owned && canAfford(item.cost);
+        var costParts = ['灯貨' + (item.cost.toka || 0)];
+        if (item.cost.ash) costParts.push('灰片' + item.cost.ash);
+        if (item.cost.paper) costParts.push('紙片' + item.cost.paper);
+        var costStr = costParts.join(' / ');
+        return (
+          <div key={item.key} style={{
+            marginBottom: 8, padding: '10px 12px', borderRadius: 8,
+            background: '#111318', border: '1px solid ' + (owned ? '#1e2a1e' : '#1e2230'),
+            opacity: owned ? 0.55 : 1,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
+              <span style={{ color: owned ? '#374151' : '#9ca3af', fontSize: 13 }}>
+                {GARDEN_ITEM_DEFS[item.gardenItem] ? GARDEN_ITEM_DEFS[item.gardenItem].emoji + ' ' : ''}{item.name}
+              </span>
+              <span style={{ color: '#4b5563', fontSize: 10 }}>{costStr}</span>
+            </div>
+            <p style={{ color: '#374151', fontSize: 11, margin: '0 0 8px', lineHeight: 1.5 }}>{item.desc}</p>
+            {owned ? (
+              <span style={{ color: '#1e4a20', fontSize: 11 }}>受領済み</span>
+            ) : (
+              <button
+                onClick={function() { handleBuy(item.key); }}
+                style={{
+                  padding: '5px 11px', borderRadius: 6, fontSize: 12,
+                  background: 'transparent',
+                  border: '1px solid ' + (affordable ? '#c2410c' : '#2e3348'),
+                  color: affordable ? '#f97316' : '#374151',
+                  cursor: affordable ? 'pointer' : 'default',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {affordable ? '交換する' : '素材不足'}
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 var TINYFOLK_ACTIVITY = {
   lightkeeper:      '火のそばで作業中',
   paperCollector:   '焦げた紙片を探している',
@@ -1466,125 +1701,58 @@ function NowStatusPanel({ game }) {
   var sf    = game.fires.find(function(f) { return f.status === 'searching'; });
   var found = game.fires.find(function(f) { return f.status === 'found'; });
   var receivedFires = game.fires.filter(function(f) { return f.status === 'received'; });
-  var mat   = safeMat(game.materials);
-  var toyman = game.toyman;
 
-  // ── 状態別メインテキスト ──
-  var mainLines;
+  var mainText;
   if (sf) {
     var qp = sf.questionProgress || 0;
-    if (qp >= 80) {
-      mainLines = ['問いが、もうすぐ形になる。', 'トイマンは、欠片の声を聞いている。'];
-    } else if (qp >= 50) {
-      mainLines = ['影は、問いかけを繰り返している。', 'トイマンは未受領の森にいる。'];
-    } else {
-      mainLines = ['火はまだ消えていません。', 'トイマンは未受領の森で、問いの欠片を探しています。'];
-    }
+    if (qp >= 80) mainText = '問いが、もうすぐ形になる。';
+    else if (qp >= 50) mainText = '影は、問いかけを繰り返している。';
+    else mainText = '火はまだ消えていません。';
   } else if (found) {
-    mainLines = ['トイマンが、問いの欠片を見つけました。', 'まだ受け取られてはいません。棚で受け取れます。'];
+    mainText = 'トイマンが、問いの欠片を見つけました。';
   } else if (receivedFires.length > 0) {
-    mainLines = ['問いの欠片は受け取られました。', 'でも、この火にはまだ受け取れていないものがあります。'];
+    mainText = 'まだ受け取れていないものがあります。';
   } else {
-    mainLines = ['今、探索中の火はありません。', '箱庭は静かです。新しい残り火を灯すと、トイマンが向かいます。'];
+    mainText = '箱庭は静かです。';
   }
 
-  // ── 最新ログ3件（exploring fire または最近更新された fire から）──
   var logsSource = sf || found || receivedFires[0] || null;
-  var recentLogs = logsSource ? (logsSource.logs || []).slice(-3) : [];
+  var logLimit = 3 + ((game.gardenItems && game.gardenItems.includes('paper_box')) ? 2 : 0);
+  var recentLogs = logsSource ? (logsSource.logs || []).slice(-logLimit) : [];
 
-  // ── 一番濃い未受領領域 ──
-  var bestUnreceived = null;
-  if (receivedFires.length > 0) {
-    var bestPct = -1;
-    receivedFires.forEach(function(f) {
-      var ur = f.unreceived || {};
-      [['meaning','意味の影'], ['value','価値の黒札'], ['satisfaction','満足の灰']].forEach(function(pair) {
-        var pct = ur[pair[0]] || 0;
-        if (pct > bestPct) { bestPct = pct; bestUnreceived = { label: pair[1], pct: pct }; }
-      });
-    });
-    if (bestUnreceived && bestUnreceived.pct <= 0) bestUnreceived = null;
-  }
-
-  // ── 小人 ──
-  var folk = game.tinyfolk || {};
-  var activeFolk = Object.keys(TINYFOLK_ACTIVITY).filter(function(k) { return folk[k]; });
-
-  // ── 次にできること ──
   var nextHint;
-  if (sf) {
-    nextHint = '影と向き合う・ただ見守る・今日は無理';
-  } else if (found) {
-    nextHint = '棚で問いの欠片を受け取る';
-  } else if (receivedFires.length > 0) {
-    nextHint = '棚から再探索する（意味の影・価値の黒札・満足の灰）';
-  } else {
-    nextHint = '残り火を灯す';
-  }
+  if (sf) nextHint = '影と向き合う・ただ見守る・今日は無理';
+  else if (found) nextHint = '棚で問いの欠片を受け取る';
+  else if (receivedFires.length > 0) nextHint = '棚から再探索する';
+  else nextHint = '残り火を灯す';
 
   return (
     <div style={{
       background: '#0f1119',
       border: '1px solid #1e2230',
-      borderRadius: 14,
-      padding: '16px',
-      marginBottom: 14,
+      borderRadius: 12,
+      padding: '12px 14px',
+      marginBottom: 12,
     }}>
-      {/* ラベル */}
-      <p style={{ color: '#374151', fontSize: 9, margin: '0 0 10px', letterSpacing: 2, fontWeight: 700 }}>
-        今の箱庭
+      <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.8, margin: '0 0 8px' }}>
+        {mainText}
       </p>
-
-      {/* メインテキスト */}
-      {mainLines.map(function(line, i) {
-        return (
-          <p key={i} style={{
-            color: i === 0 ? '#9ca3af' : '#6b7280',
-            fontSize: i === 0 ? 13 : 12,
-            lineHeight: 1.8, margin: '0 0 4px',
-          }}>
-            {line}
-          </p>
-        );
-      })}
-
-      {/* 探索中の進行バー */}
       {sf && (
-        <div style={{ margin: '12px 0 0' }}>
+        <div style={{ marginBottom: 4 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
             <span style={{ color: '#4b5563', fontSize: 10 }}>問いの深度</span>
             <span style={{ color: '#a78bfa', fontSize: 10 }}>{sf.questionProgress || 0}%</span>
           </div>
           <ProgressBar value={sf.questionProgress || 0} color="linear-gradient(90deg,#7c3aed,#a78bfa)" />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, marginTop: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2, marginTop: 4 }}>
             <span style={{ color: '#4b5563', fontSize: 10 }}>火の安定</span>
             <span style={{ color: '#34d399', fontSize: 10 }}>{sf.gardenProgress || 0}%</span>
           </div>
           <ProgressBar value={sf.gardenProgress || 0} color="linear-gradient(90deg,#064e3b,#34d399)" />
         </div>
       )}
-
-      {/* 一番濃い未受領領域 */}
-      {bestUnreceived && (
-        <div style={{ margin: '12px 0 0', padding: '8px 10px', background: '#0d0f1a', borderRadius: 8 }}>
-          <p style={{ color: '#374151', fontSize: 9, margin: '0 0 4px', letterSpacing: 1 }}>
-            今いちばん濃く残っているもの
-          </p>
-          <p style={{ color: '#7c3aed', fontSize: 13, margin: 0 }}>
-            {bestUnreceived.label} {bestUnreceived.pct}%
-            <span style={{ color: '#4b5563', fontSize: 10, marginLeft: 8 }}>
-              {unreceivedStage(bestUnreceived.pct)}
-            </span>
-          </p>
-        </div>
-      )}
-
-      {/* 見ていない間のこと / 最近のログ */}
       {recentLogs.length > 0 && (
-        <div style={{ margin: '12px 0 0', borderTop: '1px solid #1e2230', paddingTop: 10 }}>
-          <p style={{ color: '#374151', fontSize: 9, margin: '0 0 6px', letterSpacing: 1 }}>
-            最近の様子
-          </p>
+        <div style={{ borderTop: '1px solid #1e2230', paddingTop: 8, marginTop: 4 }}>
           {recentLogs.map(function(l, i) {
             return (
               <p key={i} style={{ color: '#374151', fontSize: 11, margin: '2px 0', lineHeight: 1.6 }}>
@@ -1594,54 +1762,14 @@ function NowStatusPanel({ game }) {
           })}
         </div>
       )}
-
-      {/* 小人 */}
-      {activeFolk.length > 0 && (
-        <div style={{ margin: '12px 0 0', borderTop: '1px solid #1e2230', paddingTop: 10 }}>
-          <p style={{ color: '#374151', fontSize: 9, margin: '0 0 6px', letterSpacing: 1 }}>
-            小人の様子
-          </p>
-          {activeFolk.map(function(k) {
-            var labels = { lightkeeper:'灯守り', paperCollector:'紙集め', waterCarrier:'水汲み', recordApprentice:'記録見習い' };
-            return (
-              <p key={k} style={{ color: '#4b6a54', fontSize: 11, margin: '2px 0' }}>
-                {labels[k] || k}：{TINYFOLK_ACTIVITY[k]}
-              </p>
-            );
-          })}
-        </div>
-      )}
-
-      {/* 素材 */}
-      <div style={{ margin: '12px 0 0', borderTop: '1px solid #1e2230', paddingTop: 10 }}>
-        <p style={{ color: '#374151', fontSize: 9, margin: '0 0 6px', letterSpacing: 1 }}>素材</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-          <span style={{ fontSize: 10, color: '#6b7280', padding: '2px 7px', borderRadius: 8, background: '#1a1e2c', border: '1px solid #2e3348' }}>
-            灯貨 {game.toka || 0}
-          </span>
-          {[
-            ['ash','灰片'],['paper','紙片'],['drop','水滴'],['wax','封蝋'],['stamp','受領印'],
-            ['meaningPiece','意味片'],['blackTag','黒札片'],['unfinishedSeed','未完の種'],
-          ].filter(function(p){ return (mat[p[0]]||0) > 0; }).map(function(p) {
-            return (
-              <span key={p[0]} style={{ fontSize: 10, color: '#6b7280', padding: '2px 7px', borderRadius: 8, background: '#1a1e2c', border: '1px solid #2e3348' }}>
-                {p[1]} {mat[p[0]] || 0}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 次にできること */}
-      <div style={{ margin: '12px 0 0', borderTop: '1px solid #1e2230', paddingTop: 10 }}>
-        <p style={{ color: '#374151', fontSize: 9, margin: '0 0 4px', letterSpacing: 1 }}>次にできること</p>
-        <p style={{ color: '#4b5563', fontSize: 11, margin: 0, lineHeight: 1.7 }}>{nextHint}</p>
+      <div style={{ borderTop: '1px solid #1e2230', paddingTop: 8, marginTop: 8 }}>
+        <p style={{ color: '#2e3348', fontSize: 10, margin: 0 }}>▶ {nextHint}</p>
       </div>
     </div>
   );
 }
 
-function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen }) {
+function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen, onBuyMarket }) {
   var [recordOpen, setRecordOpen] = _useState(false);
   var [lastAction, setLastAction] = _useState(null); // null | 'rest' | 'watch' | 'battle'
   var [shadowOpen, setShadowOpen] = _useState(false);
@@ -1658,12 +1786,9 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
     if (lastAction === 'rest') {
       return {
         lines: [
-          '今日は、ここまで。',
-          '問いは進まなかった。',
-          'でも、火は消えなかった。',
-          '',
-          'トイマンは火のそばに座った。',
-          '「消えないなら、それでいい」',
+          '火のそばに、小さな椅子が置かれた。',
+          '今日は、ここまででもいい。',
+          '問いは進まなかった。でも、火は消えなかった。',
         ],
         note: '灯貨+1 / 水滴+1 / 火の安定+5',
       };
@@ -1671,9 +1796,8 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
     if (lastAction === 'watch') {
       return {
         lines: [
-          'トイマンは、ただ火を見ていた。',
-          '火はまだ消えていない。',
           '灯守りが、小さな石を置いた。',
+          'トイマンは、ただ火を見ていた。',
         ],
         note: '灯貨+1 / 灰片+1 / 火の安定+8',
       };
@@ -1681,6 +1805,7 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
     if (lastAction === 'battle') {
       return {
         lines: [
+          '焦げた紙片が、森に残った。',
           '影の声が、少しだけ薄くなった。',
           '問いが、少し深くなった。',
         ],
@@ -1724,6 +1849,9 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
           }}>閉じる</button>
         </div>
       )}
+
+      {/* ── 箱庭ボード ── */}
+      <GardenBoard game={game} />
 
       {/* ── 今の様子パネル ── */}
       <NowStatusPanel game={game} />
@@ -1847,6 +1975,11 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
             かなが、少し離れた場所から見ていた。「今は受け取れなくてもいいよ」
           </p>
         </div>
+      )}
+
+      {/* ── 灯市 ── */}
+      {(game.toka || 0) >= 1 && (
+        <LightMarket game={game} onBuyNewGame={onBuyMarket} />
       )}
     </div>
   );
@@ -2190,6 +2323,10 @@ function App() {
     });
   }, []);
 
+  var handleBuyMarket = _useCallback(function(newGame) {
+    setGame(newGame);
+  }, []);
+
   var handleRestToday = _useCallback(function(fireId) {
     setGame(function(prev) {
       var result = restToday(prev, fireId);
@@ -2270,6 +2407,7 @@ function App() {
           onWatchFire={handleWatchFire}
           onRestToday={handleRestToday}
           onUpdateLastSeen={handleUpdateLastSeen}
+          onBuyMarket={handleBuyMarket}
         />
       )}
       {showKotaeIntro && (
