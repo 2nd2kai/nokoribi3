@@ -4745,8 +4745,8 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .post-receive-lead-text{color:#b9c0d4;font-size:12px;line-height:1.8;margin:0}
 
 /* コタエ会話 */
-.kotae-ov{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center}
-.kotae-sheet{max-width:480px;width:100%;background:#0f1119;border:1px solid #312e81;border-radius:20px 20px 0 0;padding:24px 20px 36px;max-height:88dvh;overflow-y:auto}
+.kotae-ov{position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center}
+.kotae-sheet{max-width:480px;width:100%;background:#0f1119;border:1px solid #312e81;border-radius:20px 20px 0 0;padding:24px 20px 40px;max-height:88dvh;overflow-y:auto}
 .kotae-grip{width:36px;height:3px;background:#2e3348;border-radius:99px;margin:0 auto 20px}
 .kotae-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
 .kotae-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#b0a8cc;flex-shrink:0}
@@ -4827,3 +4827,35 @@ html,body{
 .receipt-meta-item{color:#4b5563;font-size:11px;line-height:1.6}
 .receipt-btn{width:100%;padding:13px 0;border-radius:10px;background:#4c1d95;border:none;color:#ede9fe;font-size:14px;cursor:pointer;font-family:inherit;font-weight:600;letter-spacing:.04em}
 .receipt-btn:active{background:#5b21b6}
+
+/* ── 受領証（深版）追加要素 ── */
+.receipt-layers{margin:14px 0 0;border-top:1px solid #1e2230;padding-top:12px}
+.receipt-layers-title{color:#374151;font-size:10px;letter-spacing:1px;margin:0 0 8px}
+.receipt-layer-row{margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #111318}
+.receipt-layer-row:last-child{border-bottom:none}
+.receipt-layer-q{color:#4b5563;font-size:10px;letter-spacing:.5px;margin:0 0 2px}
+.receipt-layer-a{color:#8f9bb3;font-size:13px;line-height:1.6;margin:0}
+.receipt-metrics-section{margin:12px 0;padding:10px 12px;background:#0a0c14;border-radius:8px;border:1px solid #1e2230}
+.receipt-metric-line{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.receipt-metric-line:last-child{margin-bottom:0}
+.receipt-metric-name{color:#4b5563;font-size:11px}
+.receipt-metric-delta{color:#6b7280;font-size:11px;font-family:monospace}
+.receipt-metric-delta.pos{color:#34d399}
+.receipt-metric-delta.neg{color:#f87171}
+.receipt-acceptance{margin:12px 0;padding:12px 14px;background:#0d1018;border-radius:8px;border:1px solid #1e2230}
+.receipt-acceptance-text{color:#9ca3af;font-size:13px;line-height:1.8;margin:0 0 6px;white-space:pre-line}
+.receipt-hold-text{color:#4b5563;font-size:12px;line-height:1.6;margin:0}
+.receipt-next-q{margin:10px 0;padding:10px 12px;background:#0a0c14;border-radius:8px;border:1px solid #1e2230}
+.receipt-next-q-label{color:#374151;font-size:10px;letter-spacing:1px;margin:0 0 4px}
+.receipt-next-q-text{color:#7c3aed;font-size:13px;line-height:1.7;margin:0}
+
+/* ── 受領の旅 ── */
+.journey-progress{display:flex;gap:7px;justify-content:center;margin:0 0 18px}
+.journey-dot{width:8px;height:8px;border-radius:50%;background:#1e2230;transition:background .3s}
+.journey-dot.active{background:#7c3aed}
+.journey-dot.done{background:#4c1d95}
+.journey-speaker-gap{margin-top:12px}
+.journey-options{display:flex;flex-direction:column;gap:8px;margin:0 0 4px}
+.journey-option-btn{padding:11px 14px;border-radius:10px;border:1px solid #2e3348;background:#111318;color:#9ca3af;font-size:13px;cursor:pointer;font-family:inherit;text-align:left;line-height:1.6;transition:border-color .2s,color .2s,background .2s}
+.journey-option-btn:hover{border-color:#4c1d95;color:#c4b5fd;background:#0f0b1a}
+.journey-option-btn.selected{border-color:#7c3aed;color:#ede9fe;background:#1e1a2c}

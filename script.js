@@ -310,6 +310,7 @@ function createFire(kindle, pain, writeState, feeling, metrics) {
     lastRestAt: null,
     lastUnreceivedRestAt: null,
     receipt: null,
+    receiptDraft: null,
   };
 }
 
@@ -333,6 +334,9 @@ function migrateFire(f) {
   if (f.lastRestAt === undefined) f.lastRestAt = null;
   if (f.lastUnreceivedRestAt === undefined) f.lastUnreceivedRestAt = null;
   if (f.receipt === undefined) f.receipt = null;
+  if (f.receiptDraft === undefined) f.receiptDraft = null;
+  // receiving → found 回復（旅途中にアプリが終了した場合）
+  if (f.status === 'receiving') { f.status = 'found'; f.receiptDraft = null; }
   // 既存の received fire に receipt を補完
   if (!f.receipt && f.status === 'received' && f.question) {
     f.receipt = {
@@ -1135,6 +1139,155 @@ function receiveFire(game, fireId, answer) {
   return { ok: true, game: ns, newlyUnlockedKotae: newlyUnlockedKotae, visualEvent: ve, actionResult: actionResult, fireId: fireId };
 }
 
+// ── 受領の旅 ヘルパー ────────────────────────────────────────────────────────
+
+function normalizeMetrics(m) {
+  return {
+    meaning:      Math.max(0, Math.min(100, m.meaning      || 0)),
+    value:        Math.max(0, Math.min(100, m.value        || 0)),
+    satisfaction: Math.max(0, Math.min(100, m.satisfaction || 0)),
+  };
+}
+
+function fmtDelta(n) {
+  if (n > 0) return '+' + n;
+  if (n < 0) return String(n);
+  return '±0';
+}
+
+function calcReceiptGrowth(initial, current) {
+  var init = normalizeMetrics(initial);
+  var cur  = normalizeMetrics(current);
+  var mDelta = cur.meaning      - init.meaning;
+  var vDelta = cur.value        - init.value;
+  var sDelta = cur.satisfaction - init.satisfaction;
+  return {
+    metricDeltas: { meaning: mDelta, value: vDelta, satisfaction: sDelta },
+    positiveGrowthTotal: Math.max(0, mDelta) + Math.max(0, vDelta) + Math.max(0, sDelta),
+    netGrowthTotal: mDelta + vDelta + sDelta,
+  };
+}
+
+var RECEIPT_ACC_BY_STATE = {
+  '書いたけど届いていない': '届けようとした。それは消えていません。',
+  '投稿したけど反応がない': '声は、まだここに残っています。',
+  '終わったのに虚しい':     '終わりとは別に、ここにある何かがある。',
+  '何にもならない気がした': '何かになる必要は、まだ先の話です。',
+  '誰にも見せていない':     '見せていなくても、ここに存在しています。',
+  '消したいけど消せない':   '消せないなら、受け取ることができます。',
+};
+
+var RECEIPT_ACC_BY_FEELING = {
+  '悔しさ':       '悔しさは、まだここにある。',
+  '悲しさ':       '悲しさは、受け取られました。',
+  '寂しさ':       '寂しさは、ここに置いてあります。',
+  '怒り':         '怒りも、記録に残ります。',
+  '恥ずかしさ':   '恥ずかしさも、ここに留まれます。',
+  '情けなさ':     'ここに置いておけます。',
+  '疲れ':         'ここで、少し休めます。',
+  '空っぽ':       '空っぽのまま、受け取れます。',
+  'まだ分からない': 'まだ分からないまま、ここにあります。',
+};
+
+var RECEIPT_AXIS_QUESTIONS = {
+  meaning:      'この問いは、あなたにとって何だったのでしょうか？',
+  value:        'この火の値打ちは、誰が決めるものでしょうか？',
+  satisfaction: '何が満たされたら、十分だったのでしょうか？',
+};
+
+function generateAcceptanceText(fire, growth) {
+  var base = RECEIPT_ACC_BY_STATE[fire.writeState]
+    || RECEIPT_ACC_BY_FEELING[fire.feeling]
+    || 'ここに記録されました。';
+  var deltas = growth.metricDeltas;
+  var lowestAxis = 'meaning';
+  if (deltas.value < deltas[lowestAxis]) lowestAxis = 'value';
+  if (deltas.satisfaction < deltas[lowestAxis]) lowestAxis = 'satisfaction';
+  var holdText = growth.netGrowthTotal < 0
+    ? 'まだ受け取りきれていない部分が、この火にはあります。'
+    : 'この火は、静かに受け取られました。';
+  return { text: base, holdText: holdText, nextQuestion: RECEIPT_AXIS_QUESTIONS[lowestAxis] || null };
+}
+
+function beginReceiptJourney(game, fireId) {
+  var ns = cloneS(game);
+  var fire = ns.fires.find(function(f) { return f.id === fireId; });
+  if (!fire || fire.status !== 'found') return { ok: false, game: game };
+  fire.status = 'receiving';
+  fire.receiptDraft = {
+    status: 'layering',
+    startedAt: nowISO(),
+    layers: { remained: null, pain: null, judgment: null, wish: null },
+  };
+  return { ok: true, game: ns, fireId: fireId };
+}
+
+function completeReceiptJourney(game, fireId, journeyData) {
+  var ns = cloneS(game);
+  var fire = ns.fires.find(function(f) { return f.id === fireId; });
+  if (!fire || fire.status !== 'receiving') return { ok: false, game: game };
+
+  var layers = journeyData.layers || {};
+  var currentMetrics = journeyData.currentMetrics || { meaning: 50, value: 50, satisfaction: 50 };
+  var initialMetrics = fire.metrics || { meaning: 50, value: 50, satisfaction: 50 };
+  var growth = calcReceiptGrowth(initialMetrics, currentMetrics);
+  var accText = generateAcceptanceText(fire, growth);
+
+  fire.status = 'received';
+  fire.receivedAt = nowISO();
+  fire.receiptDraft = null;
+  fire.receipt = {
+    id: 'r' + fire.id,
+    fireId: fire.id,
+    title: fire.kindle ? fire.kindle.slice(0, 20) : '',
+    question: fire.question,
+    emberText: fire.kindle || '',
+    issuedAt: nowISO(),
+    broughtBy: 'toyman',
+    recordedBy: 'kotae',
+    status: 'issued',
+    layers: layers,
+    initialMetrics: initialMetrics,
+    currentMetrics: currentMetrics,
+    metricDeltas: growth.metricDeltas,
+    positiveGrowthTotal: growth.positiveGrowthTotal,
+    netGrowthTotal: growth.netGrowthTotal,
+    acceptanceText: accText.text,
+    holdText: accText.holdText,
+    nextQuestion: accText.nextQuestion,
+  };
+  fire.updatedAt = nowISO();
+
+  ns.toka = (ns.toka || 0) + 3;
+  ns.materials = safeMat(ns.materials);
+  ns.materials.stamp = (ns.materials.stamp || 0) + 1;
+  addGardenItem(ns, 'record_light');
+  if (!ns.unlocks.recordTower) {
+    ns.unlocks.recordTower = true;
+    ns.tinyfolk.recordApprentice = true;
+  }
+  var nextLit = ns.fires.find(function(f) { return f.status === 'lit'; });
+  if (nextLit) {
+    nextLit.status = 'searching';
+    ns.toyman = { location: 'unexplored_forest', state: 'exploring' };
+  } else {
+    ns.toyman = { location: 'starting_room', state: 'waiting' };
+  }
+
+  var ve = makeVisualEvent({
+    fireId: fireId, source: 'manual', type: 'receive',
+    work: '運ぶ', actor: 'recordApprentice', trace: 'record_light',
+    message: '記録塔に、灯りがともった。\n問いの欠片は、答えではなく\n記録として受け取られた。',
+  });
+  ns.lastVisualEvent = ve;
+  var actionResult = makeActionResult({
+    title: '問いの欠片を受け取った',
+    gains: [{ label: '灯貨', amount: 3 }, { label: '受領印', amount: 1 }],
+    traces: ['遠くの記録塔に、灯りがともった。'],
+  });
+  return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult, fireId: fireId };
+}
+
 // ── React Components ────────────────────────────────────────────────────────
 
 var _useState = React.useState;
@@ -1551,11 +1704,11 @@ function FireInputForm({ onSubmit, onCancel }) {
 function FireCard({ fire, onSelect, selected }) {
   var statusLabel = {
     lit: '待機中', searching: '探索中', found: '問いが届いた',
-    received: '受領済み', held: '保持中', returned: '還した',
+    receiving: '旅の途中', received: '受領済み', held: '保持中', returned: '還した',
   };
   var statusColor = {
     lit: '#6b7280', searching: '#f97316', found: '#a78bfa',
-    received: '#34d399', held: '#60a5fa', returned: '#9ca3af',
+    receiving: '#7c3aed', received: '#34d399', held: '#60a5fa', returned: '#9ca3af',
   };
   var st = fire.status;
 
@@ -1652,7 +1805,7 @@ function UnreceivedPanel({ fire, onReexplore, onRest, onReturnToHeart, actionRes
       borderRadius: 12, padding: '18px 16px', marginTop: 12,
     }}>
       <p style={{ color: '#4b5563', fontSize: 10, margin: '0 0 10px', letterSpacing: 1 }}>
-        まだ受け取れていないもの
+        会い直す領域
       </p>
 
       {/* トイマン */}
@@ -1848,34 +2001,19 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
           <p style={{ color: '#ede9fe', fontSize: 16, lineHeight: 1.8, margin: '0 0 16px' }}>
             {selected.question}
           </p>
-          <label style={{ color: '#9ca3af', fontSize: 12, display: 'block', marginBottom: 6 }}>
-            答え（任意）
-          </label>
-          <textarea
-            value={receiveAnswer}
-            onChange={function(e) { setReceiveAnswer(e.target.value); }}
-            placeholder="今思うことを書いてもいい。書かなくてもいい。"
-            rows={3}
-            style={{
-              width: '100%', boxSizing: 'border-box',
-              background: '#1a1a2e', border: '1px solid #3d2d5c',
-              borderRadius: 8, padding: '10px 12px',
-              color: '#e2e4ee', fontSize: 14, resize: 'vertical',
-              fontFamily: 'inherit', lineHeight: 1.6,
-            }}
-          />
+          <p style={{ color: '#6b7280', fontSize: 12, lineHeight: 1.8, margin: '0 0 14px' }}>
+            記録塔へ届けると、問いの旅が始まります。<br />
+            旅の中で、この火と会い直せます。
+          </p>
           <button
-            onClick={function() {
-              onReceive(selected.id, receiveAnswer);
-              setReceiveAnswer('');
-            }}
+            onClick={function() { onReceive(selected.id); }}
             style={{
-              width: '100%', marginTop: 12, padding: '11px 0', borderRadius: 8,
+              width: '100%', padding: '11px 0', borderRadius: 8,
               background: '#4c1d95', border: 'none', color: '#ede9fe',
               fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
             }}
           >
-            受領証を発行する
+            問いを開く
           </button>
         </div>
       )}
@@ -1961,7 +2099,111 @@ function RecordTower({ game, onGoUnreceived, onViewReceipt }) {
   );
 }
 
+// ── 受領の旅 6層 ────────────────────────────────────────────────────────────
+
+var JOURNEY_LAYERS = [
+  {
+    id: 'intro', isIntro: true, isMetrics: false,
+    place: '記録塔の入口',
+    charName: null, charColor: null,
+    dialogue: [
+      { name: 'トイマン', color: '#fb923c', text: '戻った。' },
+      { name: 'トイマン', color: '#fb923c', text: '答えではない。\nでも、欠片はあった。' },
+      { name: 'コタエ',   color: '#a78bfa', text: 'ノコリビ、確認しました。\n記録を開始します。' },
+      { name: 'トイマン', color: '#fb923c', text: 'なら、預ける。' },
+    ],
+    question: null, options: null,
+  },
+  {
+    id: 'remained', isIntro: false, isMetrics: false,
+    place: '記録塔・第一層',
+    charName: 'コタエ', charColor: '#a78bfa',
+    dialogue: [],
+    question: 'この火には、何が残っていますか？',
+    options: [
+      '言いたかったのに言えなかった言葉',
+      '分かってほしかったという気持ち',
+      '頑張ったのに届かなかった悔しさ',
+      '誰にも見せられなかった何か',
+      '終わったはずなのにまだある虚しさ',
+      'まだ分からない',
+    ],
+  },
+  {
+    id: 'pain', isIntro: false, isMetrics: false,
+    place: '記録塔・第二層',
+    charName: 'かな', charColor: '#60a5fa',
+    dialogue: [
+      { name: 'かな', color: '#60a5fa', text: '……聞かせてほしいんだけど。' },
+      { name: 'かな', color: '#60a5fa', text: 'この火、ずっと持ってたんだね。' },
+    ],
+    question: 'この火で、何が一番痛かったですか？',
+    options: [
+      '誰にも気づいてもらえなかったこと',
+      '届けたのに受け取ってもらえなかったこと',
+      '誰にも見せられなかったこと',
+      '意味がないと思われたこと（思ったこと）',
+      '努力したのに何も残らなかったこと',
+      'まだうまく言葉にできない',
+    ],
+  },
+  {
+    id: 'judgment', isIntro: false, isMetrics: false,
+    place: '記録塔・第三層',
+    charName: '審査官', charColor: '#f87171',
+    dialogue: [
+      { name: '審査官', color: '#f87171', text: '……また来たか。' },
+      { name: '審査官', color: '#f87171', text: '黒札は、わたしが貼ったものだ。\n判決ではない。ただの紙だ。' },
+      { name: '審査官', color: '#f87171', text: '……それでも、何に裁かれていた？' },
+    ],
+    question: 'この火は、何に裁かれていましたか？',
+    options: [
+      '「価値がない」という声',
+      '「誰にも必要とされない」という声',
+      '「努力が足りなかった」という声',
+      '「もっとうまくできたはずだ」という声',
+      '「これはただの自己満足だ」という声',
+      '「他の人はもっとうまくやっている」という声',
+      '特定の声というよりも、静寂そのもの',
+    ],
+  },
+  {
+    id: 'wish', isIntro: false, isMetrics: false,
+    place: '記録塔・第四層',
+    charName: 'うつろ', charColor: '#9ca3af',
+    dialogue: [
+      { name: 'うつろ', color: '#9ca3af', text: '……。' },
+      { name: 'うつろ', color: '#9ca3af', text: '何に、なってほしかったんだろう。' },
+      { name: 'うつろ', color: '#9ca3af', text: '答えなくていい。\nただ、ここに置いてくれれば。' },
+    ],
+    question: 'この火は、何になってほしかったと思いますか？',
+    options: [
+      '誰かに受け取ってほしかった',
+      '意味があると認めてほしかった',
+      '「よかった」と言ってほしかった',
+      'ただ、見てほしかった',
+      '応えてくれる声がほしかった',
+      'もう一度、やり直したかった',
+      'ただ、ここに残したかった',
+    ],
+  },
+  {
+    id: 'metrics', isIntro: false, isMetrics: true,
+    place: '記録塔',
+    charName: 'コタエ', charColor: '#a78bfa',
+    dialogue: [],
+    question: null, options: null,
+  },
+];
+
 // ── 受領証カード ────────────────────────────────────────────────────────────
+
+var LAYER_LABELS = {
+  remained: '何が残っていたか',
+  pain:     '何が痛かったか',
+  judgment: '何に裁かれていたか',
+  wish:     '何になってほしかったか',
+};
 
 function ReceiptCard({ fire, buttonLabel, onAction }) {
   var receipt = fire.receipt;
@@ -1970,10 +2212,16 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
     String(issuedDate.getMonth() + 1).padStart(2, '0') + '/' +
     String(issuedDate.getDate()).padStart(2, '0');
 
+  var layers = receipt && receipt.layers;
+  var hasLayers = layers && ['remained', 'pain', 'judgment', 'wish'].some(function(k) { return layers[k]; });
+  var metricDeltas  = receipt && receipt.metricDeltas;
+  var initialMetrics = receipt && receipt.initialMetrics;
+  var currentMetrics = receipt && receipt.currentMetrics;
+
   return (
     <div className="receipt-card">
       <p className="receipt-title">受領証</p>
-      <p className="receipt-subtitle">この残り火は、受領されました。</p>
+      <p className="receipt-subtitle">この残り火は、受け取られました。</p>
 
       <div className="receipt-row">
         <p className="receipt-label">問い</p>
@@ -1984,6 +2232,57 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
         <p className="receipt-label">残り火</p>
         <p className="receipt-value receipt-ember">「{fire.kindle}」</p>
       </div>
+
+      {hasLayers && (
+        <div className="receipt-layers">
+          <p className="receipt-layers-title">旅の記録</p>
+          {['remained', 'pain', 'judgment', 'wish'].map(function(key) {
+            var val = layers[key];
+            if (!val) return null;
+            return (
+              <div key={key} className="receipt-layer-row">
+                <p className="receipt-layer-q">{LAYER_LABELS[key]}</p>
+                <p className="receipt-layer-a">{val}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {metricDeltas && initialMetrics && currentMetrics && (
+        <div className="receipt-metrics-section">
+          {[
+            { key: 'meaning', label: '意味' },
+            { key: 'value',   label: '価値' },
+            { key: 'satisfaction', label: '満足' },
+          ].map(function(m) {
+            var delta = metricDeltas[m.key] || 0;
+            var cls = 'receipt-metric-delta' + (delta > 0 ? ' pos' : delta < 0 ? ' neg' : '');
+            return (
+              <div key={m.key} className="receipt-metric-line">
+                <span className="receipt-metric-name">{m.label}</span>
+                <span className={cls}>
+                  {initialMetrics[m.key]} → {currentMetrics[m.key]} （{fmtDelta(delta)}）
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {receipt && receipt.acceptanceText && (
+        <div className="receipt-acceptance">
+          <p className="receipt-acceptance-text">{receipt.acceptanceText}</p>
+          {receipt.holdText && <p className="receipt-hold-text">{receipt.holdText}</p>}
+        </div>
+      )}
+
+      {receipt && receipt.nextQuestion && (
+        <div className="receipt-next-q">
+          <p className="receipt-next-q-label">次の問いへ</p>
+          <p className="receipt-next-q-text">{receipt.nextQuestion}</p>
+        </div>
+      )}
 
       <div className="receipt-meta">
         <span className="receipt-meta-item">持ち帰った者：トイマン</span>
@@ -1998,56 +2297,180 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
   );
 }
 
-// ── 受領証発行儀式 ───────────────────────────────────────────────────────────
+// ── 受領の旅 コンポーネント ─────────────────────────────────────────────────
 
-var CEREMONY_LINES = [
-  { speaker: 'toyman', color: '#fb923c', name: 'トイマン', place: '記録塔の入口',
-    text: '戻った。' },
-  { speaker: 'toyman', color: '#fb923c', name: 'トイマン', place: '記録塔の入口',
-    text: '答えではない。\nでも、欠片はあった。' },
-  { speaker: 'kotae',  color: '#a78bfa', name: 'コタエ',   place: '記録塔の入口',
-    text: 'ノコリビ、確認しました。\nデータ取得中。' },
-  { speaker: 'kotae',  color: '#a78bfa', name: 'コタエ',   place: '記録塔の入口',
-    text: 'これは答えではありません。\n問いの欠片です。' },
-  { speaker: 'toyman', color: '#fb923c', name: 'トイマン', place: '記録塔',
-    text: '消すな。' },
-  { speaker: 'kotae',  color: '#a78bfa', name: 'コタエ',   place: '記録塔',
-    text: '消しません。\n記録します。' },
-  { speaker: 'toyman', color: '#fb923c', name: 'トイマン', place: '記録塔',
-    text: 'なら、預ける。' },
-  { speaker: 'kotae',  color: '#a78bfa', name: 'コタエ',   place: '記録塔',
-    text: '受領証を発行します。' },
-  { speaker: 'receipt', color: null, name: null, place: '記録塔', text: null },
-];
+function ReceiptJourney({ fire, onJourneyDone }) {
+  var [layerIdx, setLayerIdx] = _useState(0);
+  var [dialogueStep, setDialogueStep] = _useState(0);
+  var [showChoice, setShowChoice] = _useState(false);
+  var [selectedOption, setSelectedOption] = _useState(null);
+  var [layerSelections, setLayerSelections] = _useState({ remained: null, pain: null, judgment: null, wish: null });
+  var [metrics, setMetrics] = _useState(
+    fire.metrics
+      ? { meaning: fire.metrics.meaning, value: fire.metrics.value, satisfaction: fire.metrics.satisfaction }
+      : { meaning: 50, value: 50, satisfaction: 50 }
+  );
 
-function ReceiptCeremony({ fire, onComplete }) {
-  var [idx, setIdx] = _useState(0);
-  var line = CEREMONY_LINES[idx];
-  var isReceipt = line.speaker === 'receipt';
+  var layer = JOURNEY_LAYERS[layerIdx];
+  var isMetrics = !!layer.isMetrics;
+  var hasDialogue = layer.dialogue && layer.dialogue.length > 0;
+  var dialogueLine = hasDialogue ? layer.dialogue[Math.min(dialogueStep, layer.dialogue.length - 1)] : null;
+  var isLastDialogue = !hasDialogue || dialogueStep >= layer.dialogue.length - 1;
 
-  function advance() {
-    if (!isReceipt) setIdx(function(i) { return i + 1; });
+  function goNextLayer(selection) {
+    var newSel = layerSelections;
+    if (!layer.isIntro && !layer.isMetrics && selection) {
+      newSel = Object.assign({}, layerSelections);
+      newSel[layer.id] = selection;
+      setLayerSelections(newSel);
+    }
+    var nextIdx = layerIdx + 1;
+    if (nextIdx >= JOURNEY_LAYERS.length) {
+      onJourneyDone({ layers: newSel, currentMetrics: metrics });
+    } else {
+      setLayerIdx(nextIdx);
+      setDialogueStep(0);
+      setShowChoice(false);
+      setSelectedOption(null);
+    }
   }
 
+  function advance() {
+    if (!isLastDialogue) {
+      setDialogueStep(function(s) { return s + 1; });
+    } else if (layer.question) {
+      setShowChoice(true);
+    } else {
+      goNextLayer(null);
+    }
+  }
+
+  var showDialogueSec = hasDialogue && !showChoice;
+  var showChoiceSec   = !isMetrics && !!layer.question && (showChoice || !hasDialogue);
+  var showMetricsSec  = isMetrics;
+
   return (
-    <div className="kotae-ov" onClick={advance}>
+    <div className="kotae-ov">
       <div className="kotae-sheet" onClick={function(e) { e.stopPropagation(); }}>
         <div className="kotae-grip" />
-        <p style={{ color: '#4b5563', fontSize: 10, margin: '0 0 8px', letterSpacing: 1 }}>
-          {line.place}
-        </p>
 
-        {!isReceipt ? (
+        {/* 進捗ドット */}
+        <div className="journey-progress">
+          {JOURNEY_LAYERS.map(function(l, i) {
+            var cls = 'journey-dot';
+            if (i < layerIdx) cls += ' done';
+            else if (i === layerIdx) cls += ' active';
+            return <div key={i} className={cls} />;
+          })}
+        </div>
+
+        <p style={{ color: '#4b5563', fontSize: 10, margin: '0 0 10px', letterSpacing: 1 }}>{layer.place}</p>
+
+        {/* 対話セクション */}
+        {showDialogueSec && (
           <div>
-            <div className="kotae-head">
-              <span className="kotae-dot" style={{ background: line.color }} />
-              <span className="kotae-name" style={{ color: line.color }}>{line.name}</span>
-            </div>
-            <p className="kotae-line kotae-line-now">{line.text}</p>
-            <button className="kotae-btn" onClick={advance}>▽ つづき</button>
+            {layer.dialogue.slice(0, dialogueStep + 1).map(function(dl, i) {
+              var isCurrent = i === dialogueStep;
+              var showHeader = i === 0 || dl.name !== layer.dialogue[i - 1].name;
+              return (
+                <div key={i}>
+                  {showHeader && (
+                    <div className={'kotae-head' + (i > 0 ? ' journey-speaker-gap' : '')}>
+                      <span className="kotae-dot" style={{ background: dl.color }} />
+                      <span className="kotae-name" style={{ color: dl.color }}>{dl.name}</span>
+                    </div>
+                  )}
+                  <p className={'kotae-line' + (isCurrent ? ' kotae-line-now' : '')}>{dl.text}</p>
+                </div>
+              );
+            })}
+            <button className="kotae-btn" onClick={advance}>
+              {isLastDialogue ? (layer.question ? '問いへ進む ▽' : '次へ ▽') : '▽ つづき'}
+            </button>
           </div>
-        ) : (
-          <ReceiptCard fire={fire} buttonLabel="未受領領域へ進む" onAction={onComplete} />
+        )}
+
+        {/* 選択セクション */}
+        {showChoiceSec && (
+          <div>
+            {layer.charName && (
+              <div className="kotae-head">
+                <span className="kotae-dot" style={{ background: layer.charColor }} />
+                <span className="kotae-name" style={{ color: layer.charColor }}>{layer.charName}</span>
+              </div>
+            )}
+            <p style={{ color: '#e2e4ee', fontSize: 14, lineHeight: 1.8, margin: '0 0 14px', whiteSpace: 'pre-line' }}>
+              {layer.question}
+            </p>
+            <div className="journey-options">
+              {layer.options.map(function(opt) {
+                var isSel = selectedOption === opt;
+                return (
+                  <button
+                    key={opt}
+                    className={'journey-option-btn' + (isSel ? ' selected' : '')}
+                    onClick={function() { setSelectedOption(opt); }}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              className="kotae-btn"
+              style={{ opacity: selectedOption ? 1 : 0.35, cursor: selectedOption ? 'pointer' : 'default', marginTop: 14 }}
+              onClick={function() { if (selectedOption) goNextLayer(selectedOption); }}
+            >
+              記録する
+            </button>
+          </div>
+        )}
+
+        {/* 感触スライダー */}
+        {showMetricsSec && (
+          <div>
+            {layer.charName && (
+              <div className="kotae-head">
+                <span className="kotae-dot" style={{ background: layer.charColor }} />
+                <span className="kotae-name" style={{ color: layer.charColor }}>{layer.charName}</span>
+              </div>
+            )}
+            <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.8, margin: '0 0 14px' }}>
+              今、この火をどのように受け取っていますか？
+            </p>
+            {[
+              { key: 'meaning',      label: '意味があった' },
+              { key: 'value',        label: '価値があった' },
+              { key: 'satisfaction', label: '満足できた' },
+            ].map(function(m) {
+              var mKey = m.key;
+              return (
+                <div key={mKey} style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ color: '#d1d5db', fontSize: 13 }}>{m.label}</span>
+                    <span style={{ color: '#a78bfa', fontSize: 12 }}>{metrics[mKey]}</span>
+                  </div>
+                  <input
+                    type="range" min={0} max={100}
+                    value={metrics[mKey]}
+                    onChange={function(e) {
+                      var val = Number(e.target.value);
+                      setMetrics(function(prev) { var n = Object.assign({}, prev); n[mKey] = val; return n; });
+                    }}
+                    style={{ width: '100%', accentColor: '#7c3aed' }}
+                  />
+                  {fire.metrics && fire.metrics[mKey] !== undefined && (
+                    <p style={{ color: '#374151', fontSize: 10, margin: '2px 0 0' }}>
+                      灯した時：{fire.metrics[mKey]}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+            <button className="kotae-btn" onClick={function() { goNextLayer(null); }}>
+              受領する
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -2621,11 +3044,10 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
           <p className="found-banner-question">{found.question}</p>
           <p style={{ color: '#6b7280', fontSize: 12, lineHeight: 1.8, margin: '8px 0 14px' }}>
             トイマンが、火の奥から問いの欠片を持ち帰りました。<br />
-            まだ答えではありません。<br />
-            まず、受領証として記録します。
+            記録塔へ届けると、この火と会い直す旅が始まります。
           </p>
           <button
-            onClick={function() { onReceive(found.id, ''); }}
+            onClick={function() { onReceive(found.id); }}
             style={{
               width: '100%', padding: '12px 0', borderRadius: 8,
               background: '#4c1d95', border: 'none', color: '#ede9fe',
@@ -2633,7 +3055,7 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
               letterSpacing: 0.5,
             }}
           >
-            受領証を発行する
+            記録塔へ届ける
           </button>
         </div>
       )}
@@ -3026,8 +3448,8 @@ function App() {
   var [kotaeDialog, setKotaeDialog] = _useState(null); // { fireId, kind }
   var [activeUnreceivedFireId, setActiveUnreceivedFireId] = _useState(null);
   var [actionResult, setActionResult] = _useState(null);
-  // 受領証発行儀式: ReceiptCeremony を表示するための state
-  var [activeReceiptCeremony, setActiveReceiptCeremony] = _useState(null); // { fireId }
+  // 受領の旅: { fireId, phase: 'journey'|'card' }
+  var [receiptJourney, setReceiptJourney] = _useState(null);
   // 受領証閲覧: RecordTower「受領証を見る」用
   var [activeReceiptView, setActiveReceiptView] = _useState(null); // fireId
   var tickRef = _useRef(null);
@@ -3072,13 +3494,11 @@ function App() {
     }
   }, []);
 
-  var handleReceive = _useCallback(function(fireId, answer) {
-    var result = receiveFire(gameRef.current, fireId, answer);
+  var handleBeginJourney = _useCallback(function(fireId) {
+    var result = beginReceiptJourney(gameRef.current, fireId);
     if (result.ok) {
       setGame(result.game);
-      setActionResult(result.actionResult || null);
-      // 受領は常に ReceiptCeremony — KotaeDialog / EncounterDialog は使わない
-      setActiveReceiptCeremony({ fireId: fireId });
+      setReceiptJourney({ fireId: fireId, phase: 'journey' });
     }
   }, []);
 
@@ -3200,7 +3620,7 @@ function App() {
           onDoBattle={handleDoBattle}
           onWatchFire={handleWatchFire}
           onRestToday={handleRestToday}
-          onReceive={handleReceive}
+          onReceive={handleBeginJourney}
           onReexplore={handleReexplore}
           onRestUnreceived={handleRestUnreceived}
           onReturnToHeart={handleReturnToHeart}
@@ -3216,7 +3636,7 @@ function App() {
           onDoBattle={handleDoBattle}
           onWatchFire={handleWatchFire}
           onRestToday={handleRestToday}
-          onReceive={handleReceive}
+          onReceive={handleBeginJourney}
           onUpdateLastSeen={handleUpdateLastSeen}
           onBuyMarket={handleBuyMarket}
           onReexplore={handleReexplore}
@@ -3260,22 +3680,44 @@ function App() {
         />
       )}
 
-      {/* 受領証発行儀式 — 常に最前面 */}
-      {activeReceiptCeremony && (function() {
-        var fire = gameRef.current.fires.find(function(f) { return f.id === activeReceiptCeremony.fireId; });
+      {/* 受領の旅 — 常に最前面 */}
+      {receiptJourney && receiptJourney.phase === 'journey' && (function() {
+        var fire = gameRef.current.fires.find(function(f) { return f.id === receiptJourney.fireId; });
         if (!fire) return null;
         return (
-          <ReceiptCeremony
+          <ReceiptJourney
             fire={fire}
-            onComplete={function() {
-              var fid = activeReceiptCeremony.fireId;
-              setActiveReceiptCeremony(null);
-              // worldNotes / relationshipNotes を保存（初回のみ）
-              setGame(function(prev) { return saveReceiptNotes(prev); });
-              setActiveUnreceivedFireId(fid);
-              setScreen('garden');
+            onJourneyDone={function(data) {
+              var result = completeReceiptJourney(gameRef.current, receiptJourney.fireId, data);
+              if (result.ok) {
+                var ng = saveReceiptNotes(result.game);
+                setGame(ng);
+                setActionResult(result.actionResult || null);
+                setReceiptJourney({ fireId: receiptJourney.fireId, phase: 'card' });
+              }
             }}
           />
+        );
+      })()}
+      {receiptJourney && receiptJourney.phase === 'card' && (function() {
+        var fire = gameRef.current.fires.find(function(f) { return f.id === receiptJourney.fireId; });
+        if (!fire) return null;
+        return (
+          <div className="kotae-ov">
+            <div className="kotae-sheet" onClick={function(e) { e.stopPropagation(); }}>
+              <div className="kotae-grip" />
+              <ReceiptCard
+                fire={fire}
+                buttonLabel="未受領領域へ進む"
+                onAction={function() {
+                  var fid = receiptJourney.fireId;
+                  setReceiptJourney(null);
+                  setActiveUnreceivedFireId(fid);
+                  setScreen('garden');
+                }}
+              />
+            </div>
+          </div>
         );
       })()}
 
