@@ -259,6 +259,7 @@ function initGame() {
     lastAutoAt: nowISO(),
     lastSeenAt: nowISO(),
     introSeen: { kotae: false, kana: false, utsuro: false, auditor: false },
+    seenWorldIntro: false,
     seenEncounters: [],
     worldNotes: [],
     relationshipNotes: [],
@@ -379,6 +380,7 @@ function migrateGame(g) {
   if (!g.lastAutoAt) g.lastAutoAt = nowISO();
   if (!g.lastSeenAt) g.lastSeenAt = nowISO();
   if (!g.introSeen) g.introSeen = { kotae: false, kana: false, utsuro: false, auditor: false };
+  if (!('seenWorldIntro' in g)) g.seenWorldIntro = false;
   if (!Array.isArray(g.seenEncounters)) g.seenEncounters = [];
   if (!Array.isArray(g.worldNotes)) g.worldNotes = [];
   if (!Array.isArray(g.relationshipNotes)) g.relationshipNotes = [];
@@ -3423,7 +3425,7 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
   );
 }
 
-function DevBar({ game, onReset, onForceFound, onAddBattle }) {
+function DevBar({ game, onReset, onForceFound, onAddBattle, onReplayIntro }) {
   var [open, setOpen] = _useState(false);
   var searching = game.fires.find(function(f) { return f.status === 'searching'; });
   var found = game.fires.find(function(f) { return f.status === 'found'; });
@@ -3465,6 +3467,13 @@ function DevBar({ game, onReset, onForceFound, onAddBattle }) {
               +30%
             </button>
           )}
+          <button onClick={onReplayIntro} style={{
+            padding: '6px 12px', borderRadius: 6, border: '1px solid #1e3a5f',
+            background: 'transparent', color: '#60a5fa', fontSize: 12,
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            イントロ再生
+          </button>
           <button onClick={onReset} style={{
             padding: '6px 12px', borderRadius: 6, border: '1px solid #7f1d1d',
             background: 'transparent', color: '#f87171', fontSize: 12,
@@ -3521,12 +3530,126 @@ function MilestoneDialog({ milestone, onClose }) {
   );
 }
 
+// ── IntroScene ───────────────────────────────────────────────────────────────
+
+var INTRO_NARRATIVE_LINES = [
+  '画面は暗い。',
+  '',
+  'どこかで、小さな火が揺れている。',
+  'まだ名前のない火。',
+  'まだ意味になっていないもの。',
+  'まだ誰にも受け取られていないもの。',
+  '',
+  '足音が近づく。',
+  '',
+  '黒い服の小さな子が、',
+  '火の前で立ち止まる。',
+];
+
+var INTRO_TOYMAN_LINES = [
+  '……さがしたよ。',
+  '残っているなら、迎えに行く。',
+  'これは、答えじゃない。\nでも、置いていけない。',
+  'あなたの言葉で、この火に輪郭をつけて。',
+];
+
+function IntroScene({ onMarkSeen, onFireLit }) {
+  var [step, setStep] = _useState(0);
+  var [showForm, setShowForm] = _useState(false);
+  var [visible, setVisible] = _useState(false);
+
+  _useEffect(function() {
+    var t = setTimeout(function() { setVisible(true); }, 80);
+    return function() { clearTimeout(t); };
+  }, []);
+
+  function advance() {
+    if (step < INTRO_TOYMAN_LINES.length) {
+      setStep(function(s) { return s + 1; });
+    }
+  }
+
+  function handleFireBtn() {
+    onMarkSeen();
+    setShowForm(true);
+  }
+
+  var isNarrative = step === 0;
+  var toymanIdx = step - 1; // 0-based index into INTRO_TOYMAN_LINES
+  var isFinalLine = step === INTRO_TOYMAN_LINES.length;
+
+  if (showForm) {
+    return (
+      <div className="intro-scene">
+        <div className="intro-fire-glow-sm" />
+        <div className="intro-form-wrap">
+          <h3 className="intro-form-header">この火に、残っていた言葉を置いてください。</h3>
+          <FireInputForm
+            onSubmit={onFireLit}
+            onCancel={function() { setShowForm(false); }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="intro-scene" onClick={!isFinalLine ? advance : undefined}>
+      <div className="intro-fire-glow" />
+
+      <div key={step} className={'intro-content' + (visible ? ' intro-content-in' : '')}>
+        {isNarrative && (
+          <div className="intro-narrative">
+            {INTRO_NARRATIVE_LINES.map(function(line, i) {
+              if (!line) return React.createElement('div', { key: i, style: { height: 10 } });
+              return (
+                <p key={i} className="intro-narrative-line">{line}</p>
+              );
+            })}
+          </div>
+        )}
+
+        {!isNarrative && (
+          <div className="intro-toyman-block">
+            <span className="intro-toyman-label">トイマン</span>
+            <p className="intro-toyman-line">
+              {INTRO_TOYMAN_LINES[toymanIdx].split('\n').map(function(seg, si) {
+                return React.createElement(React.Fragment, { key: si },
+                  si > 0 && React.createElement('br', null),
+                  seg
+                );
+              })}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="intro-btn-row" onClick={function(e) { e.stopPropagation(); }}>
+        {isFinalLine ? (
+          <button className="intro-btn-fire" onClick={handleFireBtn}>
+            火を見る
+          </button>
+        ) : (
+          <button className="intro-btn-next" onClick={advance}>
+            つづき
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
   var [game, setGame] = _useState(function() {
     var saved = loadSave();
     return saved ? saved : initGame();
+  });
+  var [introActive, setIntroActive] = _useState(function() {
+    var saved = loadSave();
+    var g = saved ? saved : initGame();
+    return !g.seenWorldIntro && g.fires.length === 0;
   });
   var [screen, setScreen] = _useState('home');
   var [kotaeDialog, setKotaeDialog] = _useState(null); // { fireId, kind }
@@ -3646,10 +3769,38 @@ function App() {
     }
   }, []);
 
+  var handleIntroMarkSeen = _useCallback(function() {
+    setGame(function(prev) {
+      var ns = cloneS(prev);
+      ns.seenWorldIntro = true;
+      return ns;
+    });
+  }, []);
+
+  var handleIntroFireLit = _useCallback(function(kindle, pain, writeState, feeling, metrics) {
+    setGame(function(prev) {
+      var result = lightFire(prev, kindle, pain, writeState, feeling, metrics);
+      var ng = result.game;
+      ng.seenWorldIntro = true;
+      return ng;
+    });
+    setIntroActive(false);
+  }, []);
+
+  var handleReplayIntro = _useCallback(function() {
+    setGame(function(prev) {
+      var ns = cloneS(prev);
+      ns.seenWorldIntro = false;
+      return ns;
+    });
+    setIntroActive(true);
+  }, []);
+
   var handleReset = _useCallback(function() {
     if (window.confirm('本当にリセットしますか？')) {
       clearSave();
       setGame(initGame());
+      setIntroActive(true);
       setScreen('home');
     }
   }, []);
@@ -3691,7 +3842,13 @@ function App() {
       fontFamily: '"Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif',
       paddingBottom: 60,
     }}>
-      {screen === 'home' && (
+      {introActive && (
+        <IntroScene
+          onMarkSeen={handleIntroMarkSeen}
+          onFireLit={handleIntroFireLit}
+        />
+      )}
+      {!introActive && screen === 'home' && (
         <HomeView
           game={game}
           onLightFire={handleLightFire}
@@ -3837,6 +3994,7 @@ function App() {
         onReset={handleReset}
         onForceFound={handleForceFound}
         onAddBattle={handleAddBattle}
+        onReplayIntro={handleReplayIntro}
       />
     </div>
   );
