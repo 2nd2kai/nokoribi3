@@ -562,7 +562,19 @@ function reexploreFire(game, fireId, type) {
   var ve = makeVisualEvent({ fireId: fireId, source: 'manual', type: type,
     work: veOpts.work, actor: veOpts.actor, trace: veOpts.trace, message: veOpts.message });
   ns.lastVisualEvent = ve;
-  return { ok: true, game: ns, visualEvent: ve };
+  var arMap = {
+    meaning: { title: '意味の影を追った',
+      gains: [{ label: '灯貨', amount: 1 }, { label: '意味片', amount: 1 }, { label: '紙片', amount: 1 }],
+      traces: ['意味になりかけた光が、塔の方へ流れた。'] },
+    value: { title: '価値の黒札を拾った',
+      gains: [{ label: '灯貨', amount: 1 }, { label: '黒札片', amount: 1 }],
+      traces: ['黒い札が、火から剥がされた。'] },
+    satisfaction: { title: '満足の灰を探した',
+      gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }, { label: '未完の種', amount: 1 }],
+      traces: ['灰の中から、未完の種が見つかった。'] },
+  };
+  var actionResult = makeActionResult(arMap[type]);
+  return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
 }
 
 function buyMarketItem(game, key) {
@@ -605,7 +617,12 @@ function restUnreceived(game, fireId) {
     message: '今日は、ここに置いておく。\n未受領領域は進まなかった。\nでも、火は消えなかった。',
   });
   ns.lastVisualEvent = ve;
-  return { ok: true, game: ns, visualEvent: ve };
+  var actionResult = makeActionResult({
+    title: '今日は置いておいた',
+    gains: [{ label: '灯貨', amount: 1 }, { label: '水滴', amount: 1 }],
+    traces: ['火は、今日もここに置かれた。', '水滴が、火の近くに置かれた。'],
+  });
+  return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
 }
 
 function lightFire(game, kindle, pain, writeState, feeling, metrics) {
@@ -643,7 +660,7 @@ function doBattle(game, fireId, answer) {
   }
   addLog(fire, pick(BATTLE_LOGS));
   addGardenItem(ns, 'burnt_paper');
-  advanceLightkeeper(ns, 5);
+  var lkResult = advanceLightkeeper(ns, 5);
   // 紙集めの小人解放条件
   if (!ns.tinyfolk.paperCollector && ns.materials.paper >= 3) {
     ns.tinyfolk.paperCollector = true;
@@ -661,7 +678,16 @@ function doBattle(game, fireId, answer) {
     message: '影の奥から、焦げた紙片が落ちた。\n答えではない。\nでも、問いの材料だった。',
   });
   ns.lastVisualEvent = ve;
-  return { ok: true, game: ns, fire: fire, visualEvent: ve };
+  var actionResult = makeActionResult({
+    title: '影と向き合った',
+    gains: [{ label: '灯貨', amount: 2 }, { label: '紙片', amount: 1 }],
+    traces: ['焦げた紙片が、森に残った。'],
+  });
+  appendLightkeeperResult(actionResult, lkResult);
+  if (fire.status === 'found') {
+    actionResult.traces.push('トイマンが、問いの欠片を見つけた。');
+  }
+  return { ok: true, game: ns, fire: fire, visualEvent: ve, actionResult: actionResult };
 }
 
 // 自動進行: gardenProgress のみ、questionProgress は触れない、found にしない
@@ -674,8 +700,8 @@ function tickProgress(game) {
   addLog(fire, pick(AUTO_LOGS));
   ns.lastAutoAt = nowISO();
   fire.updatedAt = nowISO();
-  // 灯守りの自動進行（問いの深度は進めない）
-  var lkTickCompleted = advanceLightkeeper(ns, 5);
+  // 灯守りの自動進行（問いの深度は進めない）。tick は actionResult を出さない。
+  var lkTickCompleted = advanceLightkeeper(ns, 5).completed;
   if (!shouldSkipAutoVisualEvent(ns)) {
     var base = lkTickCompleted
       ? { work: '守る', actor: 'lightkeeper', trace: 'small_stone',
@@ -694,12 +720,45 @@ function tickProgress(game) {
   return { changed: true, game: ns };
 }
 
-// 灯守りの仕事を進める。完了した場合 true を返す
+// 一時通知 actionResult を組み立てる共通関数。
+// 4層: gains（増えたもの）/ work（作業途中）/ completions（仕事完了）/ traces（箱庭に残った痕跡）
+function makeActionResult(opts) {
+  opts = opts || {};
+  return {
+    title: opts.title || '',
+    gains: opts.gains || [],
+    work: opts.work || [],
+    completions: opts.completions || [],
+    traces: opts.traces || [],
+    at: nowISO(),
+  };
+}
+
+// advanceLightkeeper の結果を actionResult に反映する。
+// 完了時は completions に積む（message は completions 側でのみ表示し、traces には重複させない）。
+function appendLightkeeperResult(actionResult, lkResult) {
+  if (!lkResult || !lkResult.advanced) return actionResult;
+  if (lkResult.completed && lkResult.completion) {
+    actionResult.completions.push(lkResult.completion);
+  } else {
+    actionResult.work.push('灯守りの仕事が進んだ（' + lkResult.after + '%）。');
+  }
+  return actionResult;
+}
+
+// 灯守りの仕事を進める。進行・完了の詳細をオブジェクトで返す。
 function advanceLightkeeper(ns, amount) {
   var lk = ns.workerTasks && ns.workerTasks.lightkeeper;
-  if (!lk || !lk.isUnlocked) return false;
-  lk.progress = Math.min(lk.duration, (lk.progress || 0) + amount);
-  if (lk.progress < lk.duration) return false;
+  if (!lk || !lk.isUnlocked) {
+    return { advanced: false, completed: false, before: 0, after: 0, amount: 0, completion: null };
+  }
+  var before = lk.progress || 0;
+  var duration = lk.duration || 100;
+  var after = Math.min(duration, before + amount);
+  lk.progress = after;
+  if (after < duration) {
+    return { advanced: true, completed: false, before: before, after: after, amount: amount, completion: null };
+  }
   // 完了
   lk.progress = 0;
   addGardenItem(ns, 'small_stone');
@@ -708,7 +767,19 @@ function advanceLightkeeper(ns, amount) {
   ns.toka = (ns.toka || 0) + 1;
   var sf = ns.fires.find(function(f) { return f.status === 'searching'; });
   if (sf) sf.gardenProgress = Math.min(100, (sf.gardenProgress || 0) + 3);
-  return true;
+  return {
+    advanced: true, completed: true, before: before, after: 0, amount: amount,
+    completion: {
+      label: '灯守りの仕事完了',
+      message: '灯守りが、小さな石を置いた。',
+      trace: 'small_stone',
+      gains: [
+        { label: '灯貨', amount: 1 },
+        { label: '灰片', amount: 1 },
+        { label: '火の安定', amount: 3 },
+      ],
+    },
+  };
 }
 
 function watchFire(game, fireId) {
@@ -723,18 +794,23 @@ function watchFire(game, fireId) {
   ns.materials.ash = (ns.materials.ash || 0) + 1;
   addLog(fire, pick(WATCH_LOGS));
   // small_stone は灯守りの仕事完了時のみ置かれる（即時追加しない）
-  var lkCompleted = advanceLightkeeper(ns, 30);
+  var lkResult = advanceLightkeeper(ns, 30);
   fire.updatedAt = nowISO();
   var ve = makeVisualEvent({
     fireId: fireId, source: 'manual', type: 'watch',
     work: '守る', actor: 'lightkeeper',
-    trace: lkCompleted ? 'small_stone' : null,
-    message: lkCompleted
+    trace: lkResult.completed ? 'small_stone' : null,
+    message: lkResult.completed
       ? '灯守りが、小さな石を置いた。\n問いは進んでいない。\nでも、火は少し落ち着いた。'
       : '灯守りが、火のそばで石を確かめた。\n火はまだある。',
   });
   ns.lastVisualEvent = ve;
-  return { ok: true, game: ns, visualEvent: ve, lightkeeperCompleted: lkCompleted };
+  var actionResult = makeActionResult({
+    title: 'ただ見守った',
+    gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }],
+  });
+  appendLightkeeperResult(actionResult, lkResult);
+  return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
 }
 
 function restToday(game, fireId) {
@@ -752,7 +828,7 @@ function restToday(game, fireId) {
   ns.materials.drop = (ns.materials.drop || 0) + 1;
   addGardenItem(ns, 'rest_chair');
   addGardenItem(ns, 'water_drop');
-  advanceLightkeeper(ns, 15);
+  var lkResult = advanceLightkeeper(ns, 15);
   // 水汲みの小人解放条件
   if (!ns.tinyfolk.waterCarrier && fire.restCount >= 3) {
     ns.tinyfolk.waterCarrier = true;
@@ -768,7 +844,13 @@ function restToday(game, fireId) {
     message: 'トイマンは火のそばに座った。\n今日は、ここまで。\n火は消えなかった。',
   });
   ns.lastVisualEvent = ve;
-  return { ok: true, game: ns, visualEvent: ve };
+  var actionResult = makeActionResult({
+    title: '今日は無理にしなかった',
+    gains: [{ label: '灯貨', amount: 1 }, { label: '水滴', amount: 1 }],
+    traces: ['火のそばに、小さな椅子が置かれた。', '水滴が、火の近くに置かれた。'],
+  });
+  appendLightkeeperResult(actionResult, lkResult);
+  return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
 }
 
 function receiveFire(game, fireId, answer) {
@@ -800,7 +882,12 @@ function receiveFire(game, fireId, answer) {
     message: '記録塔に、灯りがともった。\n問いの欠片は、答えではなく\n記録として受け取られた。',
   });
   ns.lastVisualEvent = ve;
-  return { ok: true, game: ns, newlyUnlockedKotae: newlyUnlockedKotae, visualEvent: ve };
+  var actionResult = makeActionResult({
+    title: '問いの欠片を受け取った',
+    gains: [{ label: '灯貨', amount: 3 }, { label: '受領印', amount: 1 }],
+    traces: ['遠くの記録塔に、灯りがともった。'],
+  });
+  return { ok: true, game: ns, newlyUnlockedKotae: newlyUnlockedKotae, visualEvent: ve, actionResult: actionResult };
 }
 
 // ── React Components ────────────────────────────────────────────────────────
@@ -1275,17 +1362,11 @@ function FireCard({ fire, onSelect, selected }) {
 
 function UnreceivedPanel({ fire, onReexplore, onRest }) {
   var ur = fire.unreceived || { meaning: 0, value: 0, satisfaction: 0 };
-  var [lastResult, setLastResult] = _useState(null);
 
-  function doReexplore(type) {
-    onReexplore(fire.id, type);
-    setLastResult(type);
-  }
-
-  function doRest() {
-    onRest(fire.id);
-    setLastResult('rest');
-  }
+  // 結果表示は共通の ActionResultPanel（App の actionResult）に一本化。
+  // ここは操作と未受領領域の状態表示に専念する。
+  function doReexplore(type) { onReexplore(fire.id, type); }
+  function doRest() { onRest(fire.id); }
 
   var TYPES = [
     {
@@ -1391,51 +1472,16 @@ function UnreceivedPanel({ fire, onReexplore, onRest }) {
         style={{
           width: '100%', padding: '10px', borderRadius: 8,
           background: 'transparent', border: '1px solid #1e2230',
-          color: '#4b5563', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+          color: '#8f9bb3', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
         }}
       >
         今日は置いておく
       </button>
-
-      {/* 行動結果 */}
-      {lastResult && lastResult !== 'rest' && (
-        <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: '#0a0e18', border: '1px solid #1e2230' }}>
-          <p style={{ color: '#6b7280', fontSize: 12, margin: 0, lineHeight: 1.7 }}>
-            {fire.unreceivedLogs && fire.unreceivedLogs[0] ? fire.unreceivedLogs[0].text : '再探索しました。'}
-          </p>
-          <p style={{ color: '#374151', fontSize: 11, margin: '4px 0 0' }}>
-            灯貨+1
-            {lastResult === 'meaning' && ' / 意味片+1 / 紙片+1'}
-            {lastResult === 'value' && ' / 黒札片+1'}
-            {lastResult === 'satisfaction' && ' / 灰片+1 / 未完の種+1'}
-          </p>
-          <button onClick={function() { setLastResult(null); }} style={{
-            marginTop: 8, padding: '4px 10px', borderRadius: 5,
-            background: 'transparent', border: '1px solid #1e2230',
-            color: '#4b5563', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-          }}>閉じる</button>
-        </div>
-      )}
-      {lastResult === 'rest' && (
-        <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: '#0a0e18', border: '1px solid #1e2230' }}>
-          <p style={{ color: '#4b5563', fontSize: 12, margin: 0, lineHeight: 1.8 }}>
-            今日は、ここに置いておく。<br />
-            未受領領域は進まなかった。<br />
-            でも、火は消えなかった。
-          </p>
-          <p style={{ color: '#374151', fontSize: 11, margin: '4px 0 0' }}>灯貨+1 / 水滴+1</p>
-          <button onClick={function() { setLastResult(null); }} style={{
-            marginTop: 8, padding: '4px 10px', borderRadius: 5,
-            background: 'transparent', border: '1px solid #1e2230',
-            color: '#4b5563', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-          }}>閉じる</button>
-        </div>
-      )}
     </div>
   );
 }
 
-function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onReceive, onReexplore, onRestUnreceived }) {
+function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onReceive, onReexplore, onRestUnreceived, actionResult, onCloseActionResult }) {
   var [selectedId, setSelectedId] = _useState(null);
   var [receiveAnswer, setReceiveAnswer] = _useState('');
   var [phase, setPhase] = _useState('list');
@@ -1474,6 +1520,9 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
         }}>←</button>
         <h2 style={{ color: '#e2e4ee', fontSize: 17, margin: 0 }}>残り火の棚</h2>
       </div>
+
+      {/* 行動結果（GardenView と共通の一時通知） */}
+      <ActionResultPanel result={actionResult} onClose={onCloseActionResult} />
 
       {game.fires.length === 0 && (
         <p style={{ color: '#6b7280', fontSize: 14, textAlign: 'center', marginTop: 40, lineHeight: 1.8 }}>
@@ -1945,53 +1994,9 @@ var TINYFOLK_ACTIVITY = {
   recordApprentice: '記録塔で写している',
 };
 
-// 行動ごとの「即時に確定する」効果定義。
-// baseGains: 行動そのものの素材ゲイン / directTraces: 行動と直接対応する痕跡（即時）
-// lkInc: 灯守りの仕事を進める量。仕事完了時のゲイン・痕跡は completions として別層に出す。
-var ACTION_DEFS = {
-  watch:  { title: 'ただ見守った',
-    baseGains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }],
-    directTraces: [], lkInc: 30 },
-  rest:   { title: '今日は無理にしなかった',
-    baseGains: [{ label: '灯貨', amount: 1 }, { label: '水滴', amount: 1 }],
-    directTraces: ['火のそばに、小さな椅子が置かれた。', '水滴が、火の近くに置かれた。'], lkInc: 15 },
-  battle: { title: '影と向き合った',
-    baseGains: [{ label: '灯貨', amount: 2 }, { label: '紙片', amount: 1 }],
-    directTraces: ['焦げた紙片が、森に残った。'], lkInc: 5 },
-};
-
-// 行動前の game 状態から、行動結果を4層構造で決定論的に組み立てる。
-// 灯守りの仕事は決定論的に進むため、完了するかどうかを正確に予測できる。
-function buildActionResult(kind, game) {
-  var def = ACTION_DEFS[kind];
-  if (!def) return null;
-  var lk = game.workerTasks && game.workerTasks.lightkeeper;
-  var hasLk = !!(lk && lk.isUnlocked);
-  var prog = hasLk ? (lk.progress || 0) : 0;
-  var dur  = hasLk ? (lk.duration || 100) : 100;
-  var willComplete = hasLk && (prog + def.lkInc) >= dur;
-  var newProg = Math.min(dur, prog + def.lkInc);
-  var result = {
-    title: def.title,
-    gains: def.baseGains.slice(),
-    work: [],
-    completions: [],
-    traces: def.directTraces.slice(),
-  };
-  if (hasLk) {
-    if (willComplete) {
-      result.completions.push({
-        message: '灯守りが、小さな石を置いた。',
-        gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }, { label: '火の安定', amount: 3 }],
-        trace: 'small_stone',
-      });
-    } else {
-      result.work.push('灯守りの仕事が進んだ（' + newProg + '%）。');
-    }
-  }
-  return result;
-}
-
+// actionResult は各ゲームロジック関数（watchFire / restToday / doBattle /
+// receiveFire / reexploreFire / restUnreceived）が実処理の結果として返す。
+// UI は受け取った result を表示するだけで、予測は行わない。
 function ActionResultPanel({ result, onClose }) {
   if (!result) return null;
   return (
@@ -2047,40 +2052,23 @@ function ActionResultPanel({ result, onClose }) {
   );
 }
 
-function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived }) {
+function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived, actionResult, onCloseActionResult }) {
   var [recordOpen, setRecordOpen] = _useState(false);
-  var [actionResult, setActionResult] = _useState(null);
   var [shadowOpen, setShadowOpen] = _useState(false);
 
   var sf       = game.fires.find(function(f) { return f.status === 'searching'; });
   var found    = game.fires.find(function(f) { return f.status === 'found'; });
   var received = game.fires.filter(function(f) { return f.status === 'received'; });
-  var sfId     = sf ? sf.id : null;
 
   _useEffect(function() {
     if (onUpdateLastSeen) onUpdateLastSeen();
   }, []);
 
-  // アクティブな fire が変わったら一時表示の actionResult をリセット
-  // （lastVisualEvent は箱庭の記憶として残す）
-  _useEffect(function() {
-    setActionResult(null);
-  }, [sfId]);
-
-  // buildActionResult は行動前の game から決定論的に結果を組み立てる
-  function doWatch() {
-    setActionResult(buildActionResult('watch', game));
-    onWatchFire(sf.id);
-  }
-  function doRest() {
-    setActionResult(buildActionResult('rest', game));
-    onRestToday(sf.id);
-  }
-  function doBattle(ans) {
-    setActionResult(buildActionResult('battle', game));
-    onDoBattle(sf.id, ans);
-    setShadowOpen(false);
-  }
+  // actionResult は App が各ロジック関数の返り値から保存する。
+  // UI 側では予測しない。行動はハンドラを呼ぶだけ。
+  function doWatch() { onWatchFire(sf.id); }
+  function doRest()  { onRestToday(sf.id); }
+  function doBattle(ans) { onDoBattle(sf.id, ans); setShadowOpen(false); }
 
   var logsSource = sf || found || (game.fires.filter(function(f) { return f.status === 'received'; })[0]) || null;
   var logLimit = 3 + ((game.gardenItems && game.gardenItems.includes('paper_box')) ? 2 : 0);
@@ -2106,7 +2094,7 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
       <EventCard event={game.lastVisualEvent} />
 
       {/* 3. actionResult（行動ボタンを隠さない一時通知） */}
-      <ActionResultPanel result={actionResult} onClose={function() { setActionResult(null); }} />
+      <ActionResultPanel result={actionResult} onClose={onCloseActionResult} />
 
       {/* 4a. 行動ボタン（actionResult 表示中でも操作可能） */}
       {sf && !shadowOpen && (
@@ -2132,8 +2120,8 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
           <ShadowPanel
             fire={sf}
             onAnswer={doBattle}
-            onWatch={function() { setActionResult(buildActionResult('watch', game)); onWatchFire(sf.id); setShadowOpen(false); }}
-            onSkip={function()  { setActionResult(buildActionResult('rest', game));  onRestToday(sf.id); setShadowOpen(false); }}
+            onWatch={function() { onWatchFire(sf.id); setShadowOpen(false); }}
+            onSkip={function()  { onRestToday(sf.id); setShadowOpen(false); }}
           />
         </div>
       )}
@@ -2496,11 +2484,26 @@ function App() {
   });
   var [screen, setScreen] = _useState('home');
   var [showKotaeIntro, setShowKotaeIntro] = _useState(false);
+  var [actionResult, setActionResult] = _useState(null);
   var tickRef = _useRef(null);
+
+  // 各ハンドラが常に最新の committed game から実処理できるよう、
+  // レンダー毎に同期する ref。これで useCallback([]) を安定させつつ
+  // 自動 tick との競合（stale closure による上書き）を避ける。
+  var gameRef = _useRef(game);
+  gameRef.current = game;
 
   _useEffect(function() {
     persistSave(game);
   }, [game]);
+
+  // actionResult は一時通知。タブ（screen）を切り替えたら消す。
+  // fire の status 変化では消さない（doBattle→found で結果が消えないように）。
+  _useEffect(function() {
+    setActionResult(null);
+  }, [screen]);
+
+  var closeActionResult = _useCallback(function() { setActionResult(null); }, []);
 
   _useEffect(function() {
     tickRef.current = setInterval(function() {
@@ -2517,20 +2520,20 @@ function App() {
   }, []);
 
   var handleDoBattle = _useCallback(function(fireId, answer) {
-    setGame(function(prev) {
-      var result = doBattle(prev, fireId, answer);
-      return result.ok ? result.game : prev;
-    });
+    var result = doBattle(gameRef.current, fireId, answer);
+    if (result.ok) {
+      setGame(result.game);
+      setActionResult(result.actionResult || null);
+    }
   }, []);
 
   var handleReceive = _useCallback(function(fireId, answer) {
-    setGame(function(prev) {
-      var result = receiveFire(prev, fireId, answer);
-      if (result.ok && result.newlyUnlockedKotae) {
-        setShowKotaeIntro(true);
-      }
-      return result.ok ? result.game : prev;
-    });
+    var result = receiveFire(gameRef.current, fireId, answer);
+    if (result.ok) {
+      setGame(result.game);
+      setActionResult(result.actionResult || null);
+      if (result.newlyUnlockedKotae) setShowKotaeIntro(true);
+    }
   }, []);
 
   var handleUpdateLastSeen = _useCallback(function() {
@@ -2542,24 +2545,27 @@ function App() {
   }, []);
 
   var handleReexplore = _useCallback(function(fireId, type) {
-    setGame(function(prev) {
-      var result = reexploreFire(prev, fireId, type);
-      return result.ok ? result.game : prev;
-    });
+    var result = reexploreFire(gameRef.current, fireId, type);
+    if (result.ok) {
+      setGame(result.game);
+      setActionResult(result.actionResult || null);
+    }
   }, []);
 
   var handleRestUnreceived = _useCallback(function(fireId) {
-    setGame(function(prev) {
-      var result = restUnreceived(prev, fireId);
-      return result.ok ? result.game : prev;
-    });
+    var result = restUnreceived(gameRef.current, fireId);
+    if (result.ok) {
+      setGame(result.game);
+      setActionResult(result.actionResult || null);
+    }
   }, []);
 
   var handleWatchFire = _useCallback(function(fireId) {
-    setGame(function(prev) {
-      var result = watchFire(prev, fireId);
-      return result.ok ? result.game : prev;
-    });
+    var result = watchFire(gameRef.current, fireId);
+    if (result.ok) {
+      setGame(result.game);
+      setActionResult(result.actionResult || null);
+    }
   }, []);
 
   var handleBuyMarket = _useCallback(function(newGame) {
@@ -2567,10 +2573,11 @@ function App() {
   }, []);
 
   var handleRestToday = _useCallback(function(fireId) {
-    setGame(function(prev) {
-      var result = restToday(prev, fireId);
-      return result.ok ? result.game : prev;
-    });
+    var result = restToday(gameRef.current, fireId);
+    if (result.ok) {
+      setGame(result.game);
+      setActionResult(result.actionResult || null);
+    }
   }, []);
 
   var handleReset = _useCallback(function() {
@@ -2636,6 +2643,8 @@ function App() {
           onReceive={handleReceive}
           onReexplore={handleReexplore}
           onRestUnreceived={handleRestUnreceived}
+          actionResult={actionResult}
+          onCloseActionResult={closeActionResult}
         />
       )}
       {screen === 'garden' && (
@@ -2649,6 +2658,8 @@ function App() {
           onBuyMarket={handleBuyMarket}
           onReexplore={handleReexplore}
           onRestUnreceived={handleRestUnreceived}
+          actionResult={actionResult}
+          onCloseActionResult={closeActionResult}
         />
       )}
       {showKotaeIntro && (
