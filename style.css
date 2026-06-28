@@ -5063,3 +5063,41 @@ html,body{
   background:rgba(91,33,182,.2);box-shadow:0 0 24px 4px rgba(167,139,250,.16);
 }
 .discovery-btn:disabled{opacity:.4;cursor:default;box-shadow:none}
+
+/* prefers-reduced-motion 下で、アニメに依存して現れる文字が透明のまま消えないように。
+   （グローバルの *{animation:none} が opacity:0→1 のフェードを止めてしまうため明示） */
+@media (prefers-reduced-motion: reduce){
+  .entrust-words, .discovery-question, .intro-content{ opacity:1 !important; }
+}
+
+/* ── リセット確認（世界内モーダル）── window.confirm の置換。 */
+.reset-ov{
+  position:fixed;inset:0;z-index:2400;
+  background:rgba(5,6,8,.92);
+  display:flex;align-items:center;justify-content:center;
+  padding:28px 22px;max-width:480px;margin:0 auto;
+  animation:introFadeIn .4s ease both;
+}
+.reset-card{
+  width:100%;max-width:340px;
+  background:#0b0d12;border:1px solid #2a2030;border-radius:16px;
+  padding:24px 22px;box-shadow:0 24px 64px -20px rgba(0,0,0,.8);
+}
+.reset-name{display:block;font-size:10px;letter-spacing:.14em;margin:14px 0 6px}
+.reset-name:first-child{margin-top:0}
+.reset-kotae{color:#a78bfa}
+.reset-toyman{color:#fb923c}
+.reset-line{color:#cbd2e0;font-size:14px;line-height:1.9;margin:0}
+.reset-warn{color:#9a6b6b;font-size:12px;line-height:1.8;margin:16px 0 20px;text-align:center;font-style:italic}
+.reset-btn-keep{
+  width:100%;padding:14px 0;border-radius:12px;
+  background:#1e293b;border:1px solid #334155;color:#e2e8f0;
+  font-size:15px;cursor:pointer;font-family:inherit;letter-spacing:.04em;
+}
+.reset-btn-keep:hover{background:#243349;border-color:#3e4d63}
+.reset-btn-erase{
+  width:100%;margin-top:10px;padding:9px 0;border-radius:10px;
+  background:transparent;border:none;color:#7f5b5b;
+  font-size:12px;cursor:pointer;font-family:inherit;letter-spacing:.03em;
+}
+.reset-btn-erase:hover{color:#a06b6b;text-decoration:underline}

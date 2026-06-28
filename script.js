@@ -1926,7 +1926,7 @@ function FireInputForm({ onSubmit, onCancel }) {
               flex: 1, padding: '12px 0', borderRadius: 8,
               background: '#c2410c', border: 'none', color: '#fff',
               fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
-            }}>残り火を灯す</button>
+            }}>この火に言葉を置く</button>
             <button onClick={function() { setStep(1); }} style={{
               padding: '12px 16px', borderRadius: 8,
               background: 'transparent', border: '1px solid #2e3348',
@@ -3395,13 +3395,25 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
     setShowForm(false);
   }
 
+  // 状態別のトイマンの一言。「……さがしたよ」は入口専用、「……みつけた」は
+  // 発見シーン専用。ホームの汎用挨拶では名台詞を連打しない（軽くしない）。
+  var receiving = game.fires.find(function(f) { return f.status === 'receiving'; });
+  var received = game.fires.find(function(f) { return f.status === 'received'; });
+  var anyReturned = game.fires.some(function(f) { return f.status === 'returned'; });
   var toymanGreeting;
-  if (game.toyman.state === 'exploring') {
-    toymanGreeting = '火は見えている';
-  } else if (game.toyman.state === 'returning') {
-    toymanGreeting = '……さがしたよ';
-  } else if (totalFires === 0) {
+  if (totalFires === 0) {
     toymanGreeting = 'まだ、消えていない';
+  } else if (found) {
+    // 発見済みでまだ届けていない火（発見シーンの後に滞在した稀なケース）
+    toymanGreeting = '問いの欠片は、もう見つかっている';
+  } else if (receiving || game.toyman.state === 'returning') {
+    toymanGreeting = '記録塔へ運ぶ';
+  } else if (searching) {
+    toymanGreeting = '火は、まだある';
+  } else if (received) {
+    toymanGreeting = '受け取られた。でも、まだ余熱がある';
+  } else if (anyReturned) {
+    toymanGreeting = '帰った';
   } else {
     toymanGreeting = 'また来たんだね';
   }
@@ -3615,6 +3627,25 @@ function SaveErrorNotice({ onDismiss }) {
   );
 }
 
+// 全記録の初期化確認。OSダイアログではなく、コタエとトイマンの言葉で確かめる。
+function ResetConfirm({ onCancel, onConfirm }) {
+  return (
+    <div className="reset-ov" role="alertdialog" onClick={onCancel}>
+      <div className="reset-card" onClick={function(e) { e.stopPropagation(); }}>
+        <span className="reset-name reset-kotae">コタエ</span>
+        <p className="reset-line">この箱庭の記録を、すべて初期化します。</p>
+        <span className="reset-name reset-toyman">トイマン</span>
+        <p className="reset-line">火も、消えるのか。</p>
+        <span className="reset-name reset-kotae">コタエ</span>
+        <p className="reset-line">はい。<br />受領証も、痕跡も、返却灯も消えます。</p>
+        <p className="reset-warn">この箱庭は、最初の暗さに戻ります。<br />元には戻せません。</p>
+        <button className="reset-btn-keep" onClick={onCancel}>消さない</button>
+        <button className="reset-btn-erase" onClick={onConfirm}>すべて消す</button>
+      </div>
+    </div>
+  );
+}
+
 function MilestoneDialog({ milestone, onClose }) {
   var [step, setStep] = _useState(0);
   var lines = milestone.lines;
@@ -3773,12 +3804,17 @@ var ENTRUST_NARRATIVE_LINES = [
   '小さな火の揺れ方を、ただ見ていた。',
 ];
 
+// 初回はフル。2本目以降は短縮（毎回フル演出だと反復が重い／没入も切らさない）。
 var ENTRUST_TOYMAN_LINES = [
   '預かる。',
   '強く握らない。\nでも、落とさない。',
 ];
+var ENTRUST_TOYMAN_LINES_SHORT = [
+  '預かる。',
+  '落とさない。',
+];
 
-function EntrustScene({ fire, onDone }) {
+function EntrustScene({ fire, short, onDone }) {
   var [step, setStep] = _useState(0);
   var [visible, setVisible] = _useState(false);
   var [leaving, setLeaving] = _useState(false);
@@ -3788,8 +3824,15 @@ function EntrustScene({ fire, onDone }) {
     return function() { clearTimeout(t); };
   }, []);
 
+  // 場面のビート列。短縮時はナラティブを省き、トイマンの言葉だけを置く。
+  var beats = [];
+  if (!short) beats.push({ narrative: ENTRUST_NARRATIVE_LINES });
+  (short ? ENTRUST_TOYMAN_LINES_SHORT : ENTRUST_TOYMAN_LINES).forEach(function(t) {
+    beats.push({ toyman: t });
+  });
+
   function advance() {
-    if (step < ENTRUST_TOYMAN_LINES.length) {
+    if (step < beats.length - 1) {
       setStep(function(s) { return s + 1; });
     }
   }
@@ -3800,9 +3843,8 @@ function EntrustScene({ fire, onDone }) {
     setTimeout(function() { onDone(); }, 620);
   }
 
-  var isNarrative = step === 0;
-  var toymanIdx = step - 1; // 0-based index into ENTRUST_TOYMAN_LINES
-  var isFinal = step === ENTRUST_TOYMAN_LINES.length;
+  var isFinal = step === beats.length - 1;
+  var beat = beats[step] || {};
 
   // プレイヤー自身の言葉が、火に置かれている。
   var words = (fire && fire.kindle) ? fire.kindle.trim() : '';
@@ -3819,9 +3861,9 @@ function EntrustScene({ fire, onDone }) {
       )}
 
       <div key={step} className={'intro-content' + (visible ? ' intro-content-in' : '')}>
-        {isNarrative && (
+        {beat.narrative && (
           <div className="intro-narrative">
-            {ENTRUST_NARRATIVE_LINES.map(function(line, i) {
+            {beat.narrative.map(function(line, i) {
               if (!line) return React.createElement('div', { key: i, style: { height: 10 } });
               return (
                 <p key={i} className="intro-narrative-line">{line}</p>
@@ -3830,11 +3872,11 @@ function EntrustScene({ fire, onDone }) {
           </div>
         )}
 
-        {!isNarrative && (
+        {beat.toyman && (
           <div className="intro-toyman-block">
             <span className="intro-toyman-label">トイマン</span>
             <p className="intro-toyman-line">
-              {ENTRUST_TOYMAN_LINES[toymanIdx].split('\n').map(function(seg, si) {
+              {beat.toyman.split('\n').map(function(seg, si) {
                 return React.createElement(React.Fragment, { key: si },
                   si > 0 && React.createElement('br', null),
                   seg
@@ -3986,6 +4028,8 @@ function App() {
   // 保存失敗の通知。一度だけ出す（連続失敗で何度も出さない）。
   var [saveError, setSaveError] = _useState(false);
   var saveErrorShownRef = _useRef(false);
+  // 全記録の初期化確認（世界内モーダル）
+  var [resetConfirm, setResetConfirm] = _useState(false);
   var tickRef = _useRef(null);
 
   // 各ハンドラが常に最新の committed game から実処理できるよう、
@@ -4148,14 +4192,18 @@ function App() {
     setIntroActive(true);
   }, []);
 
+  // リセットは世界内モーダルで確認する（OSの window.confirm は世界の壁を壊す）。
   var handleReset = _useCallback(function() {
-    if (window.confirm('本当にリセットしますか？')) {
-      clearSave();
-      setGame(initGame());
-      setIntroActive(true);
-      setEntrustFireId(null);
-      setScreen('home');
-    }
+    setResetConfirm(true);
+  }, []);
+
+  var doReset = _useCallback(function() {
+    clearSave();
+    setGame(initGame());
+    setIntroActive(true);
+    setEntrustFireId(null);
+    setScreen('home');
+    setResetConfirm(false);
   }, []);
 
   var handleForceFound = _useCallback(function(fireId) {
@@ -4208,6 +4256,7 @@ function App() {
         return (
           <EntrustScene
             fire={fire}
+            short={game.fires.length > 1}
             onDone={function() {
               setEntrustFireId(null);
               setScreen('garden');
@@ -4369,6 +4418,12 @@ function App() {
       })()}
       {saveError && (
         <SaveErrorNotice onDismiss={function() { setSaveError(false); }} />
+      )}
+      {resetConfirm && (
+        <ResetConfirm
+          onCancel={function() { setResetConfirm(false); }}
+          onConfirm={doReset}
+        />
       )}
       <DevBar
         game={game}
