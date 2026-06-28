@@ -4755,3 +4755,21 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .tears-spring{background:#0a0f14;border:1px solid #164e63;border-radius:10px;padding:10px 13px;margin-top:8px}
 .tears-spring-title{color:#0e7490;font-size:12px;margin:0 0 2px}
 .tears-spring-text{color:#374151;font-size:11px;margin:0;line-height:1.6}
+
+/* ── 作業パネル ── */
+.worker-panel{background:#080a10;border:1px solid #181c28;border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.worker-panel-label{color:#1e2238;font-size:9px;letter-spacing:.12em;margin:0 0 6px;text-transform:uppercase}
+.worker-task-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.worker-task-name{color:#2e3560;font-size:11px;white-space:nowrap}
+.worker-task-work{color:#1a1e2c;font-size:10px;white-space:nowrap}
+.worker-task-bar-wrap{flex:1;height:4px;background:#111420;border-radius:2px;overflow:hidden}
+.worker-task-bar-fill{height:100%;background:linear-gradient(90deg,#312e81,#6366f1);border-radius:2px;transition:width .6s ease}
+.worker-task-pct{color:#2e3560;font-size:10px;white-space:nowrap;min-width:28px;text-align:right}
+.worker-task-hint{color:#1a1e2c;font-size:10px;margin:0}
+
+/* 灯守り進行バー（GardenBoard 内の小バー） */
+.garden-lk-bar-wrap{width:28px;height:3px;background:#111420;border-radius:2px;overflow:hidden;margin-left:4px}
+.garden-lk-bar-fill{height:100%;background:#6366f1;border-radius:2px;transition:width .6s ease}
+
+/* action-result 作業行 */
+.action-result-work{color:#2e3560;font-size:11px;margin:2px 0;line-height:1.6;font-style:italic}

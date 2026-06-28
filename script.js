@@ -258,6 +258,9 @@ function initGame() {
     lastAutoAt: nowISO(),
     lastSeenAt: nowISO(),
     introSeen: { kotae: false, kana: false, utsuro: false, auditor: false },
+    workerTasks: {
+      lightkeeper: { id: 'lightkeeper', label: '灯守り', work: '守る', progress: 0, duration: 100, trace: 'small_stone', isUnlocked: true },
+    },
   };
 }
 
@@ -342,6 +345,11 @@ function migrateGame(g) {
   // 既存の灯守り状態を推測
   if (!g.tinyfolk.lightkeeper && g.fires.length > 0) {
     g.tinyfolk.lightkeeper = true;
+  }
+  // workerTasks 補完
+  if (!g.workerTasks) g.workerTasks = {};
+  if (!g.workerTasks.lightkeeper) {
+    g.workerTasks.lightkeeper = { id: 'lightkeeper', label: '灯守り', work: '守る', progress: 0, duration: 100, trace: 'small_stone', isUnlocked: true };
   }
   return g;
 }
@@ -623,6 +631,7 @@ function doBattle(game, fireId, answer) {
   }
   addLog(fire, pick(BATTLE_LOGS));
   addGardenItem(ns, 'burnt_paper');
+  advanceLightkeeper(ns, 5);
   // 紙集めの小人解放条件
   if (!ns.tinyfolk.paperCollector && ns.materials.paper >= 3) {
     ns.tinyfolk.paperCollector = true;
@@ -653,19 +662,41 @@ function tickProgress(game) {
   addLog(fire, pick(AUTO_LOGS));
   ns.lastAutoAt = nowISO();
   fire.updatedAt = nowISO();
+  // 灯守りの自動進行（問いの深度は進めない）
+  var lkTickCompleted = advanceLightkeeper(ns, 5);
   if (!shouldSkipAutoVisualEvent(ns)) {
-    var base = pick(AUTO_VISUAL_EVENTS);
+    var base = lkTickCompleted
+      ? { work: '守る', actor: 'lightkeeper', trace: 'small_stone',
+          message: '灯守りが、小さな石を置いた。\n問いは進んでいない。\nでも、火は少し落ち着いた。' }
+      : pick(AUTO_VISUAL_EVENTS);
     var ve = makeVisualEvent({
       fireId: fire.id, source: 'auto',
-      type: base.type, work: base.work, actor: base.actor,
-      trace: base.trace, message: base.message,
+      type: 'auto', work: base.work, actor: base.actor,
+      trace: base.trace || null, message: base.message,
     });
     ns.lastVisualEvent = ve;
-    if (base.trace === 'water_drop' && ns.tinyfolk && ns.tinyfolk.waterCarrier) {
+    if (!lkTickCompleted && base.trace === 'water_drop' && ns.tinyfolk && ns.tinyfolk.waterCarrier) {
       addGardenItem(ns, 'water_drop');
     }
   }
   return { changed: true, game: ns };
+}
+
+// 灯守りの仕事を進める。完了した場合 true を返す
+function advanceLightkeeper(ns, amount) {
+  var lk = ns.workerTasks && ns.workerTasks.lightkeeper;
+  if (!lk || !lk.isUnlocked) return false;
+  lk.progress = Math.min(lk.duration, (lk.progress || 0) + amount);
+  if (lk.progress < lk.duration) return false;
+  // 完了
+  lk.progress = 0;
+  addGardenItem(ns, 'small_stone');
+  ns.materials = safeMat(ns.materials);
+  ns.materials.ash = (ns.materials.ash || 0) + 1;
+  ns.toka = (ns.toka || 0) + 1;
+  var sf = ns.fires.find(function(f) { return f.status === 'searching'; });
+  if (sf) sf.gardenProgress = Math.min(100, (sf.gardenProgress || 0) + 3);
+  return true;
 }
 
 function watchFire(game, fireId) {
@@ -681,6 +712,7 @@ function watchFire(game, fireId) {
   ns.materials.ash = (ns.materials.ash || 0) + 1;
   addLog(fire, pick(WATCH_LOGS));
   addGardenItem(ns, 'small_stone');
+  var lkCompleted = advanceLightkeeper(ns, 30);
   // 水汲みの小人解放条件（watchでも関係しない → 後でrestで解放）
   if (fire.questionProgress >= 100) {
     fire.status = 'found';
@@ -695,7 +727,7 @@ function watchFire(game, fireId) {
     message: '灯守りが、小さな石を置いた。\n問いは進んでいない。\nでも、火は少し落ち着いた。',
   });
   ns.lastVisualEvent = ve;
-  return { ok: true, game: ns, visualEvent: ve };
+  return { ok: true, game: ns, visualEvent: ve, lightkeeperCompleted: lkCompleted };
 }
 
 function restToday(game, fireId) {
@@ -713,6 +745,7 @@ function restToday(game, fireId) {
   ns.materials.drop = (ns.materials.drop || 0) + 1;
   addGardenItem(ns, 'rest_chair');
   addGardenItem(ns, 'water_drop');
+  advanceLightkeeper(ns, 15);
   // 水汲みの小人解放条件
   if (!ns.tinyfolk.waterCarrier && fire.restCount >= 3) {
     ns.tinyfolk.waterCarrier = true;
@@ -1633,6 +1666,28 @@ function GardenItem({ def, isNew }) {
   );
 }
 
+function WorkerPanel({ game }) {
+  var lk = game.workerTasks && game.workerTasks.lightkeeper;
+  if (!lk || !lk.isUnlocked || !game.tinyfolk.lightkeeper) return null;
+  var hasFire = game.fires.some(function(f) { return f.status === 'searching' || f.status === 'received'; });
+  if (!hasFire) return null;
+  var progress = lk.progress || 0;
+  return (
+    <div className="worker-panel">
+      <p className="worker-panel-label">作業中</p>
+      <div className="worker-task-row">
+        <span className="worker-task-name">🧍 {lk.label}</span>
+        <span className="worker-task-work">{lk.work}</span>
+        <div className="worker-task-bar-wrap">
+          <div className="worker-task-bar-fill" style={{ width: progress + '%' }} />
+        </div>
+        <span className="worker-task-pct">{progress}%</span>
+      </div>
+      <p className="worker-task-hint">次に残る痕跡：小さな石 🪨</p>
+    </div>
+  );
+}
+
 function GardenBoard({ game }) {
   var sf    = game.fires.find(function(f) { return f.status === 'searching'; });
   var gp    = sf ? (sf.gardenProgress || 0) : 0;
@@ -1707,6 +1762,15 @@ function GardenBoard({ game }) {
             <div className="garden-item-actor-right">
               <span className="garden-item-actor-label">灯守り</span>
               <span className="garden-item-actor-emoji">🧍</span>
+              {(function() {
+                var lk = game.workerTasks && game.workerTasks.lightkeeper;
+                var prog = lk ? (lk.progress || 0) : 0;
+                return (
+                  <div className="garden-lk-bar-wrap">
+                    <div className="garden-lk-bar-fill" style={{ width: prog + '%' }} />
+                  </div>
+                );
+              })()}
             </div>
           )}
           {(items.includes('small_stone') || gp >= 20) && (
@@ -1906,12 +1970,20 @@ function ActionResultPanel({ result, onClose }) {
           return <p key={i} className="action-result-gain">{g.label} +{g.amount}</p>;
         })}
       </div>
-      <div className="action-result-section">
-        <p className="action-result-section-label">箱庭に残った痕跡</p>
-        {result.traces.map(function(t, i) {
-          return <p key={i} className="action-result-trace">{t}</p>;
-        })}
-      </div>
+      {result.traces && result.traces.length > 0 && (
+        <div className="action-result-section">
+          <p className="action-result-section-label">箱庭に残った痕跡</p>
+          {result.traces.map(function(t, i) {
+            return <p key={i} className="action-result-trace">{t}</p>;
+          })}
+        </div>
+      )}
+      {result.work && (
+        <div className="action-result-section">
+          <p className="action-result-section-label">作業</p>
+          <p className="action-result-work">{result.work}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1935,8 +2007,25 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
   }, [sfId]);
 
   function doWatch() {
+    var lk = game.workerTasks && game.workerTasks.lightkeeper;
+    var currentLkProg = lk ? (lk.progress || 0) : 0;
+    var willComplete = (currentLkProg + 30) >= 100;
     onWatchFire(sf.id);
-    setActionResult(ACTION_RESULTS.watch);
+    if (willComplete) {
+      setActionResult({
+        title: 'ただ見守った',
+        gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }],
+        traces: ['灯守りが、小さな石を置いた。'],
+        work: null,
+      });
+    } else {
+      setActionResult({
+        title: 'ただ見守った',
+        gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }],
+        traces: [],
+        work: '灯守りが、火のそばで石を確かめている。',
+      });
+    }
   }
   function doRest() {
     onRestToday(sf.id);
@@ -1965,7 +2054,10 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
       {/* 1. GardenBoard */}
       <GardenBoard game={game} />
 
-      {/* 2. EventCard */}
+      {/* 2. WorkerPanel */}
+      <WorkerPanel game={game} />
+
+      {/* 3. EventCard */}
       <EventCard event={game.lastVisualEvent} />
 
       {/* 3. actionResult */}
