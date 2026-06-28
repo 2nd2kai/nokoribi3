@@ -448,6 +448,9 @@ function normalizeFire(f) {
   if (f.receiptDraft === undefined) f.receiptDraft = null;
   if (f.openedPlace === undefined) f.openedPlace = null;
   if (f.placeTrace === undefined) f.placeTrace = null;
+  if (f.finalReturn === undefined) f.finalReturn = null;
+  if (f.finalReturnAttemptedAt === undefined) f.finalReturnAttemptedAt = null;
+  if (f.returnHoldLog === undefined) f.returnHoldLog = [];
   // receiving → found 回復（旅途中にアプリが終了した場合）
   if (f.status === 'receiving') { f.status = 'found'; f.receiptDraft = null; }
   // 既存の received fire に receipt を補完
@@ -985,7 +988,8 @@ function restUnreceived(game, fireId) {
 }
 
 // 未受領3領域がすべて静かな痕跡になった火を、心へ返す（このサイクルの終点）。
-function returnFireToHeart(game, fireId) {
+// finalReturn: { metrics, memo, choice } — FinalReturnScene から渡される。
+function returnFireToHeart(game, fireId, finalReturn) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'received') return { ok: false, game: game };
@@ -993,6 +997,13 @@ function returnFireToHeart(game, fireId) {
   fire.status = 'returned';
   fire.returnedAt = nowISO();
   fire.updatedAt = nowISO();
+  fire.finalReturn = {
+    metrics: finalReturn ? finalReturn.metrics : null,
+    memo: finalReturn ? (finalReturn.memo || '') : '',
+    choice: finalReturn ? (finalReturn.choice || null) : null,
+    placeTrace: fire.placeTrace || null,
+    createdAt: nowISO(),
+  };
   // 心へ返すのは、このサイクルで最も静かな行為。報酬は出さない。
   // 残るのは灯貨ではなく、箱庭に置かれた返却灯（returned_ember）という痕跡だけ。
   addGardenItem(ns, 'returned_ember');
@@ -1011,6 +1022,17 @@ function returnFireToHeart(game, fireId) {
     ns = triggerEncounter(ns, 'utsuro_first_return', { fireId: fireId });
   }
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
+}
+
+// 「今日はまだ返さない」を選んだ時の保留記録。fire.status は received のまま。
+function holdFinalReturn(game, fireId, memo) {
+  var ns = cloneS(game);
+  var fire = ns.fires.find(function(f) { return f.id === fireId; });
+  if (!fire) return { ok: false, game: game };
+  fire.finalReturnAttemptedAt = nowISO();
+  if (!Array.isArray(fire.returnHoldLog)) fire.returnHoldLog = [];
+  fire.returnHoldLog = fire.returnHoldLog.concat([{ at: nowISO(), memo: memo || '' }]);
+  return { ok: true, game: ns };
 }
 
 // ── 灯貨の不変条件 ───────────────────────────────────────────────────────────
@@ -2338,16 +2360,28 @@ function UnreceivedPanel({ fire, onReexplore, onRest, onReturnToHeart, actionRes
       )}
 
       {/* 3領域すべて静かな痕跡になったら、火を心へ返す（このサイクルの終点） */}
-      {allSettled ? (
-        <div className="return-heart-box">
-          <p className="return-heart-msg">
-            3つの影は、もう火を覆っていない。<br />この火を、心へ返せます。
-          </p>
-          <button className="return-heart-btn" onClick={function() { onReturnToHeart(fire.id); }}>
-            🏮 火を心へ返す
-          </button>
-        </div>
-      ) : (function() {
+      {allSettled ? (function() {
+        var canReturn = !!(fire.receipt && fire.openedPlace && fire.openedPlace.firstEncounterSeen && fire.placeTrace);
+        return (
+          <div className="return-heart-box">
+            <p className="return-heart-msg">
+              3つの影は、もう火を覆っていない。<br />この火を、心へ返せます。
+            </p>
+            {canReturn ? (
+              <button className="return-heart-btn" onClick={function() { onReturnToHeart(fire.id); }}>
+                火を心へ返す
+              </button>
+            ) : (
+              <p className="return-heart-wait">
+                {!fire.openedPlace ? '場所がまだ開いていません。' :
+                 !fire.openedPlace.firstEncounterSeen ? 'まず、開いた場所でキャラクターと会ってください。' :
+                 !fire.placeTrace ? '場所での記録がまだありません。' :
+                 '受領証がまだありません。'}
+              </p>
+            )}
+          </div>
+        );
+      })() : (function() {
         var cd = cooldownRemaining(fire.lastUnreceivedRestAt, 30);
         return (
           <button
@@ -4500,6 +4534,232 @@ function PlaceEncounterScene({ fire, onComplete }) {
   );
 }
 
+// ── FinalReturnScene ─────────────────────────────────────────────────────────
+// 心へ返す署名儀式。記録確認 → 三軸署名 → 返し方の選択 → 完了 or 保留。
+// 灯貨は増やさない。プレイヤーが「言葉」で終点を選ぶ。
+function FinalReturnScene({ fire, onReturn, onHold }) {
+  var [phase, setPhase] = _useState('record'); // record | sign | choice | done | hold_msg
+  var [metrics, setMetrics] = _useState({ meaning: null, value: null, satisfaction: null });
+  var [memo, setMemo] = _useState('');
+  var [choiceMade, setChoiceMade] = _useState(null);
+  var [crisisHold, setCrisisHold] = _useState(false);
+  var [visible, setVisible] = _useState(false);
+  var [leaving, setLeaving] = _useState(false);
+
+  _useEffect(function() {
+    var t = setTimeout(function() { setVisible(true); }, 80);
+    return function() { clearTimeout(t); };
+  }, []);
+
+  function doLeave(cb) {
+    setLeaving(true);
+    setTimeout(cb, 620);
+  }
+
+  function proceedToChoice() {
+    if (hasDanger(memo)) { setCrisisHold(true); return; }
+    setPhase('choice');
+  }
+
+  function selectReturn(c) {
+    setChoiceMade(c);
+    setPhase('done');
+  }
+
+  function selectHold() {
+    setPhase('hold_msg');
+  }
+
+  useOverlayKeys({
+    onEnter: leaving ? null
+      : phase === 'record' ? function() { setPhase('sign'); }
+      : phase === 'done' ? function() { doLeave(function() { onReturn({ metrics: metrics, memo: memo, choice: choiceMade }); }); }
+      : phase === 'hold_msg' ? function() { doLeave(function() { onHold({ memo: memo }); }); }
+      : null,
+    onEscape: (phase === 'choice') ? function() { setPhase('sign'); } : null,
+  });
+
+  var receipt = fire.receipt || {};
+  var pt = fire.placeTrace || {};
+
+  var AXES = [
+    { key: 'meaning', label: '意味があった' },
+    { key: 'value', label: '価値があった' },
+    { key: 'satisfaction', label: '納得があった' },
+  ];
+  var AXIS_OPTS = ['あった', 'まだわからない', 'なかった'];
+
+  var RETURN_CHOICES = [
+    { id: 'certain', label: '納得があったから返す' },
+    { id: 'still_pain', label: 'まだ痛いけど返す' },
+    { id: 'unknown', label: '全部は分からないまま返す' },
+  ];
+
+  var wrapCls = 'intro-wrap final-return-wrap' + (visible ? ' intro-visible' : '') + (leaving ? ' intro-leaving' : '');
+
+  if (crisisHold) {
+    return (
+      <CrisisHold
+        onHold={function() { setCrisisHold(false); setMemo(''); }}
+        onProceed={function() { setCrisisHold(false); setPhase('choice'); }}
+        proceedLabel="内容を確認して、続ける"
+      />
+    );
+  }
+
+  return (
+    <div className={wrapCls} onClick={function(e) { e.stopPropagation(); }}>
+      <div className="intro-content">
+
+        {phase === 'record' && (
+          <div className="final-return-record intro-content-in">
+            <p className="intro-narrative-line final-return-heading">記録を確認してください</p>
+            <div className="final-return-archive">
+              {fire.kindle && (
+                <div className="final-return-row">
+                  <span className="final-return-label">原文</span>
+                  <span className="final-return-value">{fire.kindle}</span>
+                </div>
+              )}
+              {fire.question && (
+                <div className="final-return-row">
+                  <span className="final-return-label">問いの欠片</span>
+                  <span className="final-return-value">{fire.question}</span>
+                </div>
+              )}
+              {receipt.acceptanceText && (
+                <div className="final-return-row">
+                  <span className="final-return-label">受領証</span>
+                  <span className="final-return-value">{receipt.acceptanceText}</span>
+                </div>
+              )}
+              {pt.traceText && (
+                <div className="final-return-row">
+                  <span className="final-return-label">場所の痕跡</span>
+                  <span className="final-return-value">{pt.traceText}</span>
+                </div>
+              )}
+            </div>
+            <div className="intro-btn-row">
+              <button className="intro-btn-fire place-btn" onClick={function() { setPhase('sign'); }} disabled={leaving}>
+                署名へ進む
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === 'sign' && (
+          <div className="final-return-sign intro-content-in">
+            <p className="intro-narrative-line final-return-heading">この火との時間を振り返って</p>
+            <div className="final-return-axes">
+              {AXES.map(function(ax) {
+                return (
+                  <div key={ax.key} className="final-return-axis-row">
+                    <span className="final-return-axis-label">{ax.label}</span>
+                    <div className="final-return-axis-opts">
+                      {AXIS_OPTS.map(function(opt) {
+                        var sel = metrics[ax.key] === opt;
+                        return (
+                          <button
+                            key={opt}
+                            className={'final-return-axis-btn' + (sel ? ' selected' : '')}
+                            onClick={function() {
+                              setMetrics(function(prev) {
+                                var n = Object.assign({}, prev); n[ax.key] = opt; return n;
+                              });
+                            }}
+                          >{opt}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="final-return-memo-wrap">
+              <p className="final-return-memo-label">この火を返す前に、最後に一言だけ残してください。<br /><span className="final-return-memo-sub">空欄でも構いません。</span></p>
+              <textarea
+                className="final-return-memo"
+                rows={3}
+                value={memo}
+                onChange={function(e) { setMemo(e.target.value); }}
+                placeholder="……"
+              />
+            </div>
+            <div className="intro-btn-row">
+              <button className="intro-btn-fire place-btn" onClick={proceedToChoice} disabled={leaving}>
+                次へ
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === 'choice' && (
+          <div className="final-return-choice intro-content-in">
+            <p className="intro-narrative-line final-return-heading">どのように、返しますか</p>
+            <div className="final-return-choices">
+              {RETURN_CHOICES.map(function(rc) {
+                return (
+                  <button key={rc.id} className="final-return-choice-btn" onClick={function() { selectReturn(rc.label); }}>
+                    {rc.label}
+                  </button>
+                );
+              })}
+              <button className="final-return-choice-btn final-return-hold-btn" onClick={selectHold}>
+                今日はまだ返さない
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === 'done' && (
+          <div className="final-return-done intro-content-in">
+            <p className="intro-narrative-line">火は、棚から消えた。</p>
+            <div style={{ height: 18 }} />
+            <p className="intro-narrative-line">でも、記録塔の奥に、</p>
+            <p className="intro-narrative-line">小さな場所が空いた。</p>
+            <div style={{ height: 24 }} />
+            <p className="final-return-char" style={{ color: '#7EB8D4' }}>トイマン</p>
+            <p className="intro-narrative-line">帰った。</p>
+            <div style={{ height: 12 }} />
+            <p className="final-return-char" style={{ color: '#b0a8cc' }}>コタエ</p>
+            <p className="intro-narrative-line">消失ではありません。<br />返却です。</p>
+            <div className="intro-btn-row">
+              <button
+                className="intro-btn-fire place-btn"
+                onClick={function() { doLeave(function() { onReturn({ metrics: metrics, memo: memo, choice: choiceMade }); }); }}
+                disabled={leaving}
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === 'hold_msg' && (
+          <div className="final-return-hold intro-content-in">
+            <p className="final-return-char" style={{ color: '#b0a8cc' }}>コタエ</p>
+            <p className="intro-narrative-line">保留しました。<br />返さないことも、記録します。</p>
+            <div style={{ height: 16 }} />
+            <p className="final-return-char" style={{ color: '#7EB8D4' }}>トイマン</p>
+            <p className="intro-narrative-line">まだ置く。それでいい。</p>
+            <div className="intro-btn-row">
+              <button
+                className="intro-btn-fire place-btn"
+                onClick={function() { doLeave(function() { onHold({ memo: memo }); }); }}
+                disabled={leaving}
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -4533,6 +4793,8 @@ function App() {
   var awayCheckedRef = _useRef(false);
   // 場所での初回出会い { fireId }
   var [placeEncounter, setPlaceEncounter] = _useState(null);
+  // 心へ返す署名儀式 — fireId
+  var [finalReturnFireId, setFinalReturnFireId] = _useState(null);
   var tickRef = _useRef(null);
 
   // 各ハンドラが常に最新の committed game から実処理できるよう、
@@ -4650,13 +4912,26 @@ function App() {
     }
   }, []);
 
+  // 「火を心へ返す」ボタン → FinalReturnScene を開くだけ。実際の返却は handleFinalReturn。
   var handleReturnToHeart = _useCallback(function(fireId) {
-    var result = returnFireToHeart(gameRef.current, fireId);
+    setFinalReturnFireId(fireId);
+  }, []);
+
+  // 署名完了 → 実際に返却
+  var handleFinalReturn = _useCallback(function(fireId, finalData) {
+    var result = returnFireToHeart(gameRef.current, fireId, finalData);
+    setFinalReturnFireId(null);
     if (result.ok) {
       setGame(result.game);
       setActionResult(result.actionResult || null);
-      setKotaeDialog({ fireId: fireId, kind: 'returned' });
     }
+  }, []);
+
+  // 「今日はまだ返さない」→ 保留記録だけ残して閉じる
+  var handleHoldReturn = _useCallback(function(fireId, holdData) {
+    var result = holdFinalReturn(gameRef.current, fireId, holdData ? holdData.memo : '');
+    setFinalReturnFireId(null);
+    if (result.ok) setGame(result.game);
   }, []);
 
   var handleWatchFire = _useCallback(function(fireId) {
@@ -4808,6 +5083,18 @@ function App() {
           <PlaceEncounterScene
             fire={fire}
             onComplete={function(selected) { handlePlaceEncounterDone(fire.id, selected); }}
+          />
+        );
+      })()}
+      {/* 心へ返す署名儀式 — FinalReturnScene */}
+      {!introActive && !entrustFireId && !placeEncounter && finalReturnFireId && (function() {
+        var fire = game.fires.find(function(f) { return f.id === finalReturnFireId; });
+        if (!fire) return null;
+        return (
+          <FinalReturnScene
+            fire={fire}
+            onReturn={function(data) { handleFinalReturn(finalReturnFireId, data); }}
+            onHold={function(data) { handleHoldReturn(finalReturnFireId, data); }}
           />
         );
       })()}

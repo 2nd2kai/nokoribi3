@@ -4739,6 +4739,47 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .return-heart-msg{color:#c4b5fd;font-size:13px;line-height:1.8;margin:0 0 12px}
 .return-heart-btn{width:100%;padding:13px 0;border-radius:10px;background:#4c1d95;border:1px solid #7c3aed;color:#ede9fe;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.04em}
 .return-heart-btn:active{background:#5b21b6}
+.return-heart-wait{color:#5b6678;font-size:12px;line-height:1.7;margin:8px 0 0;text-align:center}
+
+/* FinalReturnScene — 心へ返す署名儀式 */
+.final-return-wrap{background:#070810}
+.final-return-heading{font-size:14px;letter-spacing:.08em;color:#9aa3b5;margin:0 0 20px;text-align:center}
+.final-return-archive{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
+.final-return-row{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:8px;background:#0d0f1a;border:1px solid #1a1e2e}
+.final-return-label{font-size:10px;letter-spacing:.12em;color:#4a5470;text-transform:uppercase}
+.final-return-value{font-size:13px;line-height:1.7;color:#9aa3b5}
+.final-return-axes{display:flex;flex-direction:column;gap:12px;margin-bottom:22px}
+.final-return-axis-row{display:flex;flex-direction:column;gap:6px}
+.final-return-axis-label{font-size:12px;color:#8f9bb3;letter-spacing:.04em}
+.final-return-axis-opts{display:flex;gap:6px}
+.final-return-axis-btn{
+  flex:1;padding:7px 4px;border-radius:7px;font-size:11px;cursor:pointer;
+  font-family:inherit;letter-spacing:.02em;
+  background:transparent;border:1px solid #1e2230;color:#5b6678;transition:all .15s;
+}
+.final-return-axis-btn.selected{background:#1a1e2e;border-color:#4a5470;color:#c4cbd8}
+.final-return-axis-btn:hover:not(.selected){border-color:#2a3040;color:#8f9bb3}
+.final-return-memo-wrap{margin-bottom:20px}
+.final-return-memo-label{font-size:12px;color:#8f9bb3;line-height:1.7;margin:0 0 8px}
+.final-return-memo-sub{font-size:11px;color:#4a5470}
+.final-return-memo{
+  width:100%;box-sizing:border-box;background:#0d0f1a;border:1px solid #1e2230;border-radius:8px;
+  color:#9aa3b5;font-family:inherit;font-size:13px;line-height:1.7;padding:10px 12px;resize:none;
+}
+.final-return-memo:focus{outline:none;border-color:#2a3a50}
+.final-return-choices{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.final-return-choice-btn{
+  width:100%;padding:12px 0;border-radius:9px;font-size:13px;cursor:pointer;
+  font-family:inherit;letter-spacing:.04em;
+  background:rgba(62,42,92,.14);border:1px solid #4c2d7a;color:#c4b5fd;transition:all .15s;
+}
+.final-return-choice-btn:hover{background:rgba(76,29,149,.22);border-color:#7c3aed}
+.final-return-hold-btn{
+  margin-top:4px;background:transparent;border:1px solid #1e2230;color:#4a5470;
+}
+.final-return-hold-btn:hover{background:#0d0f1a;border-color:#2a3040;color:#6b7280}
+.final-return-char{font-size:11px;letter-spacing:.14em;color:#4a5470;margin:0 0 4px}
+.final-return-done .intro-narrative-line,.final-return-hold .intro-narrative-line{color:#9aa3b5;font-size:14px;line-height:1.9}
 
 /* 受領後の次導線 */
 .post-receive-lead{background:#0f0f1a;border:1px solid #312e81;border-radius:10px;padding:12px 14px;margin-bottom:10px}
