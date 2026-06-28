@@ -357,6 +357,7 @@ function initGame() {
     lastSeenAt: nowISO(),
     introSeen: { kotae: false, kana: false, utsuro: false, auditor: false },
     seenWorldIntro: false,
+    unlockedPlaces: [],
     seenEncounters: [],
     worldNotes: [],
     relationshipNotes: [],
@@ -410,6 +411,7 @@ function createFire(kindle, pain, writeState, feeling, metrics) {
     lastUnreceivedRestAt: null,
     receipt: null,
     receiptDraft: null,
+    openedPlace: null,
   };
 }
 
@@ -443,6 +445,7 @@ function normalizeFire(f) {
   if (f.lastUnreceivedRestAt === undefined) f.lastUnreceivedRestAt = null;
   if (f.receipt === undefined) f.receipt = null;
   if (f.receiptDraft === undefined) f.receiptDraft = null;
+  if (f.openedPlace === undefined) f.openedPlace = null;
   // receiving → found 回復（旅途中にアプリが終了した場合）
   if (f.status === 'receiving') { f.status = 'found'; f.receiptDraft = null; }
   // 既存の received fire に receipt を補完
@@ -520,6 +523,7 @@ function normalizeGame(g) {
   if (!g.lastAutoAt) g.lastAutoAt = nowISO();
   if (!g.lastSeenAt) g.lastSeenAt = nowISO();
   if (!('lastAwayShownAt' in g)) g.lastAwayShownAt = null;
+  if (!Array.isArray(g.unlockedPlaces)) g.unlockedPlaces = [];
   if (!g.introSeen) g.introSeen = { kotae: false, kana: false, utsuro: false, auditor: false };
   if (!('seenWorldIntro' in g)) g.seenWorldIntro = false;
   if (!Array.isArray(g.seenEncounters)) g.seenEncounters = [];
@@ -1417,6 +1421,49 @@ function generateAcceptanceText(fire, growth) {
   return { text: base, holdText: holdText, nextQuestion: RECEIPT_AXIS_QUESTIONS[lowestAxis] || null };
 }
 
+// ── 受領証から開く場所 ───────────────────────────────────────────────────────
+// 受領証はゴールではなく、火に残った未消化の感情へ会いに行くための地図。
+// 余熱を3種で測り、最も強いものに対応する場所を一つだけ開く。
+var PLACE_DEFS = {
+  pain:      { id: 'tears',      name: '涙の泉',     reason: 'この火には、痛かったところが残っていました。',           map: '受領証の裏に、水のにじみが広がった。' },
+  judgment:  { id: 'black_tags', name: '黒札置き場', reason: 'この火は、価値を裁く札を背負っていました。',             map: '受領証の端に、黒い札が一枚貼りついていた。' },
+  emptiness: { id: 'back_shelf', name: '棚の奥',     reason: 'この火には、まだ置き場所のない余白が残っていました。',   map: '受領証の下に、空白の棚が描かれていた。' },
+};
+
+var HEAT_PAIN_FEELINGS = ['悲しさ', '寂しさ', '悔しさ', '情けなさ', '恥ずかしさ', '怒り'];
+var HEAT_PAIN_STATES = ['書いたけど届いていない', '投稿したけど反応がない', '誰にも見せていない', '消したいけど消せない'];
+
+// 火に残った余熱を3種で測る。高いほど、まだ受け取れていない。
+function computeRemainingHeat(fire) {
+  var u = fire.unreceived || {};
+  var gp = fire.gardenProgress || 0;
+  var clamp = function(n) { return Math.round(Math.max(0, Math.min(100, n))); };
+  // 価値の黒札・納得の灰は、未受領領域をそのまま使う。
+  var judgment = clamp(u.value || 0);
+  var emptiness = clamp(u.satisfaction || 0);
+  // 痛みの水滴: 意味になれなかった疼き＋感情・関係・落ち着かなさの信号。
+  var pain = (u.meaning || 0) * 0.6;
+  if (HEAT_PAIN_FEELINGS.indexOf(fire.feeling || '') !== -1) pain += 22;
+  if (HEAT_PAIN_STATES.indexOf(fire.writeState || '') !== -1) pain += 16;
+  if (gp < 40) pain += 18; // 火が落ち着かないまま受領された
+  return { pain: clamp(pain), judgment: judgment, emptiness: emptiness };
+}
+
+// 最も強い余熱に対応する場所を一つだけ選ぶ。
+// 同点は、裁く場所(黒札)より先に痛み・余白の場所を選ぶ（黒札に偏らせない）。
+function chooseOpenedPlace(heat) {
+  var order = [['pain', heat.pain], ['emptiness', heat.emptiness], ['judgment', heat.judgment]];
+  var best = order[0];
+  for (var i = 1; i < order.length; i++) {
+    if (order[i][1] > best[1]) best = order[i];
+  }
+  var def = PLACE_DEFS[best[0]];
+  return {
+    id: def.id, name: def.name, reason: def.reason, map: def.map,
+    heatKey: best[0], openedAt: Date.now(), firstEncounterSeen: false,
+  };
+}
+
 function beginReceiptJourney(game, fireId) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
@@ -1467,6 +1514,14 @@ function completeReceiptJourney(game, fireId, journeyData) {
       traces: getStabilityTraces(gp),
     },
   };
+
+  // 受領証の裏に地図が現れる。火に残った余熱を測り、対応する場所を一つだけ開く。
+  var heat = computeRemainingHeat(fire);
+  var place = chooseOpenedPlace(heat);
+  fire.receipt.remainingHeat = heat;
+  fire.openedPlace = place;
+  if (!Array.isArray(ns.unlockedPlaces)) ns.unlockedPlaces = [];
+  if (ns.unlockedPlaces.indexOf(place.id) === -1) ns.unlockedPlaces.push(place.id);
   fire.updatedAt = nowISO();
 
   // 受領証が発行される——この火が丁寧に扱われたあと、世界に余光がひとつこぼれる。
@@ -1499,9 +1554,10 @@ function completeReceiptJourney(game, fireId, journeyData) {
     traces: [
       '遠くの記録塔に、灯りがともった。',
       'この火から、灯りがひとつこぼれた。灯守りが、それを拾った。',
+      '受領証の裏に、' + place.name + 'への小さな地図が現れた。',
     ],
   });
-  return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult, fireId: fireId };
+  return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult, fireId: fireId, openedPlace: place };
 }
 
 // ── React Components ────────────────────────────────────────────────────────
@@ -2528,6 +2584,30 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
         <span className="receipt-meta-item">記録した者：コタエ</span>
         <span className="receipt-meta-item">発行日：{dateStr}</span>
       </div>
+
+      {/* 受領証の裏の地図 — 終わりではなく、次の扉。 */}
+      {fire.openedPlace && (
+        <div className="receipt-place">
+          <p className="receipt-place-map">{fire.openedPlace.map}</p>
+          <p className="receipt-place-lead">受領証の裏に、小さな地図が現れました。</p>
+          <div className="receipt-place-box">
+            <p className="receipt-place-k">次に開いた場所</p>
+            <p className="receipt-place-name">{fire.openedPlace.name}</p>
+            <p className="receipt-place-k receipt-place-k2">理由</p>
+            <p className="receipt-place-reason">{fire.openedPlace.reason}</p>
+          </div>
+          <div className="receipt-place-voices">
+            <p className="receipt-place-voice">
+              <span className="receipt-place-who kotae">コタエ</span>
+              記録は終わりました。でも、余熱は残っています。
+            </p>
+            <p className="receipt-place-voice">
+              <span className="receipt-place-who toyman">トイマン</span>
+              なら、会いに行く。
+            </p>
+          </div>
+        </div>
+      )}
 
       <button className="receipt-btn" onClick={onAction}>
         {buttonLabel || '余熱に会い直す'}
@@ -3604,6 +3684,13 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
             <p className="today-voice-text">{companion.text}</p>
           </div>
 
+          {/* 受領証の裏に開いた道（会いに行く導線は次段。今は気配だけ） */}
+          {currentFire.status === 'received' && currentFire.openedPlace && (
+            <p className="today-opened-place">
+              受領証の裏に、{currentFire.openedPlace.name}への道が開いている。
+            </p>
+          )}
+
           {nextActions.length > 0 && (
             <div className="today-actions">
               <p className="today-actions-label">次にできること</p>
@@ -3856,8 +3943,6 @@ function MilestoneDialog({ milestone, onClose }) {
 // ── IntroScene ───────────────────────────────────────────────────────────────
 
 var INTRO_NARRATIVE_LINES = [
-  '画面は暗い。',
-  '',
   'どこかで、小さな火が揺れている。',
   'まだ名前のない火。',
   'まだ意味になっていないもの。',
