@@ -1511,6 +1511,24 @@ var _useEffect = React.useEffect;
 var _useCallback = React.useCallback;
 var _useRef = React.useRef;
 
+// オーバーレイのキーボード操作。世界に入れる人を狭めないための最小の扉。
+// Esc で安全側に閉じる／Enter・Space で進める。入力中やボタン上では邪魔しない。
+function useOverlayKeys(opts) {
+  _useEffect(function() {
+    function onKey(e) {
+      var tag = e.target && e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return; // 入力を妨げない
+      if (e.key === 'Escape' && opts.onEscape) { e.preventDefault(); opts.onEscape(); return; }
+      if ((e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') && opts.onEnter) {
+        if (tag === 'BUTTON' || tag === 'A') return; // フォーカス中のボタンはネイティブに任せる
+        e.preventDefault(); opts.onEnter();
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
+  });
+}
+
 function ProgressBar({ value, color }) {
   var bg = color || 'linear-gradient(90deg, #f97316, #fb923c)';
   return (
@@ -1615,6 +1633,8 @@ function ToymanVoice({ text, sub }) {
 // プレイヤーを止めるのではなく、苦痛に最後の編集権を渡さないための、ひと呼吸。
 // onProceed があれば、ひと呼吸のあと本人が意識して進む道も残す（強制終了にしない）。
 function CrisisHold({ onHold, onProceed, proceedLabel }) {
+  // Esc は安全側（今は置いておく）。続行は明示クリックのみ。
+  useOverlayKeys({ onEscape: onHold });
   return (
     <div className="crisis-hold-ov" role="alert">
       <div className="crisis-hold-card" onClick={function(e) { e.stopPropagation(); }}>
@@ -3745,6 +3765,7 @@ function DevBar({ game, onReset, onForceFound, onAddBattle, onReplayIntro }) {
 // 保存失敗を、世界観を壊さずに伝える通知。コタエの声で一度だけ。
 // 留守のあいだ。戻ってきた時、最初に出る。報酬回収ではなく、世話されていた証拠。
 function AwayReport({ report, onClose }) {
+  useOverlayKeys({ onEscape: onClose, onEnter: onClose });
   return (
     <div className="away-ov" role="dialog" onClick={onClose}>
       <div className="away-card" onClick={function(e) { e.stopPropagation(); }}>
@@ -3760,6 +3781,7 @@ function AwayReport({ report, onClose }) {
 }
 
 function SaveErrorNotice({ onDismiss }) {
+  useOverlayKeys({ onEscape: onDismiss });
   return (
     <div className="save-error-notice" role="alert">
       <div className="save-error-card">
@@ -3775,6 +3797,8 @@ function SaveErrorNotice({ onDismiss }) {
 
 // 全記録の初期化確認。OSダイアログではなく、コタエとトイマンの言葉で確かめる。
 function ResetConfirm({ onCancel, onConfirm }) {
+  // Esc は安全側（消さない）。Enter で誤って全消去しないよう、確定は明示クリックのみ。
+  useOverlayKeys({ onEscape: onCancel });
   return (
     <div className="reset-ov" role="alertdialog" onClick={onCancel}>
       <div className="reset-card" onClick={function(e) { e.stopPropagation(); }}>
@@ -3876,6 +3900,9 @@ function IntroScene({ onMarkSeen, onFireLit }) {
   var isNarrative = step === 0;
   var toymanIdx = step - 1; // 0-based index into INTRO_TOYMAN_LINES
   var isFinalLine = step === INTRO_TOYMAN_LINES.length;
+
+  // キーボード: Enter/Space で進む（フォーム表示中は無効。入口なので Esc は無し）
+  useOverlayKeys({ onEnter: showForm ? null : (isFinalLine ? handleFireBtn : advance) });
 
   if (showForm) {
     return (
@@ -3992,6 +4019,9 @@ function EntrustScene({ fire, short, onDone }) {
   var isFinal = step === beats.length - 1;
   var beat = beats[step] || {};
 
+  // キーボード: Enter/Space で進む／最後の一押し
+  useOverlayKeys({ onEnter: leaving ? null : (isFinal ? handleDone : advance) });
+
   // プレイヤー自身の言葉が、火に置かれている。
   var words = (fire && fire.kindle) ? fire.kindle.trim() : '';
 
@@ -4094,6 +4124,9 @@ function DiscoveryScene({ fire, onDeliver }) {
 
   // 火の中で形を持ちかけた問い。かすかに見せる（受領の旅で本格的に向き合う）。
   var q = (fire && fire.question) ? fire.question : '';
+
+  // キーボード: Enter/Space で進む／記録塔へ届ける
+  useOverlayKeys({ onEnter: leaving ? null : (isFinal ? handleDeliver : advance) });
 
   return (
     <div
