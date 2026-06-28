@@ -3448,8 +3448,10 @@ function homeNextActions(fire) {
     case 'found':     return [{ label: '記録塔へ届ける', go: 'deliver' }];
     case 'receiving': return [];
     case 'received':
+      // settled なら、その火に会いに行ける場所へ（そこに「心へ返す」がある）。
+      // コタエの「返せます」と導線を一致させ、約束を裏切らない。
       return isAllSettled(fire)
-        ? [{ label: '記録塔を見る', go: 'garden' }]
+        ? [{ label: '記録塔の奥へ', go: 'unreceived' }]
         : [{ label: '余熱に会い直す', go: 'unreceived' }];
     case 'returned':  return [{ label: '箱庭を見る', go: 'garden' }];
     default:          return [{ label: '箱庭を見る', go: 'garden' }];
