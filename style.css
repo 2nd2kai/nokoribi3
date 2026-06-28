@@ -4859,3 +4859,8 @@ html,body{
 .journey-option-btn{padding:11px 14px;border-radius:10px;border:1px solid #2e3348;background:#111318;color:#9ca3af;font-size:13px;cursor:pointer;font-family:inherit;text-align:left;line-height:1.6;transition:border-color .2s,color .2s,background .2s}
 .journey-option-btn:hover{border-color:#4c1d95;color:#c4b5fd;background:#0f0b1a}
 .journey-option-btn.selected{border-color:#7c3aed;color:#ede9fe;background:#1e1a2c}
+
+/* ── 火はもう十分に守られた（見守り連打を世界観で止める） ── */
+.enough-note{padding:14px 16px;border-radius:12px;background:#0a0e0c;border:1px solid #14532d;text-align:center}
+.enough-note-line{color:#4b6a54;font-size:13px;line-height:1.8;margin:0 0 6px}
+.enough-note-toyman{color:#6b7280;font-size:12px;line-height:1.7;margin:0;font-style:italic}

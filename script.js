@@ -529,7 +529,7 @@ var ENCOUNTER_DEFS = {
     ],
     worldNote: '記録塔は、受け取られた問いを保管する場所だ。コタエがひとりで守っている。',
     relationshipNote: { characterId: 'kotae', text: '記録塔で初めて会った。静かで、でも確かにいた。' },
-    button: '未受領領域へ',
+    button: '余熱に会い直す',
     nav: 'garden_unreceived',
   },
   kana_first_rest: {
@@ -819,7 +819,7 @@ function restUnreceived(game, fireId) {
   var ve = makeVisualEvent({
     fireId: fireId, source: 'manual', type: 'rest',
     work: '休ませる', actor: 'toyman', trace: 'water_drop',
-    message: '今日は、ここに置いておく。\n未受領領域は進まなかった。\nでも、火は消えなかった。',
+    message: '今日は、ここに置いておく。\n余熱には、まだ会いに行かなかった。\nでも、火は消えなかった。',
   });
   ns.lastVisualEvent = ve;
   var actionResult = makeActionResult({
@@ -1001,12 +1001,11 @@ function advanceLightkeeper(ns, amount) {
   if (after < duration) {
     return { advanced: true, completed: false, before: before, after: after, amount: amount, completion: null };
   }
-  // 完了
+  // 完了。灯守りの仕事は守られた痕跡（石）を残すもの。灯貨は増やさない。
   lk.progress = 0;
   addGardenItem(ns, 'small_stone');
   ns.materials = safeMat(ns.materials);
   ns.materials.ash = (ns.materials.ash || 0) + 1;
-  ns.toka = (ns.toka || 0) + 1;
   var sf = ns.fires.find(function(f) { return f.status === 'searching'; });
   if (sf) sf.gardenProgress = Math.min(100, (sf.gardenProgress || 0) + 3);
   return {
@@ -1016,7 +1015,6 @@ function advanceLightkeeper(ns, amount) {
       message: '灯守りが、小さな石を置いた。',
       trace: 'small_stone',
       gains: [
-        { label: '灯貨', amount: 1 },
         { label: '灰片', amount: 1 },
         { label: '火の安定', amount: 3 },
       ],
@@ -1028,10 +1026,10 @@ function watchFire(game, fireId) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'searching') return { ok: false, game: game };
-  // 見守りは火を保つだけ。問いの深度は進めない。
+  // 見守りは火を保つだけ。問いの深度は進めない。灯貨も増やさない。
+  // 見守りは灯貨稼ぎではなく、守られた痕跡を残す行為。
   fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + 8);
   fire.watchCount = (fire.watchCount || 0) + 1;
-  ns.toka = (ns.toka || 0) + 1;
   ns.materials = safeMat(ns.materials);
   ns.materials.ash = (ns.materials.ash || 0) + 1;
   addLog(fire, pick(WATCH_LOGS));
@@ -1049,7 +1047,8 @@ function watchFire(game, fireId) {
   ns.lastVisualEvent = ve;
   var actionResult = makeActionResult({
     title: 'ただ見守った',
-    gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }],
+    gains: [{ label: '灰片', amount: 1 }],
+    traces: ['急がなかった時間が、火のそばに残った。'],
   });
   appendLightkeeperResult(actionResult, lkResult);
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
@@ -1067,7 +1066,7 @@ function restToday(game, fireId) {
   var logText = pick(REST_LOGS);
   fire.restLogs = (fire.restLogs || []).concat([{ text: logText, at: nowISO() }]);
   addLog(fire, logText);
-  ns.toka = (ns.toka || 0) + 1;
+  // 休ませることも灯貨稼ぎではない。火のそばに痕跡だけが残る。
   ns.materials = safeMat(ns.materials);
   ns.materials.drop = (ns.materials.drop || 0) + 1;
   addGardenItem(ns, 'rest_chair');
@@ -1090,7 +1089,7 @@ function restToday(game, fireId) {
   ns.lastVisualEvent = ve;
   var actionResult = makeActionResult({
     title: '今日は無理にしなかった',
-    gains: [{ label: '灯貨', amount: 1 }, { label: '水滴', amount: 1 }],
+    gains: [{ label: '水滴', amount: 1 }],
     traces: ['火のそばに、小さな椅子が置かれた。', '水滴が、火の近くに置かれた。'],
   });
   appendLightkeeperResult(actionResult, lkResult);
@@ -1146,6 +1145,10 @@ function receiveFire(game, fireId, answer) {
 }
 
 // ── 受領の旅 ヘルパー ────────────────────────────────────────────────────────
+
+// 火が十分に守られたと見なす安定の上限。これを超えたら見守り連打を止め、
+// 数字ではなく世界観で「もう十分」と返す。
+var STABILITY_ENOUGH = 85;
 
 function stabilityStage(pct) {
   if (pct >= 85) return 'よく守られた火';
@@ -1525,24 +1528,33 @@ function ShadowPanel({ fire, onAnswer, onWatch, onSkip }) {
             影と向き合う
             <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>+15〜25% / 灯貨+2</span>
           </button>
-          <button onClick={function() { onWatch(); }} style={{
-            padding: '11px 14px', borderRadius: 8, textAlign: 'left',
-            background: '#111318', border: '1px solid #2e3348',
-            color: '#9ca3af', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-          }}>
-            <span style={{ color: '#6b7280', marginRight: 8 }}>◎</span>
-            ただ見守る
-            <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>+3〜5% / 灯貨+1</span>
-          </button>
-          <button onClick={function() { onSkip(); }} style={{
-            padding: '11px 14px', borderRadius: 8, textAlign: 'left',
-            background: '#111318', border: '1px solid #1e2230',
-            color: '#6b7280', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-          }}>
-            <span style={{ color: '#4b5563', marginRight: 8 }}>…</span>
-            今日は無理
-            <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>+1% / 灯貨+1</span>
-          </button>
+          {(fire.gardenProgress || 0) >= STABILITY_ENOUGH ? (
+            <div className="enough-note">
+              <p className="enough-note-line">火は、もう十分に守られています。</p>
+              <p className="enough-note-toyman">トイマン：もう、ここにある。それでいい。</p>
+            </div>
+          ) : (
+            <React.Fragment>
+              <button onClick={function() { onWatch(); }} style={{
+                padding: '11px 14px', borderRadius: 8, textAlign: 'left',
+                background: '#111318', border: '1px solid #2e3348',
+                color: '#9ca3af', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                <span style={{ color: '#6b7280', marginRight: 8 }}>◎</span>
+                ただ見守る
+                <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>守られた痕跡が残る</span>
+              </button>
+              <button onClick={function() { onSkip(); }} style={{
+                padding: '11px 14px', borderRadius: 8, textAlign: 'left',
+                background: '#111318', border: '1px solid #1e2230',
+                color: '#6b7280', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                <span style={{ color: '#4b5563', marginRight: 8 }}>…</span>
+                今日は無理
+                <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>火は消えない</span>
+              </button>
+            </React.Fragment>
+          )}
         </div>
       )}
       </div>
@@ -2091,7 +2103,7 @@ function RecordTower({ game, onGoUnreceived, onViewReceipt }) {
   var records = game.fires.filter(function(f) {
     return f.status === 'received' || f.status === 'held' || f.status === 'returned';
   });
-  var statusText = { received: '未受領あり', held: '保持中', returned: '心へ返した' };
+  var statusText = { received: '余熱あり', held: '保持中', returned: '心へ返した' };
 
   return (
     <div style={{ padding: '0 0 40px' }}>
@@ -2143,7 +2155,7 @@ function RecordTower({ game, onGoUnreceived, onViewReceipt }) {
                     color: '#a78bfa', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
                   }}
                 >
-                  未受領領域へ進む →
+                  余熱に会い直す →
                 </button>
               )}
             </div>
@@ -2502,7 +2514,7 @@ var KOTAE_SCRIPTS = {
     lines: [
       'ノコリビ、受領しました。',
       'これは答えではありません。\n問いの欠片です。',
-      '記録塔に保存します。\nただし、まだ受け取れていない領域があります。',
+      '記録塔に保存します。\nただし、火の奥には、まだ余熱が残っています。',
       '意味の影。\n価値の黒札。\n納得の灰。',
       'この火は、まだ全部を受け取られたわけではありません。',
       '次に進めます。\nどこから迎えに行くか、選んでください。',
@@ -2510,7 +2522,7 @@ var KOTAE_SCRIPTS = {
     button: '余熱に会い直す',
   },
   open: {
-    lines: ['未受領領域を展開します。\nまだ受け取れていないものを確認してください。'],
+    lines: ['余熱に会い直します。\nまだ受け取れていないものを確認してください。'],
     button: '確認する',
   },
   returned: {
@@ -2822,17 +2834,17 @@ function LightMarket({ game, onBuyNewGame }) {
       marginBottom: 12,
     }}>
       <p style={{ color: '#22263a', fontSize: 9, margin: '0 0 4px', letterSpacing: 2, fontWeight: 700 }}>
-        灯市
+        灯置き場
       </p>
       <p style={{ color: '#2e3348', fontSize: 11, lineHeight: 1.7, margin: '0 0 12px' }}>
-        灯貨で小さなものを交換できます。
-        灯貨は火の価値ではなく、火を消さずに置いておいた痕跡です。
+        灯貨で、この世界に灯りを置けます。
+        灯貨は買うためのものではなく、火を消さずに置いておいた痕跡です。
       </p>
 
       {result && (
         <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: '#0d1018', border: '1px solid #1e2230' }}>
           <p style={{ color: result.ok ? '#4b6a54' : '#4b5563', fontSize: 12, margin: '0 0 4px' }}>
-            {result.ok ? '受け取りました。' : result.reason === 'already_owned' ? 'すでに持っています。' : '素材が足りません。'}
+            {result.ok ? '灯りを置きました。' : result.reason === 'already_owned' ? 'もう置いてあります。' : '灯貨か素材が足りません。'}
           </p>
           <button onClick={function() { setResult(null); }} style={{
             padding: '3px 8px', borderRadius: 4,
@@ -2863,7 +2875,7 @@ function LightMarket({ game, onBuyNewGame }) {
             </div>
             <p style={{ color: '#374151', fontSize: 11, margin: '0 0 8px', lineHeight: 1.5 }}>{item.desc}</p>
             {owned ? (
-              <span style={{ color: '#1e4a20', fontSize: 11 }}>受領済み</span>
+              <span style={{ color: '#1e4a20', fontSize: 11 }}>灯した</span>
             ) : (
               <button
                 onClick={function() { handleBuy(item.key); }}
@@ -2876,7 +2888,7 @@ function LightMarket({ game, onBuyNewGame }) {
                   fontFamily: 'inherit',
                 }}
               >
-                {affordable ? '交換する' : '素材不足'}
+                {affordable ? '灯りを置く' : '灯貨不足'}
               </button>
             )}
           </div>
@@ -3015,19 +3027,29 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
       {/* 3. 行動ボタン（先頭側に固定して、押しても位置が動かないようにする） */}
       {sf && !shadowOpen && (function() {
         var cdRest = cooldownRemaining(sf.lastRestAt, 30);
+        var wellGuarded = (sf.gardenProgress || 0) >= STABILITY_ENOUGH;
         return (
           <div className="action-btns">
             <button className="btn-shadow" onClick={function() { setShadowOpen(true); }}>
               <span className="btn-shadow-icon">🌑</span>影と向き合う
             </button>
-            <button className="btn-watch" onClick={doWatch}>
-              <span className="btn-watch-icon">◎</span>ただ見守る
-            </button>
-            <button className="btn-rest" onClick={cdRest > 0 ? null : doRest}
-              style={{ opacity: cdRest > 0 ? 0.5 : 1, cursor: cdRest > 0 ? 'default' : 'pointer' }}>
-              <span className="btn-rest-icon">…</span>
-              {cdRest > 0 ? '今日は無理（あと' + cdRest + '秒）' : '今日は無理'}
-            </button>
+            {wellGuarded ? (
+              <div className="enough-note">
+                <p className="enough-note-line">火は、もう十分に守られています。</p>
+                <p className="enough-note-toyman">トイマン：もう、ここにある。それでいい。</p>
+              </div>
+            ) : (
+              <React.Fragment>
+                <button className="btn-watch" onClick={doWatch}>
+                  <span className="btn-watch-icon">◎</span>ただ見守る
+                </button>
+                <button className="btn-rest" onClick={cdRest > 0 ? null : doRest}
+                  style={{ opacity: cdRest > 0 ? 0.5 : 1, cursor: cdRest > 0 ? 'default' : 'pointer' }}>
+                  <span className="btn-rest-icon">…</span>
+                  {cdRest > 0 ? '今日は無理（あと' + cdRest + '秒）' : '今日は無理'}
+                </button>
+              </React.Fragment>
+            )}
           </div>
         );
       })()}
@@ -3182,7 +3204,7 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
         </div>
       )}
 
-      {/* 8. 灯市（灯守りの仕事が一度完了して small_stone が置かれてから） */}
+      {/* 8. 灯置き場（灯守りの仕事が一度完了して small_stone が置かれてから） */}
       {((game.gardenItems && game.gardenItems.includes('small_stone')) || (game.unlocks && game.unlocks.lightMarket)) && (
         <LightMarket game={game} onBuyNewGame={onBuyMarket} />
       )}
@@ -3306,15 +3328,21 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
         <ToymanVoice text={toymanGreeting} />
       )}
 
-      {/* 灯守り初登場 */}
+      {/* 灯守り初登場 — 灯貨の意味をここで伝える */}
       {!showForm && game.tinyfolk && game.tinyfolk.lightkeeper && totalFires === 1 && (
         <div style={{
           background: '#0a0e0c', border: '1px solid #14532d',
           borderRadius: 8, padding: '12px 14px', margin: '8px 0',
         }}>
-          <p style={{ color: '#4b6a54', fontSize: 12, lineHeight: 1.8, margin: 0 }}>
+          <p style={{ color: '#4b6a54', fontSize: 12, lineHeight: 1.8, margin: '0 0 8px' }}>
             火のそばに、小さな影が動いた。<br />
             灯守りが、石をひとつ置いた。
+          </p>
+          <p style={{ color: '#3e5a48', fontSize: 12, lineHeight: 1.8, margin: 0 }}>
+            灯守り：<br />
+            こぼれた灯りです。捨てないでください。<br />
+            これは灯貨。買うためのものではありません。<br />
+            置くための灯りです。
           </p>
         </div>
       )}
@@ -3353,7 +3381,7 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
           background: '#111318', border: '1px solid #2e3348',
           borderRadius: 12, padding: '18px 16px', margin: '12px 0',
         }}>
-          <h3 style={{ color: '#f97316', fontSize: 15, margin: '0 0 14px' }}>残り火を灯す</h3>
+          <h3 style={{ color: '#f97316', fontSize: 15, margin: '0 0 14px' }}>火に言葉を置く</h3>
           <FireInputForm
             onSubmit={handleLightFire}
             onCancel={function() { setShowForm(false); }}
@@ -3369,7 +3397,7 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
             fontFamily: 'inherit', marginTop: 8, letterSpacing: 0.5,
           }}
         >
-          + 残り火を灯す
+          + 火に言葉を置く
         </button>
       )}
 
