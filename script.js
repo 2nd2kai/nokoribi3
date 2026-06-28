@@ -327,11 +327,16 @@ function migrateFire(f) {
 
 function migrateGame(g) {
   if (!g) return g;
+  // 旧セーブ・破損セーブに備えてトップレベルを先に補完する
+  if (!g.unlocks || typeof g.unlocks !== 'object') g.unlocks = {};
+  if (!g.toyman || typeof g.toyman !== 'object') g.toyman = { location: 'starting_room', state: 'waiting' };
+  if (!Array.isArray(g.fires)) g.fires = [];
   if (!g.materials) g.materials = initMaterials();
   else g.materials = safeMat(g.materials);
   if (!g.tinyfolk) g.tinyfolk = initTinyfolk();
   if (!g.gardenItems) g.gardenItems = [];
   if (!Array.isArray(g.gardenItems)) g.gardenItems = [];
+  if (!g.workerTasks || typeof g.workerTasks !== 'object') g.workerTasks = {};
   if (!('lastVisualEvent' in g)) g.lastVisualEvent = null;
   if (!g.unlocks.tearsSpring) g.unlocks.tearsSpring = false;
   if (!g.unlocks.postOffice) g.unlocks.postOffice = false;
@@ -591,9 +596,16 @@ function restUnreceived(game, fireId) {
   ns.toka = (ns.toka || 0) + 1;
   ns.materials = safeMat(ns.materials);
   ns.materials.drop += 1;
+  addGardenItem(ns, 'water_drop');
   fire.logs = (fire.logs || []).concat([{ text: '今日は、ここに置いておく。', at: nowISO() }]);
   fire.updatedAt = nowISO();
-  return { ok: true, game: ns };
+  var ve = makeVisualEvent({
+    fireId: fireId, source: 'manual', type: 'rest',
+    work: '休ませる', actor: 'toyman', trace: 'water_drop',
+    message: '今日は、ここに置いておく。\n未受領領域は進まなかった。\nでも、火は消えなかった。',
+  });
+  ns.lastVisualEvent = ve;
+  return { ok: true, game: ns, visualEvent: ve };
 }
 
 function lightFire(game, kindle, pain, writeState, feeling, metrics) {
@@ -703,28 +715,23 @@ function watchFire(game, fireId) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'searching') return { ok: false, game: game };
-  var qGain = Math.floor(rnd() * 4); // 0〜3
-  fire.questionProgress = Math.min(100, (fire.questionProgress || 0) + qGain);
+  // 見守りは火を保つだけ。問いの深度は進めない。
   fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + 8);
   fire.watchCount = (fire.watchCount || 0) + 1;
   ns.toka = (ns.toka || 0) + 1;
   ns.materials = safeMat(ns.materials);
   ns.materials.ash = (ns.materials.ash || 0) + 1;
   addLog(fire, pick(WATCH_LOGS));
-  addGardenItem(ns, 'small_stone');
+  // small_stone は灯守りの仕事完了時のみ置かれる（即時追加しない）
   var lkCompleted = advanceLightkeeper(ns, 30);
-  // 水汲みの小人解放条件（watchでも関係しない → 後でrestで解放）
-  if (fire.questionProgress >= 100) {
-    fire.status = 'found';
-    fire.question = makeQuestion(fire);
-    fire.foundAt = nowISO();
-    ns.toyman = { location: 'starting_room', state: 'returning' };
-  }
   fire.updatedAt = nowISO();
   var ve = makeVisualEvent({
     fireId: fireId, source: 'manual', type: 'watch',
-    work: '守る', actor: 'lightkeeper', trace: 'small_stone',
-    message: '灯守りが、小さな石を置いた。\n問いは進んでいない。\nでも、火は少し落ち着いた。',
+    work: '守る', actor: 'lightkeeper',
+    trace: lkCompleted ? 'small_stone' : null,
+    message: lkCompleted
+      ? '灯守りが、小さな石を置いた。\n問いは進んでいない。\nでも、火は少し落ち着いた。'
+      : '灯守りが、火のそばで石を確かめた。\n火はまだある。',
   });
   ns.lastVisualEvent = ve;
   return { ok: true, game: ns, visualEvent: ve, lightkeeperCompleted: lkCompleted };
@@ -1773,7 +1780,7 @@ function GardenBoard({ game }) {
               })()}
             </div>
           )}
-          {(items.includes('small_stone') || gp >= 20) && (
+          {items.includes('small_stone') && (
             <div className="garden-item-actor-right">
               <span className={['garden-item-actor-label', freshTrace === 'small_stone' ? 'garden-trace-appear' : ''].join(' ').trim()}>小さな石</span>
               <span className={['garden-item-actor-emoji', freshTrace === 'small_stone' ? 'garden-trace-appear' : ''].join(' ').trim()}>🪨</span>
@@ -1938,23 +1945,52 @@ var TINYFOLK_ACTIVITY = {
   recordApprentice: '記録塔で写している',
 };
 
-var ACTION_RESULTS = {
-  watch: {
-    title: 'ただ見守った',
-    gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }],
-    traces: ['灯守りが、小さな石を置いた。'],
-  },
-  rest: {
-    title: '今日は無理にしなかった',
-    gains: [{ label: '灯貨', amount: 1 }, { label: '水滴', amount: 1 }],
-    traces: ['火のそばに、小さな椅子が置かれた。', '水滴が、火の近くに置かれた。'],
-  },
-  battle: {
-    title: '影と向き合った',
-    gains: [{ label: '灯貨', amount: 2 }, { label: '紙片', amount: 1 }],
-    traces: ['焦げた紙片が、森に残った。'],
-  },
+// 行動ごとの「即時に確定する」効果定義。
+// baseGains: 行動そのものの素材ゲイン / directTraces: 行動と直接対応する痕跡（即時）
+// lkInc: 灯守りの仕事を進める量。仕事完了時のゲイン・痕跡は completions として別層に出す。
+var ACTION_DEFS = {
+  watch:  { title: 'ただ見守った',
+    baseGains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }],
+    directTraces: [], lkInc: 30 },
+  rest:   { title: '今日は無理にしなかった',
+    baseGains: [{ label: '灯貨', amount: 1 }, { label: '水滴', amount: 1 }],
+    directTraces: ['火のそばに、小さな椅子が置かれた。', '水滴が、火の近くに置かれた。'], lkInc: 15 },
+  battle: { title: '影と向き合った',
+    baseGains: [{ label: '灯貨', amount: 2 }, { label: '紙片', amount: 1 }],
+    directTraces: ['焦げた紙片が、森に残った。'], lkInc: 5 },
 };
+
+// 行動前の game 状態から、行動結果を4層構造で決定論的に組み立てる。
+// 灯守りの仕事は決定論的に進むため、完了するかどうかを正確に予測できる。
+function buildActionResult(kind, game) {
+  var def = ACTION_DEFS[kind];
+  if (!def) return null;
+  var lk = game.workerTasks && game.workerTasks.lightkeeper;
+  var hasLk = !!(lk && lk.isUnlocked);
+  var prog = hasLk ? (lk.progress || 0) : 0;
+  var dur  = hasLk ? (lk.duration || 100) : 100;
+  var willComplete = hasLk && (prog + def.lkInc) >= dur;
+  var newProg = Math.min(dur, prog + def.lkInc);
+  var result = {
+    title: def.title,
+    gains: def.baseGains.slice(),
+    work: [],
+    completions: [],
+    traces: def.directTraces.slice(),
+  };
+  if (hasLk) {
+    if (willComplete) {
+      result.completions.push({
+        message: '灯守りが、小さな石を置いた。',
+        gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }, { label: '火の安定', amount: 3 }],
+        trace: 'small_stone',
+      });
+    } else {
+      result.work.push('灯守りの仕事が進んだ（' + newProg + '%）。');
+    }
+  }
+  return result;
+}
 
 function ActionResultPanel({ result, onClose }) {
   if (!result) return null;
@@ -1964,12 +2000,41 @@ function ActionResultPanel({ result, onClose }) {
         <p className="action-result-title">{result.title}</p>
         <button className="action-result-close" onClick={onClose}>✕</button>
       </div>
-      <div className="action-result-section">
-        <p className="action-result-section-label">増えたもの</p>
-        {result.gains.map(function(g, i) {
-          return <p key={i} className="action-result-gain">{g.label} +{g.amount}</p>;
-        })}
-      </div>
+
+      {/* 1. 増えたもの */}
+      {result.gains && result.gains.length > 0 && (
+        <div className="action-result-section">
+          <p className="action-result-section-label">増えたもの</p>
+          {result.gains.map(function(g, i) {
+            return <p key={i} className="action-result-gain">{g.label} +{g.amount}</p>;
+          })}
+        </div>
+      )}
+
+      {/* 2. 作業（途中経過） */}
+      {result.work && result.work.length > 0 && (
+        <div className="action-result-section">
+          <p className="action-result-section-label">作業</p>
+          {result.work.map(function(w, i) {
+            return <p key={i} className="action-result-work">{w}</p>;
+          })}
+        </div>
+      )}
+
+      {/* 3. 仕事完了 */}
+      {result.completions && result.completions.map(function(c, i) {
+        return (
+          <div key={i} className="action-result-section action-result-completion">
+            <p className="action-result-section-label">仕事完了</p>
+            <p className="action-result-completion-msg">{c.message}</p>
+            {c.gains.map(function(g, j) {
+              return <p key={j} className="action-result-gain">{g.label} +{g.amount}</p>;
+            })}
+          </div>
+        );
+      })}
+
+      {/* 4. 箱庭に残った痕跡 */}
       {result.traces && result.traces.length > 0 && (
         <div className="action-result-section">
           <p className="action-result-section-label">箱庭に残った痕跡</p>
@@ -1978,63 +2043,43 @@ function ActionResultPanel({ result, onClose }) {
           })}
         </div>
       )}
-      {result.work && (
-        <div className="action-result-section">
-          <p className="action-result-section-label">作業</p>
-          <p className="action-result-work">{result.work}</p>
-        </div>
-      )}
     </div>
   );
 }
 
-function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen, onBuyMarket }) {
+function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived }) {
   var [recordOpen, setRecordOpen] = _useState(false);
   var [actionResult, setActionResult] = _useState(null);
   var [shadowOpen, setShadowOpen] = _useState(false);
 
-  var sf    = game.fires.find(function(f) { return f.status === 'searching'; });
-  var found = game.fires.find(function(f) { return f.status === 'found'; });
-  var sfId  = sf ? sf.id : null;
+  var sf       = game.fires.find(function(f) { return f.status === 'searching'; });
+  var found    = game.fires.find(function(f) { return f.status === 'found'; });
+  var received = game.fires.filter(function(f) { return f.status === 'received'; });
+  var sfId     = sf ? sf.id : null;
 
   _useEffect(function() {
     if (onUpdateLastSeen) onUpdateLastSeen();
   }, []);
 
-  // アクティブな fire が変わったら actionResult をリセット
+  // アクティブな fire が変わったら一時表示の actionResult をリセット
+  // （lastVisualEvent は箱庭の記憶として残す）
   _useEffect(function() {
     setActionResult(null);
   }, [sfId]);
 
+  // buildActionResult は行動前の game から決定論的に結果を組み立てる
   function doWatch() {
-    var lk = game.workerTasks && game.workerTasks.lightkeeper;
-    var currentLkProg = lk ? (lk.progress || 0) : 0;
-    var willComplete = (currentLkProg + 30) >= 100;
+    setActionResult(buildActionResult('watch', game));
     onWatchFire(sf.id);
-    if (willComplete) {
-      setActionResult({
-        title: 'ただ見守った',
-        gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }],
-        traces: ['灯守りが、小さな石を置いた。'],
-        work: null,
-      });
-    } else {
-      setActionResult({
-        title: 'ただ見守った',
-        gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }],
-        traces: [],
-        work: '灯守りが、火のそばで石を確かめている。',
-      });
-    }
   }
   function doRest() {
+    setActionResult(buildActionResult('rest', game));
     onRestToday(sf.id);
-    setActionResult(ACTION_RESULTS.rest);
   }
   function doBattle(ans) {
+    setActionResult(buildActionResult('battle', game));
     onDoBattle(sf.id, ans);
     setShadowOpen(false);
-    setActionResult(ACTION_RESULTS.battle);
   }
 
   var logsSource = sf || found || (game.fires.filter(function(f) { return f.status === 'received'; })[0]) || null;
@@ -2060,11 +2105,11 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
       {/* 3. EventCard */}
       <EventCard event={game.lastVisualEvent} />
 
-      {/* 3. actionResult */}
+      {/* 3. actionResult（行動ボタンを隠さない一時通知） */}
       <ActionResultPanel result={actionResult} onClose={function() { setActionResult(null); }} />
 
-      {/* 4a. 行動ボタン */}
-      {sf && actionResult === null && !shadowOpen && (
+      {/* 4a. 行動ボタン（actionResult 表示中でも操作可能） */}
+      {sf && !shadowOpen && (
         <div className="action-btns">
           <button className="btn-shadow" onClick={function() { setShadowOpen(true); }}>
             <span className="btn-shadow-icon">🌑</span>影と向き合う
@@ -2087,8 +2132,8 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
           <ShadowPanel
             fire={sf}
             onAnswer={doBattle}
-            onWatch={function() { onWatchFire(sf.id); setShadowOpen(false); setActionResult(ACTION_RESULTS.watch); }}
-            onSkip={function()  { onRestToday(sf.id); setShadowOpen(false); setActionResult(ACTION_RESULTS.rest);  }}
+            onWatch={function() { setActionResult(buildActionResult('watch', game)); onWatchFire(sf.id); setShadowOpen(false); }}
+            onSkip={function()  { setActionResult(buildActionResult('rest', game));  onRestToday(sf.id); setShadowOpen(false); }}
           />
         </div>
       )}
@@ -2101,6 +2146,18 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
           <p className="found-banner-hint">「残り火の棚」から受け取ってください</p>
         </div>
       )}
+
+      {/* 受領済みの火：未受領領域への再探索入口（主導線は箱庭に寄せる） */}
+      {received.length > 0 && onReexplore && received.map(function(rf) {
+        return (
+          <UnreceivedPanel
+            key={rf.id}
+            fire={rf}
+            onReexplore={onReexplore}
+            onRest={onRestUnreceived}
+          />
+        );
+      })}
 
       {/* 5. 問いの深度・火の安定バー */}
       {sf && (
@@ -2156,8 +2213,8 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
         </div>
       )}
 
-      {/* 8. 灯市 */}
-      {(game.toka || 0) >= 1 && (
+      {/* 8. 灯市（灯守りの仕事が一度完了して small_stone が置かれてから） */}
+      {((game.gardenItems && game.gardenItems.includes('small_stone')) || (game.unlocks && game.unlocks.lightMarket)) && (
         <LightMarket game={game} onBuyNewGame={onBuyMarket} />
       )}
     </div>
@@ -2388,7 +2445,7 @@ function DevBar({ game, onReset, onForceFound, onAddBattle }) {
         }}
       >
         [DEV] {open ? '▲' : '▼'} fires:{game.fires.length} battles:{game.battleCount} 灯貨:{game.toka || 0}
-        {searching ? ' | ' + searching.progress + '%' : ''}
+        {searching ? ' | 問' + (searching.questionProgress || 0) + '% 火' + (searching.gardenProgress || 0) + '%' : ''}
         {found ? ' | ★found' : ''}
       </button>
       {open && (
@@ -2418,8 +2475,11 @@ function DevBar({ game, onReset, onForceFound, onAddBattle }) {
           }}>
             リセット
           </button>
-          <span style={{ color: '#4b5563', fontSize: 11, alignSelf: 'center' }}>
-            {game.toyman.state}@{game.toyman.location}
+          <span style={{ color: '#8f9bb3', fontSize: 11, alignSelf: 'center' }}>
+            {game.toyman ? game.toyman.state + '@' + game.toyman.location : '—'}
+            {game.workerTasks && game.workerTasks.lightkeeper
+              ? ' | 灯守り' + (game.workerTasks.lightkeeper.progress || 0) + '%'
+              : ''}
           </span>
         </div>
       )}
@@ -2526,7 +2586,7 @@ function App() {
       var ns = cloneS(prev);
       var fire = ns.fires.find(function(f) { return f.id === fireId; });
       if (!fire) return prev;
-      fire.progress = 100;
+      fire.questionProgress = 100;
       fire.status = 'found';
       fire.question = makeQuestion(fire);
       fire.foundAt = nowISO();
@@ -2540,8 +2600,8 @@ function App() {
       var ns = cloneS(prev);
       var fire = ns.fires.find(function(f) { return f.id === fireId; });
       if (!fire) return prev;
-      fire.progress = Math.min(100, (fire.progress || 0) + 30);
-      if (fire.progress >= 100) {
+      fire.questionProgress = Math.min(100, (fire.questionProgress || 0) + 30);
+      if (fire.questionProgress >= 100) {
         fire.status = 'found';
         fire.question = makeQuestion(fire);
         fire.foundAt = nowISO();
@@ -2587,6 +2647,8 @@ function App() {
           onRestToday={handleRestToday}
           onUpdateLastSeen={handleUpdateLastSeen}
           onBuyMarket={handleBuyMarket}
+          onReexplore={handleReexplore}
+          onRestUnreceived={handleRestUnreceived}
         />
       )}
       {showKotaeIntro && (
