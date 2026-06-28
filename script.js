@@ -452,6 +452,17 @@ function normalizeFire(f) {
   if (f.finalReturnAttemptedAt === undefined) f.finalReturnAttemptedAt = null;
   if (f.returnHoldLog === undefined) f.returnHoldLog = [];
   if (f.heatTraces === undefined) f.heatTraces = [];
+  if (f.returnLamp === undefined) f.returnLamp = null;
+  // 旧セーブで既に returned だが返却灯が無い火に、最小限の灯りを補完する。
+  if (f.status === 'returned' && !f.returnLamp) {
+    f.returnLamp = {
+      litAt: f.returnedAt || f.updatedAt || nowISO(),
+      label: (f.finalReturn && f.finalReturn.choice) || null,
+      memo: (f.finalReturn && f.finalReturn.memo) || '',
+      placeTrace: f.placeTrace ? f.placeTrace.traceText : null,
+      heatTraces: (f.heatTraces || []).map(function(h) { return h.traceText; }),
+    };
+  }
   // receiving → found 回復（旅途中にアプリが終了した場合）
   if (f.status === 'receiving') { f.status = 'found'; f.receiptDraft = null; }
   // 既存の received fire に receipt を補完
@@ -880,6 +891,8 @@ var REEXPLORE_CFG = {
   },
 };
 
+// 【互換用・UIから直接は呼ばれない】旧・余熱の再探索（数値を減らして素材を得る方式）。
+// 本筋は revisitHeat（会い直し儀式）に移行済み。古いセーブ／将来の参照のため残置。
 function reexploreFire(game, fireId, type) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
@@ -945,6 +958,9 @@ var HEAT_TRACE_LABELS = {
   satisfaction: '棚に置いた灰',
 };
 
+var HEAT_TYPE_LABELS = { meaning: '意味の影', value: '価値の黒札', satisfaction: '納得の灰' };
+var HEAT_TRACE_CAP = 10;
+
 function revisitHeat(game, fireId, heatType, touchMode, selected) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
@@ -956,18 +972,24 @@ function revisitHeat(game, fireId, heatType, touchMode, selected) {
   var reduction = 0;
   if (touchMode === '少しだけ触れる') reduction = base;
   else if (touchMode === '正面から見る') reduction = Math.min(base * 2, before);
-  // 今日はそばに置く: reduction = 0（急がなかった痕跡だけ残す）
+  // 今日はそばに置く: reduction = 0。余熱は減らさず、急がなかったことだけを記録する。
 
   var after = Math.max(0, before - reduction);
   fire.unreceived[heatType] = after;
 
-  var traceText = (HEAT_TRACE_LABELS[heatType] || heatType) + '：' + selected;
+  // 「今日はそばに置く」は会い直しではなく、急がなかった日の記録。
+  // 余熱を「何として置き直すか」は決めない。残したのは「進めなかった」という痕跡そのもの。
+  var sparedToday = (touchMode === '今日はそばに置く');
+  var traceText = sparedToday
+    ? ('急がなかった余熱：' + (HEAT_TYPE_LABELS[heatType] || heatType))
+    : ((HEAT_TRACE_LABELS[heatType] || heatType) + '：' + selected);
 
   if (!Array.isArray(fire.heatTraces)) fire.heatTraces = [];
+  // 記録塔をログ倉庫にしないため、痕跡は上限を設ける（古いものから落とす）。
   fire.heatTraces = fire.heatTraces.concat([{
-    type: heatType, touchMode: touchMode, selected: selected, traceText: traceText,
-    createdAt: Date.now(),
-  }]);
+    type: heatType, touchMode: touchMode, selected: sparedToday ? null : selected,
+    spared: sparedToday, traceText: traceText, createdAt: Date.now(),
+  }]).slice(-HEAT_TRACE_CAP);
 
   fire.logs = [{ text: traceText, at: nowISO() }].concat(fire.logs || []).slice(0, LOG_CAP_FIRE);
   fire.updatedAt = nowISO();
@@ -1051,6 +1073,15 @@ function returnFireToHeart(game, fireId, finalReturn) {
     choice: finalReturn ? (finalReturn.choice || null) : null,
     placeTrace: fire.placeTrace || null,
     createdAt: nowISO(),
+  };
+  // 返却灯。返した火は「完了データ」ではなく、記録塔の奥にともる小さな灯り。
+  // finalReturn から自動でともる。灯貨は使わない（感情の返却は課金インテリアではない）。
+  fire.returnLamp = {
+    litAt: nowISO(),
+    label: fire.finalReturn.choice,
+    memo: fire.finalReturn.memo,
+    placeTrace: fire.placeTrace ? fire.placeTrace.traceText : null,
+    heatTraces: (fire.heatTraces || []).map(function(h) { return h.traceText; }),
   };
   // 心へ返すのは、このサイクルで最も静かな行為。報酬は出さない。
   // 残るのは灯貨ではなく、箱庭に置かれた返却灯（returned_ember）という痕跡だけ。
@@ -2532,7 +2563,7 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
   );
 }
 
-function RecordTower({ game, onGoUnreceived, onViewReceipt }) {
+function RecordTower({ game, onGoUnreceived, onViewReceipt, onViewReturnLamp }) {
   var records = game.fires.filter(function(f) {
     return f.status === 'received' || f.status === 'held' || f.status === 'returned';
   });
@@ -2566,6 +2597,18 @@ function RecordTower({ game, onGoUnreceived, onViewReceipt }) {
                 → {fire.answer}
               </p>
             )}
+            {/* 心へ返した火は、返却灯としてここに残る。なかったことにしない。 */}
+            {fire.status === 'returned' && fire.returnLamp && (
+              <div className="tower-lamp">
+                <p className="tower-lamp-lead">この火は、心へ返されました。<br />消失ではなく、返却です。</p>
+                {fire.returnLamp.label && (
+                  <p className="tower-lamp-line"><span className="tower-lamp-k">返却灯</span>「{fire.returnLamp.label}」</p>
+                )}
+                {fire.returnLamp.memo && (
+                  <p className="tower-lamp-line"><span className="tower-lamp-k">最後の一言</span>{fire.returnLamp.memo}</p>
+                )}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
               {onViewReceipt && fire.receipt && (
                 <button
@@ -2577,6 +2620,18 @@ function RecordTower({ game, onGoUnreceived, onViewReceipt }) {
                   }}
                 >
                   受領証を見る
+                </button>
+              )}
+              {fire.status === 'returned' && onViewReturnLamp && (
+                <button
+                  onClick={function() { onViewReturnLamp(fire.id); }}
+                  style={{
+                    padding: '5px 11px', borderRadius: 7,
+                    background: 'transparent', border: '1px solid #3a3550',
+                    color: '#b0a8cc', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  返却灯を見る
                 </button>
               )}
               {fire.status === 'received' && onGoUnreceived && (
@@ -2755,6 +2810,100 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
       <button className="receipt-btn" onClick={onAction}>
         {buttonLabel || '余熱に会い直す'}
       </button>
+    </div>
+  );
+}
+
+// ── 返却灯 ───────────────────────────────────────────────────────────────────
+// 心へ返した火の、最後の記録。完了の証ではなく、返した証としてともる灯り。
+// 原文・問い・受け取り文・場所の痕跡・会い直した余熱・返し方・最後の一言を見返せる。
+// アプリは何も評価しない。残っているのは、すべてプレイヤー自身の言葉。
+function ReturnLampCard({ fire, onClose }) {
+  var lamp = fire.returnLamp || {};
+  var fr = fire.finalReturn || {};
+  var litDate = lamp.litAt ? new Date(lamp.litAt) : (fire.returnedAt ? new Date(fire.returnedAt) : null);
+  var dateStr = litDate
+    ? (litDate.getFullYear() + '/' + String(litDate.getMonth() + 1).padStart(2, '0') + '/' + String(litDate.getDate()).padStart(2, '0'))
+    : '';
+  var heatTraces = (lamp.heatTraces && lamp.heatTraces.length) ? lamp.heatTraces
+    : (fire.heatTraces || []).map(function(h) { return h.traceText; });
+  var placeTrace = lamp.placeTrace || (fire.placeTrace && fire.placeTrace.traceText) || null;
+
+  return (
+    <div className="return-lamp-card">
+      <div className="return-lamp-flame" aria-hidden="true">🏮</div>
+      <p className="return-lamp-title">返却灯</p>
+      <p className="return-lamp-lead">この火は、心へ返されました。<br />消失ではなく、返却です。</p>
+
+      {/* 原文・問い */}
+      {fire.kindle && (
+        <div className="return-lamp-row">
+          <span className="return-lamp-k">残り火</span>
+          <span className="return-lamp-v">「{fire.kindle}」</span>
+        </div>
+      )}
+      {fire.question && (
+        <div className="return-lamp-row">
+          <span className="return-lamp-k">問い</span>
+          <span className="return-lamp-v">「{fire.question}」</span>
+        </div>
+      )}
+      {fire.receipt && fire.receipt.acceptanceText && (
+        <div className="return-lamp-row">
+          <span className="return-lamp-k">受け取り</span>
+          <span className="return-lamp-v">{fire.receipt.acceptanceText}</span>
+        </div>
+      )}
+
+      {/* 場所の痕跡 */}
+      {placeTrace && (
+        <div className="return-lamp-row">
+          <span className="return-lamp-k">場所の痕跡</span>
+          <span className="return-lamp-v">{placeTrace}</span>
+        </div>
+      )}
+
+      {/* 会い直した余熱 */}
+      {heatTraces.length > 0 && (
+        <div className="return-lamp-traces">
+          <p className="return-lamp-traces-label">会い直した余熱</p>
+          {heatTraces.map(function(t, i) {
+            return <p key={i} className="return-lamp-trace-line">・{t}</p>;
+          })}
+        </div>
+      )}
+
+      {/* 返し方 */}
+      {lamp.label && (
+        <div className="return-lamp-choice">
+          <p className="return-lamp-choice-label">返し方</p>
+          <p className="return-lamp-choice-text">「{lamp.label}」</p>
+        </div>
+      )}
+
+      {/* 最後の一言 */}
+      {lamp.memo ? (
+        <div className="return-lamp-memo">
+          <p className="return-lamp-memo-label">最後の一言</p>
+          <p className="return-lamp-memo-text">{lamp.memo}</p>
+        </div>
+      ) : (
+        <p className="return-lamp-memo-empty">最後の一言は、残されませんでした。</p>
+      )}
+
+      {/* トイマン・コタエ */}
+      <div className="return-lamp-voices">
+        <p className="return-lamp-voice">
+          <span className="return-lamp-who toyman">トイマン</span>帰った。
+        </p>
+        <p className="return-lamp-voice">
+          <span className="return-lamp-who kotae">コタエ</span>消失ではありません。<br />返却です。
+        </p>
+      </div>
+
+      {dateStr && <p className="return-lamp-date">返した日：{dateStr}</p>}
+
+      <button className="receipt-btn return-lamp-btn" onClick={onClose}>閉じる</button>
     </div>
   );
 }
@@ -3440,7 +3589,7 @@ function ActionResultPanel({ result, onClose }) {
   );
 }
 
-function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestToday, onReceive, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived, onReturnToHeart, actionResult, onCloseActionResult, activeUnreceivedFireId, onGoUnreceivedFromTower, onViewReceipt }) {
+function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestToday, onReceive, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived, onReturnToHeart, actionResult, onCloseActionResult, activeUnreceivedFireId, onGoUnreceivedFromTower, onViewReceipt, onViewReturnLamp }) {
   var [recordOpen, setRecordOpen] = _useState(false);
   var [shadowOpen, setShadowOpen] = _useState(false);
   var [localSelectedReceivedId, setLocalSelectedReceivedId] = _useState(null);
@@ -3652,6 +3801,7 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
               game={game}
               onGoUnreceived={function(fid) { setRecordOpen(false); onGoUnreceivedFromTower(fid); }}
               onViewReceipt={onViewReceipt}
+              onViewReturnLamp={onViewReturnLamp}
             />
           </div>
         )
@@ -3796,8 +3946,36 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
         </div>
       )}
 
+      {/* 今日の箱庭（返却済み）— なかったことにせず、返却灯として見せる */}
+      {currentFire && !showForm && currentFire.status === 'returned' && currentFire.returnLamp && (
+        <div className="today-card today-card-returned">
+          <p className="today-label">今日の箱庭</p>
+          <p className="today-fire-kindle">「{fireTitle(currentFire)}」</p>
+          <p className="today-returned-lead">
+            この火は、心へ返されました。<br />
+            記録塔の奥に、小さな灯りが残っています。
+          </p>
+          {currentFire.returnLamp.label && (
+            <p className="today-returned-lamp">返却灯：「{currentFire.returnLamp.label}」</p>
+          )}
+          <div className="today-voice">
+            <span className="today-voice-who">トイマン</span>
+            <p className="today-voice-text">帰った。</p>
+          </div>
+          <div className="today-voice">
+            <span className="today-voice-who">コタエ</span>
+            <p className="today-voice-text">消失ではありません。返却です。</p>
+          </div>
+          <div className="today-actions">
+            <button className="today-action-btn" onClick={function() { onNextAction('garden', currentFire.id); }}>
+              箱庭を見る
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 今日の箱庭 — ホームを「現在地の窓」にする */}
-      {currentFire && !showForm && (
+      {currentFire && !showForm && !(currentFire.status === 'returned' && currentFire.returnLamp) && (
         <div className="today-card">
           <p className="today-label">今日の箱庭</p>
 
@@ -4635,7 +4813,11 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete })
 
   var wrapCls = 'intro-wrap heat-revisit-wrap' + (visible ? ' intro-visible' : '') + (leaving ? ' intro-leaving' : '');
   var beat = beats[step] || {};
-  var traceText = selected ? (def.traceLabel + '：' + selected) : '';
+  var sparedToday = (touchMode === '今日はそばに置く');
+  // 急がなかった日は「何になるか」を決めない。残るのは「進めなかった」という痕跡。
+  var traceText = sparedToday
+    ? ('急がなかった余熱：' + def.label)
+    : (selected ? (def.traceLabel + '：' + selected) : '');
 
   function renderBeatContent(b) {
     return (
@@ -4674,7 +4856,8 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete })
                 return (
                   <button key={tm.id} className="heat-revisit-touch-btn" onClick={function() {
                     setTouchMode(tm.id);
-                    setPhase('choose');
+                    // 「今日はそばに置く」は何になるかを決めない。痕跡だけ残して終える。
+                    setPhase(tm.id === '今日はそばに置く' ? 'trace' : 'choose');
                   }}>
                     <span className="heat-revisit-touch-id">{tm.id}</span>
                     <span className="heat-revisit-touch-desc">{tm.desc}</span>
@@ -5005,6 +5188,8 @@ function App() {
   var [milestoneDialog, setMilestoneDialog] = _useState(null);
   // 受領証閲覧: RecordTower「受領証を見る」用
   var [activeReceiptView, setActiveReceiptView] = _useState(null); // fireId
+  // 返却灯閲覧: RecordTower「返却灯を見る」用
+  var [activeReturnLamp, setActiveReturnLamp] = _useState(null); // fireId
   // 保存失敗の通知。一度だけ出す（連続失敗で何度も出さない）。
   var [saveError, setSaveError] = _useState(false);
   var saveErrorShownRef = _useRef(false);
@@ -5126,7 +5311,9 @@ function App() {
 
   var handleRevisitHeatDone = _useCallback(function(fireId, heatType, touchMode, selected) {
     setHeatRevisitState(null);
-    if (touchMode && selected) {
+    // touchMode が null = Esc キャンセル（何も記録しない）。
+    // 「今日はそばに置く」は selected が null でも痕跡を残すので、touchMode だけで判定する。
+    if (touchMode) {
       var result = revisitHeat(gameRef.current, fireId, heatType, touchMode, selected);
       if (result.ok) setGame(result.game);
     }
@@ -5391,6 +5578,7 @@ function App() {
           activeUnreceivedFireId={activeUnreceivedFireId}
           onGoUnreceivedFromTower={function(fid) { setActiveUnreceivedFireId(fid); }}
           onViewReceipt={function(fid) { setActiveReceiptView(fid); }}
+          onViewReturnLamp={function(fid) { setActiveReturnLamp(fid); }}
         />
       )}
       {kotaeDialog && (
@@ -5486,6 +5674,19 @@ function App() {
                 buttonLabel="閉じる"
                 onAction={function() { setActiveReceiptView(null); }}
               />
+            </div>
+          </div>
+        );
+      })()}
+      {/* 返却灯閲覧 — RecordTower「返却灯を見る」から */}
+      {activeReturnLamp && (function() {
+        var fire = gameRef.current.fires.find(function(f) { return f.id === activeReturnLamp; });
+        if (!fire) return null;
+        return (
+          <div className="kotae-ov" onClick={function() { setActiveReturnLamp(null); }}>
+            <div className="kotae-sheet" onClick={function(e) { e.stopPropagation(); }}>
+              <div className="kotae-grip" />
+              <ReturnLampCard fire={fire} onClose={function() { setActiveReturnLamp(null); }} />
             </div>
           </div>
         );

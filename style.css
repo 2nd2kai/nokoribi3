@@ -4850,6 +4850,43 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .final-return-char{font-size:11px;letter-spacing:.14em;color:#4a5470;margin:0 0 4px}
 .final-return-done .intro-narrative-line,.final-return-hold .intro-narrative-line{color:#9aa3b5;font-size:14px;line-height:1.9}
 
+/* 返却灯 — 心へ返した火が記録塔の奥に残す灯り */
+.return-lamp-card{padding:4px 2px 8px}
+.return-lamp-flame{font-size:30px;text-align:center;margin:0 0 6px;opacity:.85;filter:drop-shadow(0 0 12px rgba(176,168,204,.4))}
+.return-lamp-title{text-align:center;color:#b0a8cc;font-size:13px;letter-spacing:.16em;margin:0 0 10px}
+.return-lamp-lead{text-align:center;color:#9aa3b5;font-size:13px;line-height:1.9;margin:0 0 18px}
+.return-lamp-row{display:flex;flex-direction:column;gap:3px;padding:9px 12px;border-radius:8px;background:#0d0f1a;border:1px solid #1e2030;margin-bottom:8px}
+.return-lamp-k{font-size:10px;letter-spacing:.1em;color:#4a5470}
+.return-lamp-v{font-size:13px;line-height:1.7;color:#9aa3b5}
+.return-lamp-traces{padding:10px 12px;border-radius:8px;background:#0b0d16;border:1px solid #1e1c2e;margin-bottom:8px}
+.return-lamp-traces-label{font-size:10px;letter-spacing:.1em;color:#4a4560;margin:0 0 6px}
+.return-lamp-trace-line{font-size:12px;line-height:1.7;color:#9a93b5;margin:2px 0}
+.return-lamp-choice{padding:10px 12px;border-radius:8px;background:rgba(62,42,92,.14);border:1px solid #3a2d5a;margin-bottom:8px;text-align:center}
+.return-lamp-choice-label{font-size:10px;letter-spacing:.1em;color:#6a5d8a;margin:0 0 4px}
+.return-lamp-choice-text{font-size:14px;color:#c4b5fd;margin:0;letter-spacing:.04em}
+.return-lamp-memo{padding:12px;border-radius:8px;background:#0d0f1a;border:1px solid #2a2340;margin-bottom:14px}
+.return-lamp-memo-label{font-size:10px;letter-spacing:.1em;color:#4a5470;margin:0 0 5px}
+.return-lamp-memo-text{font-size:14px;line-height:1.8;color:#cbd2e0;margin:0;white-space:pre-wrap}
+.return-lamp-memo-empty{font-size:12px;color:#4a5470;text-align:center;margin:0 0 14px;line-height:1.7}
+.return-lamp-voices{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.return-lamp-voice{font-size:13px;line-height:1.8;color:#9aa3b5;margin:0}
+.return-lamp-who{display:inline-block;font-size:10px;letter-spacing:.1em;margin-right:8px;padding:1px 7px;border-radius:6px}
+.return-lamp-who.toyman{color:#7EB8D4;background:rgba(126,184,212,.1)}
+.return-lamp-who.kotae{color:#b0a8cc;background:rgba(176,168,204,.1)}
+.return-lamp-date{font-size:10px;color:#3a4050;text-align:center;margin:0 0 14px;letter-spacing:.06em}
+.return-lamp-btn{margin-top:2px}
+
+/* 記録塔の返却灯サマリ */
+.tower-lamp{margin:8px 0 4px;padding:10px 12px;border-radius:8px;background:#0c0d15;border:1px solid #2a2640}
+.tower-lamp-lead{font-size:12px;line-height:1.8;color:#9a93b5;margin:0 0 8px}
+.tower-lamp-line{font-size:12px;line-height:1.7;color:#aeb4c4;margin:3px 0}
+.tower-lamp-k{display:inline-block;font-size:10px;letter-spacing:.08em;color:#5a5478;margin-right:8px}
+
+/* ホーム今日の箱庭（返却済み） */
+.today-card-returned{border-color:#2e2a44}
+.today-returned-lead{color:#9aa3b5;font-size:13px;line-height:1.9;margin:12px 0 12px}
+.today-returned-lamp{color:#c4b5fd;font-size:13px;letter-spacing:.03em;margin:0 0 14px;padding:9px 12px;border-radius:8px;background:rgba(62,42,92,.14);border:1px solid #3a2d5a}
+
 /* 受領後の次導線 */
 .post-receive-lead{background:#0f0f1a;border:1px solid #312e81;border-radius:10px;padding:12px 14px;margin-bottom:10px}
 .post-receive-lead-text{color:#b9c0d4;font-size:12px;line-height:1.8;margin:0}
