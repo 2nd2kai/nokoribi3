@@ -5136,3 +5136,26 @@ html,body{
   font-size:13px;cursor:pointer;font-family:inherit;
 }
 .home-light-secondary:hover{border-color:#c2410c;color:#fed7aa}
+
+/* ── 留守のあいだ（放置復帰）── 報酬ではなく、世話されていた証拠。静かに。 */
+.away-ov{
+  position:fixed;inset:0;z-index:2350;
+  background:rgba(5,6,8,.94);
+  display:flex;align-items:center;justify-content:center;
+  padding:28px 22px;max-width:480px;margin:0 auto;
+  animation:introFadeIn .6s ease both;
+}
+.away-card{
+  width:100%;max-width:340px;
+  background:#0a0e0c;border:1px solid #1f3a2e;border-radius:16px;
+  padding:26px 22px;box-shadow:0 24px 64px -20px rgba(0,0,0,.8);text-align:center;
+}
+.away-label{color:#5b8a72;font-size:11px;letter-spacing:.2em;margin:0 0 18px}
+.away-line{color:#aeb9c4;font-size:14px;line-height:2;margin:0}
+.away-note{color:#6b8a78;font-size:13px;line-height:1.9;margin:18px 0 22px;font-style:italic}
+.away-btn{
+  width:100%;padding:13px 0;border-radius:12px;
+  background:#13241b;border:1px solid #2a4a38;color:#bbf7d0;
+  font-size:15px;cursor:pointer;font-family:inherit;letter-spacing:.08em;
+}
+.away-btn:hover{background:#182e22;border-color:#357a52}

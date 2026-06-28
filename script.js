@@ -519,6 +519,7 @@ function normalizeGame(g) {
   if (!g.unlocks.lightMarket) g.unlocks.lightMarket = false;
   if (!g.lastAutoAt) g.lastAutoAt = nowISO();
   if (!g.lastSeenAt) g.lastSeenAt = nowISO();
+  if (!('lastAwayShownAt' in g)) g.lastAwayShownAt = null;
   if (!g.introSeen) g.introSeen = { kotae: false, kana: false, utsuro: false, auditor: false };
   if (!('seenWorldIntro' in g)) g.seenWorldIntro = false;
   if (!Array.isArray(g.seenEncounters)) g.seenEncounters = [];
@@ -1093,6 +1094,7 @@ function tickProgress(game) {
   fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + autoGain);
   addLog(fire, pick(AUTO_LOGS));
   ns.lastAutoAt = nowISO();
+  ns.lastSeenAt = nowISO(); // 在席を刻む（次回の「留守のあいだ」判定の基準）
   fire.updatedAt = nowISO();
   // 灯守りの自動進行（問いの深度は進めない）。tick は actionResult を出さない。
   var lkTickCompleted = advanceLightkeeper(ns, 5).completed;
@@ -1112,6 +1114,46 @@ function tickProgress(game) {
     }
   }
   return { changed: true, game: ns };
+}
+
+// 留守のあいだ。前回の滞在から十分に時間が空いて戻ってきた時、
+// 「問いは進んでいないが、火は世話されていた」を見せる。箱庭放置ゲームの核。
+// 放置で進めてよいのは安定と痕跡だけ。問い・灯貨・余熱・受領・返却は決して進めない。
+function computeAwayReturn(game, skip) {
+  var ns = cloneS(game);
+  var report = null;
+  if (!skip) {
+    var lastSeen = ns.lastSeenAt ? new Date(ns.lastSeenAt).getTime() : 0;
+    var elapsedMin = lastSeen ? (Date.now() - lastSeen) / 60000 : 0;
+    // 世話する対象（進行中の火）がある時だけ出す。
+    var fire = ns.fires.find(function(f) { return f.status === 'searching'; });
+    if (lastSeen && elapsedMin >= 30 && fire) {
+      var tier, lines, bump;
+      if (elapsedMin < 180) {            // 30分〜3時間
+        tier = 'short'; bump = 3;
+        lines = ['灯守りが、火のそばに小さな石を置いていました。'];
+      } else if (elapsedMin < 1440) {    // 3時間〜1日
+        tier = 'mid'; bump = 5;
+        lines = ['灯守りが、小さな石を置いていました。', '記録見習いが、紙片の端を整えていました。'];
+      } else {                            // 1日以上
+        tier = 'long'; bump = 8;
+        lines = ['留守のあいだ、火は消えていませんでした。', '小人たちが、そばにいたようです。'];
+      }
+      // 安定だけ少し落ち着く（上限 STABILITY_ENOUGH。放置だけでは満たし切らない＝役割を残す）。
+      fire.gardenProgress = Math.min(STABILITY_ENOUGH, (fire.gardenProgress || 0) + bump);
+      // 守られた痕跡を残す（報酬ではなく、世話されていた証拠）。
+      addGardenItem(ns, 'small_stone');
+      if (tier !== 'short') {
+        ns.materials = safeMat(ns.materials);
+        ns.materials.ash = (ns.materials.ash || 0) + 1;
+      }
+      fire.updatedAt = nowISO();
+      ns.lastAwayShownAt = nowISO();
+      report = { tier: tier, lines: lines };
+    }
+  }
+  ns.lastSeenAt = nowISO(); // 常に「今この瞬間に居る」を記録する
+  return { game: ns, report: report };
 }
 
 // 一時通知 actionResult を組み立てる共通関数。
@@ -1940,9 +1982,10 @@ function FireInputForm({ onSubmit, onCancel }) {
 }
 
 function FireCard({ fire, onSelect, selected }) {
+  // 機械語ではなく、ホームと同じ「居場所」の言葉で揃える。
   var statusLabel = {
-    lit: '待機中', searching: '探索中', found: '問いが届いた',
-    receiving: '旅の途中', received: '受領済み', held: '保持中', returned: '還した',
+    lit: '焚き口', searching: '未受領の森', found: '森の奥',
+    receiving: '記録塔への道', received: '余熱の棚', held: '保持中', returned: '記録塔の奥',
   };
   var statusColor = {
     lit: '#6b7280', searching: '#f97316', found: '#a78bfa',
@@ -2887,11 +2930,15 @@ function GardenBoard({ game }) {
           {items.includes('paper_box') && Item('paper_box')}
         </div>
 
-        {/* 中央：残り火 */}
+        {/* 中央：残り火（そばにいる子は、いま向き合う火の状態に合わせる） */}
         <div className="garden-area-center">
           <span className="garden-fire-pulse" style={{ fontSize: 32, lineHeight: 1, display: 'block' }}>🔥</span>
           <div className="garden-fire-label">残り火</div>
-          {game.toyman && <div className="garden-fire-label">トイマン</div>}
+          {(function() {
+            var cf = pickCurrentFire(game.fires);
+            var who = cf ? fireCompanionLine(cf).who : 'トイマン';
+            return <div className="garden-fire-label">{who}</div>;
+          })()}
         </div>
 
         {/* 右列：保全 */}
@@ -3696,6 +3743,22 @@ function DevBar({ game, onReset, onForceFound, onAddBattle, onReplayIntro }) {
 }
 
 // 保存失敗を、世界観を壊さずに伝える通知。コタエの声で一度だけ。
+// 留守のあいだ。戻ってきた時、最初に出る。報酬回収ではなく、世話されていた証拠。
+function AwayReport({ report, onClose }) {
+  return (
+    <div className="away-ov" role="dialog" onClick={onClose}>
+      <div className="away-card" onClick={function(e) { e.stopPropagation(); }}>
+        <p className="away-label">留守のあいだ</p>
+        {report.lines.map(function(l, i) {
+          return <p key={i} className="away-line">{l}</p>;
+        })}
+        <p className="away-note">問いは、まだ見つかっていません。<br />でも、火は消えていません。</p>
+        <button className="away-btn" onClick={onClose}>ただいま</button>
+      </div>
+    </div>
+  );
+}
+
 function SaveErrorNotice({ onDismiss }) {
   return (
     <div className="save-error-notice" role="alert">
@@ -4113,6 +4176,9 @@ function App() {
   var saveErrorShownRef = _useRef(false);
   // 全記録の初期化確認（世界内モーダル）
   var [resetConfirm, setResetConfirm] = _useState(false);
+  // 留守のあいだ（戻ってきた時に一度だけ）
+  var [awayReport, setAwayReport] = _useState(null);
+  var awayCheckedRef = _useRef(false);
   var tickRef = _useRef(null);
 
   // 各ハンドラが常に最新の committed game から実処理できるよう、
@@ -4129,6 +4195,16 @@ function App() {
       setSaveError(true);
     }
   }, [game]);
+
+  // 起動時に一度だけ「留守のあいだ」を判定する。常に lastSeenAt を今に更新する。
+  // 初回（イントロ中）は出さない。
+  _useEffect(function() {
+    if (awayCheckedRef.current) return;
+    awayCheckedRef.current = true;
+    var result = computeAwayReturn(gameRef.current, introActive);
+    setGame(result.game);
+    if (result.report) setAwayReport(result.report);
+  }, []);
 
   // actionResult は一時通知。タブ（screen）を切り替えたら消す。
   // fire の status 変化では消さない（doBattle→found で結果が消えないように）。
@@ -4358,6 +4434,10 @@ function App() {
           />
         );
       })()}
+      {/* 留守のあいだ — 戻ってきた時に最初に出る。問いは進まず、火は世話されていた。 */}
+      {!introActive && !entrustFireId && awayReport && (
+        <AwayReport report={awayReport} onClose={function() { setAwayReport(null); }} />
+      )}
       {!introActive && screen === 'home' && (
         <HomeView
           game={game}
