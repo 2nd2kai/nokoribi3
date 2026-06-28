@@ -1726,33 +1726,51 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
   );
 }
 
-function RecordTower({ game }) {
-  var received = game.fires.filter(function(f) {
+function RecordTower({ game, onGoUnreceived }) {
+  var records = game.fires.filter(function(f) {
     return f.status === 'received' || f.status === 'held' || f.status === 'returned';
   });
+  var statusText = { received: '未受領あり', held: '保持中', returned: '心へ返した' };
 
   return (
     <div style={{ padding: '0 0 40px' }}>
       <h3 style={{ color: '#a78bfa', fontSize: 15, margin: '0 0 14px' }}>記録塔</h3>
-      {received.length === 0 && (
-        <p style={{ color: '#6b7280', fontSize: 13 }}>まだ記録がありません。</p>
+      {records.length === 0 && (
+        <p style={{ color: '#8f9bb3', fontSize: 13 }}>まだ記録がありません。</p>
       )}
-      {received.map(function(fire) {
+      {records.map(function(fire) {
         return (
           <div key={fire.id} style={{
             background: '#151820', border: '1px solid #2e3348',
             borderRadius: 8, padding: '12px 14px', marginBottom: 8,
           }}>
-            <p style={{ color: '#e2e4ee', fontSize: 13, margin: '0 0 6px' }}>{fire.kindle}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+              <p style={{ color: '#e2e4ee', fontSize: 13, margin: 0 }}>{fire.kindle}</p>
+              <span style={{ color: fire.status === 'returned' ? '#9ca3af' : '#a78bfa', fontSize: 10, whiteSpace: 'nowrap' }}>
+                {statusText[fire.status] || fire.status}
+              </span>
+            </div>
             {fire.question && (
               <p style={{ color: '#7c3aed', fontSize: 12, margin: '0 0 4px', lineHeight: 1.6 }}>
                 ✦ {fire.question}
               </p>
             )}
             {fire.answer && (
-              <p style={{ color: '#9ca3af', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+              <p style={{ color: '#9ca3af', fontSize: 12, margin: '0 0 6px', lineHeight: 1.5 }}>
                 → {fire.answer}
               </p>
+            )}
+            {fire.status === 'received' && onGoUnreceived && (
+              <button
+                onClick={function() { onGoUnreceived(fire.id); }}
+                style={{
+                  marginTop: 4, padding: '6px 12px', borderRadius: 7,
+                  background: 'transparent', border: '1px solid #4c1d95',
+                  color: '#a78bfa', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                未受領領域へ進む →
+              </button>
             )}
           </div>
         );
@@ -1761,43 +1779,50 @@ function RecordTower({ game }) {
   );
 }
 
-function KotaeIntro({ onClose }) {
+// コタエの会話台本。コタエが画面に出る時は必ずいずれかの本文を表示する（無言にしない）。
+var KOTAE_SCRIPTS = {
+  receive: {
+    lines: [
+      'ノコリビ、受領しました。',
+      'これは答えではありません。\n問いの欠片です。',
+      '記録塔に保存します。\nただし、まだ受け取れていない領域があります。',
+      '意味の影。\n価値の黒札。\n満足の灰。',
+      'この火は、まだ全部を受け取られたわけではありません。',
+      '次に進めます。\nどこから迎えに行くか、選んでください。',
+    ],
+    button: '未受領領域を開く',
+  },
+  open: {
+    lines: ['未受領領域を展開します。\nまだ受け取れていないものを確認してください。'],
+    button: '確認する',
+  },
+  returned: {
+    lines: ['この火は、心へ返されました。', '消えたのではありません。\n記録として残っています。'],
+    button: '閉じる',
+  },
+};
+
+function KotaeDialog({ kind, onConfirm }) {
+  var script = KOTAE_SCRIPTS[kind] || KOTAE_SCRIPTS.receive;
+  var [step, setStep] = _useState(0);
+  var isLast = step >= script.lines.length - 1;
+  function advance() {
+    if (isLast) onConfirm();
+    else setStep(function(s) { return s + 1; });
+  }
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 100,
-      background: 'rgba(0,0,0,0.75)',
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-    }}>
-      <div style={{
-        maxWidth: 480, width: '100%',
-        background: '#0f1119', border: '1px solid #312e81',
-        borderRadius: '20px 20px 0 0',
-        padding: '24px 20px 36px',
-      }}>
-        <div style={{ width: 36, height: 3, background: '#2e3348', borderRadius: 99, margin: '0 auto 20px' }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <span style={{
-            display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
-            background: '#b0a8cc', flexShrink: 0,
-          }} />
-          <span style={{ color: '#b0a8cc', fontSize: 13, fontWeight: 700 }}>コタエ</span>
+    <div className="kotae-ov" onClick={advance}>
+      <div className="kotae-sheet" onClick={function(e) { e.stopPropagation(); }}>
+        <div className="kotae-grip" />
+        <div className="kotae-head">
+          <span className="kotae-dot" />
+          <span className="kotae-name">コタエ</span>
         </div>
-        <p style={{ color: '#e2e4ee', fontSize: 15, lineHeight: 1.9, margin: '0 0 6px' }}>
-          ……届いた。
-        </p>
-        <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.9, margin: '0 0 20px' }}>
-          問いの欠片は、ここに記録されます。<br />
-          記録塔の扉が、開きました。
-        </p>
-        <button
-          onClick={onClose}
-          style={{
-            width: '100%', padding: '12px 0', borderRadius: 10,
-            background: '#312e81', border: 'none', color: '#c7d2fe',
-            fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-          }}
-        >
-          記録塔を確かめる
+        {script.lines.slice(0, step + 1).map(function(line, i) {
+          return <p key={i} className={'kotae-line' + (i === step ? ' kotae-line-now' : '')}>{line}</p>;
+        })}
+        <button className="kotae-btn" onClick={advance}>
+          {isLast ? script.button : '▽ つづき'}
         </button>
       </div>
     </div>
@@ -1872,7 +1897,7 @@ function GardenBoard({ game }) {
     return <GardenItem key={key} def={def} isNew={freshTrace === key} count={counts[key]} />;
   }
 
-  var showTop = (items.includes('record_light') || game.unlocks.recordTower || items.includes('meaning_fragment'));
+  var showTop = (items.includes('record_light') || game.unlocks.recordTower || items.includes('meaning_fragment') || items.includes('returned_ember'));
   var showLeft = (folk.paperCollector || items.includes('burnt_paper') || mat.paper > 0 || gp >= 40);
   var showRight = (folk.lightkeeper || items.includes('small_stone') || gp >= 20 || items.includes('lamp_stand'));
   var showBottom = (items.includes('rest_chair') || items.includes('water_drop') || folk.waterCarrier || game.unlocks.tearsSpring);
@@ -1887,6 +1912,7 @@ function GardenBoard({ game }) {
       {showTop && (
         <div className="garden-area-top-center">
           {(items.includes('record_light') || game.unlocks.recordTower) && Item('record_light')}
+          {items.includes('returned_ember') && Item('returned_ember')}
           {items.includes('meaning_fragment') && Item('meaning_fragment')}
           {folk.recordApprentice && (
             <div className="garden-item">
@@ -2180,13 +2206,19 @@ function ActionResultPanel({ result, onClose }) {
   );
 }
 
-function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived, onReturnToHeart, actionResult, onCloseActionResult }) {
+function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived, onReturnToHeart, actionResult, onCloseActionResult, activeUnreceivedFireId }) {
   var [recordOpen, setRecordOpen] = _useState(false);
   var [shadowOpen, setShadowOpen] = _useState(false);
 
   var sf       = game.fires.find(function(f) { return f.status === 'searching'; });
   var found    = game.fires.find(function(f) { return f.status === 'found'; });
   var received = game.fires.filter(function(f) { return f.status === 'received'; });
+  // コタエ会話から案内された火を先頭に出す
+  if (activeUnreceivedFireId) {
+    received = received.slice().sort(function(a, b) {
+      return (b.id === activeUnreceivedFireId ? 1 : 0) - (a.id === activeUnreceivedFireId ? 1 : 0);
+    });
+  }
 
   _useEffect(function() {
     if (onUpdateLastSeen) onUpdateLastSeen();
@@ -2266,6 +2298,16 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
         </div>
       )}
 
+      {/* 受領後の次導線：記録塔で止まらせない */}
+      {received.length > 0 && (
+        <div className="post-receive-lead">
+          <p className="post-receive-lead-text">
+            記録塔に問いの欠片が保存されました。<br />
+            でも、この火にはまだ受け取れていないものがあります。
+          </p>
+        </div>
+      )}
+
       {/* 受領済みの火：未受領領域への再探索入口（主導線は箱庭に寄せる） */}
       {received.length > 0 && onReexplore && received.map(function(rf) {
         return (
@@ -2322,7 +2364,7 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
               <span className="record-tower-header-title">🗼 記録塔</span>
               <button className="record-tower-close" onClick={function() { setRecordOpen(false); }}>閉じる</button>
             </div>
-            <RecordTower game={game} />
+            <RecordTower game={game} onGoUnreceived={function() { setRecordOpen(false); }} />
           </div>
         )
       )}
@@ -2617,7 +2659,8 @@ function App() {
     return saved ? saved : initGame();
   });
   var [screen, setScreen] = _useState('home');
-  var [showKotaeIntro, setShowKotaeIntro] = _useState(false);
+  var [kotaeDialog, setKotaeDialog] = _useState(null); // { fireId, kind }
+  var [activeUnreceivedFireId, setActiveUnreceivedFireId] = _useState(null);
   var [actionResult, setActionResult] = _useState(null);
   var tickRef = _useRef(null);
 
@@ -2666,7 +2709,8 @@ function App() {
     if (result.ok) {
       setGame(result.game);
       setActionResult(result.actionResult || null);
-      if (result.newlyUnlockedKotae) setShowKotaeIntro(true);
+      // 受領のたびに必ずコタエ会話を出す（記録塔で止まらせない）
+      setKotaeDialog({ fireId: fireId, kind: 'receive' });
     }
   }, []);
 
@@ -2699,6 +2743,7 @@ function App() {
     if (result.ok) {
       setGame(result.game);
       setActionResult(result.actionResult || null);
+      setKotaeDialog({ fireId: fireId, kind: 'returned' });
     }
   }, []);
 
@@ -2804,17 +2849,21 @@ function App() {
           onReturnToHeart={handleReturnToHeart}
           actionResult={actionResult}
           onCloseActionResult={closeActionResult}
+          activeUnreceivedFireId={activeUnreceivedFireId}
         />
       )}
-      {showKotaeIntro && (
-        <KotaeIntro onClose={function() {
-          setShowKotaeIntro(false);
-          setGame(function(prev) {
-            var ns = cloneS(prev);
-            ns.introSeen.kotae = true;
-            return ns;
-          });
-        }} />
+      {kotaeDialog && (
+        <KotaeDialog
+          kind={kotaeDialog.kind}
+          onConfirm={function() {
+            var d = kotaeDialog;
+            setKotaeDialog(null);
+            if (d.kind === 'receive') {
+              setActiveUnreceivedFireId(d.fireId);
+              setScreen('garden');
+            }
+          }}
+        />
       )}
       <DevBar
         game={game}

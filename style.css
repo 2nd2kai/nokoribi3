@@ -4740,6 +4740,22 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .return-heart-btn{width:100%;padding:13px 0;border-radius:10px;background:#4c1d95;border:1px solid #7c3aed;color:#ede9fe;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.04em}
 .return-heart-btn:active{background:#5b21b6}
 
+/* 受領後の次導線 */
+.post-receive-lead{background:#0f0f1a;border:1px solid #312e81;border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.post-receive-lead-text{color:#b9c0d4;font-size:12px;line-height:1.8;margin:0}
+
+/* コタエ会話 */
+.kotae-ov{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center}
+.kotae-sheet{max-width:480px;width:100%;background:#0f1119;border:1px solid #312e81;border-radius:20px 20px 0 0;padding:24px 20px 36px;max-height:88dvh;overflow-y:auto}
+.kotae-grip{width:36px;height:3px;background:#2e3348;border-radius:99px;margin:0 auto 20px}
+.kotae-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.kotae-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#b0a8cc;flex-shrink:0}
+.kotae-name{color:#b0a8cc;font-size:13px;font-weight:700}
+.kotae-line{color:#cdd2e4;font-size:15px;line-height:1.9;margin:0 0 10px;white-space:pre-line;opacity:.55;transition:opacity .3s ease}
+.kotae-line-now{color:#e2e4ee;opacity:1}
+.kotae-btn{width:100%;margin-top:10px;padding:13px 0;border-radius:10px;background:#312e81;border:none;color:#c7d2fe;font-size:14px;cursor:pointer;font-family:inherit;font-weight:600}
+.kotae-btn:active{background:#3b378f}
+
 /* ── 進度バーセクション ── */
 .progress-section{margin-bottom:12px;padding:10px 12px;background:#0a0c0f;border:1px solid #1e2230;border-radius:10px}
 .progress-row{display:flex;justify-content:space-between;margin-bottom:2px}
