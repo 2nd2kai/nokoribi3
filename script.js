@@ -161,9 +161,19 @@ const QUESTION_POOL = [
   (ws) => `「${ws}」という経験が、あなたを変えたとしたら、どのように？`,
 ];
 
-const FIRE_DANGER_WORDS = [
-  '死にたい', '消えたい', '消えてしまいたい', '消えたくなる',
-  'もう終わりにしたい', '生きていたくない', '自殺', '自傷',
+// 危機語。完璧な検閲ではなく、苦痛に最後の編集権を渡さないための網。
+// 漢字は形態素解析できないので、漢字形とひらがな形の両方を持つ。
+// カタカナ・全角・大文字・分かち書きは normalizeForCrisis が吸収する。
+const CRISIS_WORDS = [
+  '死にたい', 'しにたい', '死にたく', 'しにたく', '死のう', 'しのう',
+  '死んでしまいたい', 'しんでしまいたい', '死ぬしかない', 'しぬしかない',
+  '消えたい', 'きえたい', '消えてしまいたい', 'きえてしまいたい',
+  '消えてなくなりたい', 'きえてなくなりたい', '消えたくなる', 'きえたくなる',
+  'いなくなりたい', '居なくなりたい',
+  '生きていたくない', 'いきていたくない', '生きたくない', 'いきたくない',
+  '自殺', 'じさつ', '自傷', 'じしょう', '自害', 'じがい', 'リストカット',
+  '終わりにしたい', 'おわりにしたい',
+  'killmyself', 'suicide', 'wanttodie', 'endmylife', 'iwanttodie',
 ];
 
 // ── Utilities ──────────────────────────────────────────────────────────────
@@ -182,9 +192,30 @@ function capLog(arr, max) {
   return arr.length > max ? arr.slice(arr.length - max) : arr;
 }
 
+// 検知のための正規化。NFKC・小文字化・カタカナ→ひらがな・空白/区切りの除去。
+// 「し ね」「し・に・た・い」「シニタイ」「ｼﾆﾀｲ」等の回避を畳む。
+function normalizeForCrisis(text) {
+  if (!text) return '';
+  var t = String(text);
+  try { t = t.normalize('NFKC'); } catch (e) {}
+  t = t.toLowerCase();
+  // カタカナ → ひらがな（コードポイントずらし）
+  t = t.replace(/[ァ-ヶ]/g, function(ch) {
+    return String.fromCharCode(ch.charCodeAt(0) - 0x60);
+  });
+  // 空白・中黒・区切り記号を畳んで、分断による回避を防ぐ
+  t = t.replace(/[\s　・･.,_\-―ー~〜|/\\]/g, '');
+  return t;
+}
+
+// 危機語を含むか。語彙側も同じ正規化を通すので、表記ゆれに広く当たる。
 function hasDanger(text) {
-  if (!text) return false;
-  return FIRE_DANGER_WORDS.some(function(w) { return text.includes(w); });
+  var n = normalizeForCrisis(text);
+  if (!n) return false;
+  for (var i = 0; i < CRISIS_WORDS.length; i++) {
+    if (n.indexOf(normalizeForCrisis(CRISIS_WORDS[i])) !== -1) return true;
+  }
+  return false;
 }
 
 function fireTitle(fire) {
@@ -1522,16 +1553,66 @@ function ToymanVoice({ text, sub }) {
   );
 }
 
+// 保留室。危険な言葉が「置かれよう」とした時、記録machineへ流さず一度受け止める。
+// プレイヤーを止めるのではなく、苦痛に最後の編集権を渡さないための、ひと呼吸。
+// onProceed があれば、ひと呼吸のあと本人が意識して進む道も残す（強制終了にしない）。
+function CrisisHold({ onHold, onProceed, proceedLabel }) {
+  return (
+    <div className="crisis-hold-ov" role="alert">
+      <div className="crisis-hold-card" onClick={function(e) { e.stopPropagation(); }}>
+        <div className="crisis-dialogue">
+          <span className="crisis-name crisis-kotae">コタエ</span>
+          <p className="crisis-line">この言葉は、通常の記録として扱いません。</p>
+          <span className="crisis-name crisis-toyman">トイマン</span>
+          <p className="crisis-line">置いていくのか。</p>
+          <span className="crisis-name crisis-kotae">コタエ</span>
+          <p className="crisis-line">いいえ。<br />先に、安全な場所へ置きます。</p>
+          <p className="crisis-soft">今は、答えを出さなくていい。<br />今は、決めなくていい。</p>
+        </div>
+        <div className="crisis-support">
+          <p className="crisis-support-lead">もし今、つらくて誰かに話したいとき。</p>
+          <p className="crisis-support-name">よりそいホットライン</p>
+          <p className="crisis-support-num">0120-279-338</p>
+          <p className="crisis-support-sub">24時間・通話無料。ひとりで抱えなくて大丈夫です。</p>
+        </div>
+        <button className="crisis-hold-btn" onClick={onHold}>今は、ここに置いておく</button>
+        {onProceed && (
+          <button className="crisis-proceed-btn" onClick={onProceed}>
+            それでも、{proceedLabel || '置く'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ShadowPanel({ fire, onAnswer, onWatch, onSkip }) {
   var [input, setInput] = _useState('');
+  var [crisisHold, setCrisisHold] = _useState(false);
   var [mode, setMode] = _useState('choice'); // choice | confront
   var voice = getShadowVoice(fire);
   var softened = fire.battleCount >= 4;
 
-  function handleSubmit() {
+  function doAnswer() {
     onAnswer(input.trim());
     setInput('');
     setMode('choice');
+  }
+
+  function handleSubmit() {
+    // 影に向き合う言葉を「置く」瞬間に検知する。
+    if (hasDanger(input)) { setCrisisHold(true); return; }
+    doAnswer();
+  }
+
+  if (crisisHold) {
+    return (
+      <CrisisHold
+        onHold={function() { setCrisisHold(false); }}
+        onProceed={function() { setCrisisHold(false); doAnswer(); }}
+        proceedLabel="向き合う"
+      />
+    );
   }
 
   return (
@@ -1639,48 +1720,53 @@ function FireInputForm({ onSubmit, onCancel }) {
   var [meaning, setMeaning] = _useState(50);
   var [value, setValue] = _useState(50);
   var [satisfaction, setSatisfaction] = _useState(50);
-  var [dangerMode, setDangerMode] = _useState(false);
+  var [crisisHold, setCrisisHold] = _useState(false);
   var [step, setStep] = _useState(0);
+  // 保留室から「それでも」進む時に実行する保留中の動作 { run, label }
+  var crisisPendingRef = _useRef(null);
 
-  function checkDanger(text) {
-    if (hasDanger(text)) setDangerMode(true);
+  function triggerCrisis(run, label) {
+    crisisPendingRef.current = { run: run, label: label };
+    setCrisisHold(true);
   }
 
   function handleNext() {
     if (step === 0 && !kindle.trim()) return;
+    // 言葉を置く前（step0→1）に検知する。書いている途中は遮らない。
+    if (step === 0 && (hasDanger(kindle) || hasDanger(pain))) {
+      triggerCrisis(function() { setStep(1); }, 'つづける');
+      return;
+    }
     setStep(function(s) { return s + 1; });
+  }
+
+  function doLight() {
+    onSubmit(kindle, pain, writeState, feeling, { meaning: meaning, value: value, satisfaction: satisfaction });
   }
 
   function handleSubmit() {
     if (!kindle.trim()) return;
-    onSubmit(kindle, pain, writeState, feeling, { meaning: meaning, value: value, satisfaction: satisfaction });
+    // 火に「置く」瞬間に再チェック（貼り付け・遷移の取りこぼしを拾う）。
+    if (hasDanger(kindle) || hasDanger(pain)) {
+      triggerCrisis(function() { doLight(); }, '火に置く');
+      return;
+    }
+    doLight();
   }
 
-  if (dangerMode) {
+  if (crisisHold) {
+    var pending = crisisPendingRef.current;
     return (
-      <div style={{ padding: '4px 0' }}>
-        <div style={{
-          background: '#1c0a0a', border: '1px solid #7f1d1d',
-          borderRadius: 10, padding: 20, marginBottom: 16,
-        }}>
-          <p style={{ color: '#fca5a5', fontSize: 15, lineHeight: 1.8, margin: 0 }}>
-            書いてくれてありがとう。<br />
-            今、つらい気持ちがあるみたいだね。<br /><br />
-            もし誰かに話したいとき、<strong>よりそいホットライン（0120-279-338）</strong>に電話できます。<br />
-            残り火は、あなたがここにいてくれることを待っています。
-          </p>
-        </div>
-        <button
-          onClick={function() { setDangerMode(false); }}
-          style={{
-            padding: '10px 20px', borderRadius: 8, border: '1px solid #4b5563',
-            background: 'transparent', color: '#9ca3af', fontSize: 14,
-            cursor: 'pointer', fontFamily: 'inherit',
-          }}
-        >
-          戻る
-        </button>
-      </div>
+      <CrisisHold
+        onHold={function() { setCrisisHold(false); crisisPendingRef.current = null; }}
+        onProceed={function() {
+          var p = crisisPendingRef.current;
+          setCrisisHold(false);
+          crisisPendingRef.current = null;
+          if (p && p.run) p.run();
+        }}
+        proceedLabel={pending ? pending.label : '進む'}
+      />
     );
   }
 
@@ -1693,7 +1779,7 @@ function FireInputForm({ onSubmit, onCancel }) {
           </label>
           <textarea
             value={kindle}
-            onChange={function(e) { setKindle(e.target.value); checkDanger(e.target.value); }}
+            onChange={function(e) { setKindle(e.target.value); }}
             placeholder="詩、歌詞、日記、手紙、SNS投稿…なんでも"
             rows={3}
             autoFocus
@@ -1710,7 +1796,7 @@ function FireInputForm({ onSubmit, onCancel }) {
           </label>
           <textarea
             value={pain}
-            onChange={function(e) { setPain(e.target.value); checkDanger(e.target.value); }}
+            onChange={function(e) { setPain(e.target.value); }}
             placeholder="伝わらなかった、反応がなかった、後悔している…"
             rows={2}
             style={{

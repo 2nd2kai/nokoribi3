@@ -4993,3 +4993,44 @@ html,body{
   font-size:13px;cursor:pointer;font-family:inherit;
 }
 .save-error-btn:hover{border-color:#6b7280;color:#e5e7eb}
+
+/* ── 保留室（危機検知）── 落ち着いた暗さ。責めず、急かさず、ひと呼吸。 */
+.crisis-hold-ov{
+  position:fixed;inset:0;z-index:2300;
+  background:rgba(5,6,8,.92);
+  display:flex;align-items:center;justify-content:center;
+  padding:28px 22px;max-width:480px;margin:0 auto;
+  animation:introFadeIn .5s ease both;
+}
+.crisis-hold-card{
+  width:100%;max-width:360px;max-height:calc(100dvh - 56px);overflow-y:auto;
+  background:#0b0d12;border:1px solid #243042;border-radius:16px;
+  padding:24px 22px;box-shadow:0 24px 64px -20px rgba(0,0,0,.8);
+}
+.crisis-dialogue{margin-bottom:20px}
+.crisis-name{display:block;font-size:10px;letter-spacing:.14em;margin:14px 0 6px}
+.crisis-name:first-child{margin-top:0}
+.crisis-kotae{color:#a78bfa}
+.crisis-toyman{color:#fb923c}
+.crisis-line{color:#cbd2e0;font-size:14px;line-height:1.9;margin:0}
+.crisis-soft{color:#8f9bb3;font-size:14px;line-height:2;margin:16px 0 0;font-style:italic;text-align:center}
+.crisis-support{
+  margin:0 0 20px;padding:14px 16px;border-radius:12px;
+  background:#0a0f0d;border:1px solid #1f3a2e;text-align:center;
+}
+.crisis-support-lead{color:#6b8a78;font-size:12px;line-height:1.7;margin:0 0 8px}
+.crisis-support-name{color:#86efac;font-size:13px;margin:0 0 2px;letter-spacing:.04em}
+.crisis-support-num{color:#bbf7d0;font-size:20px;letter-spacing:.06em;margin:0 0 6px;font-weight:600}
+.crisis-support-sub{color:#5b7a68;font-size:11px;line-height:1.7;margin:0}
+.crisis-hold-btn{
+  width:100%;padding:14px 0;border-radius:12px;
+  background:#1e293b;border:1px solid #334155;color:#e2e8f0;
+  font-size:15px;cursor:pointer;font-family:inherit;letter-spacing:.04em;
+}
+.crisis-hold-btn:hover{background:#243349;border-color:#3e4d63}
+.crisis-proceed-btn{
+  width:100%;margin-top:10px;padding:9px 0;border-radius:10px;
+  background:transparent;border:none;color:#5b6678;
+  font-size:12px;cursor:pointer;font-family:inherit;letter-spacing:.03em;
+}
+.crisis-proceed-btn:hover{color:#7a8699;text-decoration:underline}
