@@ -708,21 +708,21 @@ var REEXPLORE_CFG = {
     item: 'meaning_fragment', logs: 'REEXPLORE_MEANING_LOGS',
     ve: { work: '拾う', actor: 'toyman', trace: 'meaning_fragment', message: '答えではない。\nでも、向きはある。' },
     title: '意味の影を追った',
-    gains: [{ label: '灯貨', amount: 1 }, { label: '意味片', amount: 1 }, { label: '紙片', amount: 1 }],
+    gains: [{ label: '意味片', amount: 1 }, { label: '紙片', amount: 1 }],
     baseTrace: '意味になりかけた光が、塔の方へ流れた。',
   },
   value: {
     item: 'black_tag', logs: 'REEXPLORE_VALUE_LOGS',
     ve: { work: '剥がす', actor: 'toyman', trace: 'black_tag', message: '黒い札が落ちていた。\nトイマンは、それを判決ではなく\nただの札として拾った。' },
     title: '価値の黒札を拾った',
-    gains: [{ label: '灯貨', amount: 1 }, { label: '黒札片', amount: 1 }],
+    gains: [{ label: '黒札片', amount: 1 }],
     baseTrace: '黒い札が、火から剥がされた。',
   },
   satisfaction: {
     item: 'small_seed', logs: 'REEXPLORE_SATISFACTION_LOGS',
     ve: { work: '育てる', actor: 'toyman', trace: 'small_seed', message: '灰の中に、まだ熱い種が残っていた。\n終わりではない。\n残りだった。' },
     title: '納得の灰を探した',
-    gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }, { label: '未完の種', amount: 1 }],
+    gains: [{ label: '灰片', amount: 1 }, { label: '未完の種', amount: 1 }],
     baseTrace: '灰の中から、未完の種が見つかった。',
   },
 };
@@ -740,7 +740,7 @@ function reexploreFire(game, fireId, type) {
   var after = Math.max(0, before - reexploreGain(before));
   fire.unreceived[type] = after;
   fire.reexploreCounts[type] = (fire.reexploreCounts[type] || 0) + 1;
-  ns.toka = (ns.toka || 0) + 1;
+  // 余熱に会い直すのは報酬行為ではない。残るのは灯貨ではなく、剥がした札・拾った片の痕跡。
 
   if (type === 'meaning') { ns.materials.meaningPiece += 1; ns.materials.paper += 1; }
   else if (type === 'value') { ns.materials.blackTag += 1; }
@@ -811,7 +811,7 @@ function restUnreceived(game, fireId) {
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'received') return { ok: false, game: game };
   if (cooldownRemaining(fire.lastUnreceivedRestAt, 30) > 0) return { ok: false, reason: 'cooldown', game: game };
-  ns.toka = (ns.toka || 0) + 1;
+  // 「今日は置いておく」のは報酬行為ではない。残るのは灯貨ではなく、水滴の跡。
   ns.materials = safeMat(ns.materials);
   ns.materials.drop += 1;
   addGardenItem(ns, 'water_drop');
@@ -827,7 +827,7 @@ function restUnreceived(game, fireId) {
   var actionResult = makeActionResult({
     title: '今日は置いておいた',
     context: 'unreceived', fireId: fireId,
-    gains: [{ label: '灯貨', amount: 1 }, { label: '水滴', amount: 1 }],
+    gains: [{ label: '水滴', amount: 1 }],
     traces: ['火は、今日もここに置かれた。', '水滴が、火の近くに置かれた。'],
   });
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
@@ -842,7 +842,8 @@ function returnFireToHeart(game, fireId) {
   fire.status = 'returned';
   fire.returnedAt = nowISO();
   fire.updatedAt = nowISO();
-  ns.toka = (ns.toka || 0) + 5;
+  // 心へ返すのは、このサイクルで最も静かな行為。報酬は出さない。
+  // 残るのは灯貨ではなく、箱庭に置かれた返却灯（returned_ember）という痕跡だけ。
   addGardenItem(ns, 'returned_ember');
   var ve = makeVisualEvent({
     fireId: fireId, source: 'manual', type: 'returned',
@@ -853,11 +854,21 @@ function returnFireToHeart(game, fireId) {
   var actionResult = makeActionResult({
     title: '火を心へ返した',
     context: 'unreceived', fireId: fireId,
-    gains: [{ label: '灯貨', amount: 5 }],
     traces: ['心へ還った火が、箱庭に置かれた。'],
   });
   ns = triggerEncounter(ns, 'utsuro_first_return', { fireId: fireId });
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
+}
+
+// ── 灯貨の不変条件 ───────────────────────────────────────────────────────────
+// 灯貨は行動の報酬ではない。火を丁寧に扱ったあとに世界へこぼれる「余光」。
+// 「買うためのもの」ではなく「置くための灯り」。
+// だから ns.toka を増やしてよいのは、この spillAfterglow ただ一つに集約する。
+// 見守り・探索・余熱・休息・心へ返す——どの行為でも灯貨は増やさない。
+// （ns.toka を減らすのは灯置き場で灯りを置くとき＝buyMarketItem のみ）
+function spillAfterglow(ns, amount) {
+  ns.toka = (ns.toka || 0) + (amount || 1);
+  return ns;
 }
 
 function lightFire(game, kindle, pain, writeState, feeling, metrics) {
@@ -869,7 +880,7 @@ function lightFire(game, kindle, pain, writeState, feeling, metrics) {
     ns.toyman = { location: 'unexplored_forest', state: 'exploring' };
   }
   ns.fires = [fire].concat(ns.fires);
-  ns.toka = (ns.toka || 0) + 1;
+  // 火に言葉を置くのは報酬行為ではない。灯貨は増やさない。
   // 最初の火で灯守り出現
   if (!ns.tinyfolk.lightkeeper) {
     ns.tinyfolk.lightkeeper = true;
@@ -888,7 +899,7 @@ function doBattle(game, fireId, answer) {
   fire.battleCount = (fire.battleCount || 0) + 1;
   fire.shadowVoiceIdx = (fire.shadowVoiceIdx || 0) + 1;
   ns.battleCount = (ns.battleCount || 0) + 1;
-  ns.toka = (ns.toka || 0) + 2;
+  // 影へ進むのは報酬行為ではない。残るのは灯貨ではなく、焦げた紙片という痕跡。
   ns.materials = safeMat(ns.materials);
   ns.materials.paper = (ns.materials.paper || 0) + 1;
   if (answer && answer.trim()) {
@@ -916,7 +927,7 @@ function doBattle(game, fireId, answer) {
   ns.lastVisualEvent = ve;
   var actionResult = makeActionResult({
     title: '影と向き合った',
-    gains: [{ label: '灯貨', amount: 2 }, { label: '紙片', amount: 1 }],
+    gains: [{ label: '紙片', amount: 1 }],
     traces: ['焦げた紙片が、森に残った。'],
   });
   appendLightkeeperResult(actionResult, lkResult);
@@ -1098,53 +1109,9 @@ function restToday(game, fireId) {
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
 }
 
-function receiveFire(game, fireId, answer) {
-  var ns = cloneS(game);
-  var fire = ns.fires.find(function(f) { return f.id === fireId; });
-  if (!fire || fire.status !== 'found') return { ok: false, game: game };
-  fire.status = 'received';
-  fire.answer = (answer || '').trim() || null;
-  fire.receivedAt = nowISO();
-  fire.receipt = {
-    id: 'r' + fire.id,
-    fireId: fire.id,
-    title: fire.kindle ? fire.kindle.slice(0, 20) : '',
-    question: fire.question,
-    emberText: fire.kindle || '',
-    issuedAt: nowISO(),
-    broughtBy: 'toyman',
-    recordedBy: 'kotae',
-    status: 'pending',
-  };
-  ns.toka = (ns.toka || 0) + 3;
-  ns.materials = safeMat(ns.materials);
-  ns.materials.stamp = (ns.materials.stamp || 0) + 1;
-  addGardenItem(ns, 'record_light');
-  if (!ns.unlocks.recordTower) {
-    ns.unlocks.recordTower = true;
-    ns.tinyfolk.recordApprentice = true;
-  }
-  var newlyUnlockedKotae = !!(ns.unlocks.recordTower && !game.unlocks.recordTower && !ns.introSeen.kotae);
-  var nextLit = ns.fires.find(function(f) { return f.status === 'lit'; });
-  if (nextLit) {
-    nextLit.status = 'searching';
-    ns.toyman = { location: 'unexplored_forest', state: 'exploring' };
-  } else {
-    ns.toyman = { location: 'starting_room', state: 'waiting' };
-  }
-  var ve = makeVisualEvent({
-    fireId: fireId, source: 'manual', type: 'receive',
-    work: '運ぶ', actor: 'recordApprentice', trace: 'record_light',
-    message: '記録塔に、灯りがともった。\n問いの欠片は、答えではなく\n記録として受け取られた。',
-  });
-  ns.lastVisualEvent = ve;
-  var actionResult = makeActionResult({
-    title: '問いの欠片を受け取った',
-    gains: [{ label: '灯貨', amount: 3 }, { label: '受領印', amount: 1 }],
-    traces: ['遠くの記録塔に、灯りがともった。'],
-  });
-  return { ok: true, game: ns, newlyUnlockedKotae: newlyUnlockedKotae, visualEvent: ve, actionResult: actionResult, fireId: fireId };
-}
+// 旧 receiveFire（found から即 received にして灯貨 +3 を出す裏口）は廃止。
+// 受領は必ず ReceiptJourney を通す: beginReceiptJourney → completeReceiptJourney。
+// 儀式に勝手口を作らない。
 
 // ── 受領の旅 ヘルパー ────────────────────────────────────────────────────────
 
@@ -1318,7 +1285,9 @@ function completeReceiptJourney(game, fireId, journeyData) {
   };
   fire.updatedAt = nowISO();
 
-  ns.toka = (ns.toka || 0) + 3;
+  // 受領証が発行される——この火が丁寧に扱われたあと、世界に余光がひとつこぼれる。
+  // これが灯貨の増える、唯一の正規の場面。報酬ではなく、こぼれた灯り。
+  spillAfterglow(ns, 1);
   ns.materials = safeMat(ns.materials);
   ns.materials.stamp = (ns.materials.stamp || 0) + 1;
   addGardenItem(ns, 'record_light');
@@ -1342,8 +1311,11 @@ function completeReceiptJourney(game, fireId, journeyData) {
   ns.lastVisualEvent = ve;
   var actionResult = makeActionResult({
     title: '問いの欠片を受け取った',
-    gains: [{ label: '灯貨', amount: 3 }, { label: '受領印', amount: 1 }],
-    traces: ['遠くの記録塔に、灯りがともった。'],
+    gains: [{ label: '受領印', amount: 1 }],
+    traces: [
+      '遠くの記録塔に、灯りがともった。',
+      'この火から、灯りがひとつこぼれた。灯守りが、それを拾った。',
+    ],
   });
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult, fireId: fireId };
 }
@@ -1528,7 +1500,7 @@ function ShadowPanel({ fire, onAnswer, onWatch, onSkip }) {
           }}>
             <span style={{ color: '#a78bfa', marginRight: 8 }}>▶</span>
             影と向き合う
-            <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>+15〜25% / 灯貨+2</span>
+            <span style={{ color: '#555', fontSize: 11, marginLeft: 8 }}>問いの欠片に近づく</span>
           </button>
           {(fire.gardenProgress || 0) >= STABILITY_ENOUGH ? (
             <div className="enough-note">
@@ -2908,7 +2880,7 @@ var TINYFOLK_ACTIVITY = {
 };
 
 // actionResult は各ゲームロジック関数（watchFire / restToday / doBattle /
-// receiveFire / reexploreFire / restUnreceived）が実処理の結果として返す。
+// completeReceiptJourney / reexploreFire / restUnreceived）が実処理の結果として返す。
 // UI は受け取った result を表示するだけで、予測は行わない。
 function ActionResultPanel({ result, onClose }) {
   if (!result) return null;
