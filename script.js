@@ -3214,60 +3214,16 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
   );
 }
 
-function FireLitResult({ onGoGarden, onGoShelf }) {
-  return (
-    <div style={{ padding: '24px 0' }}>
-      <p style={{ color: '#f97316', fontSize: 15, textAlign: 'center', margin: '0 0 20px', letterSpacing: 0.5 }}>
-        火が灯った。
-      </p>
-      <div style={{
-        background: '#1a1e2c', border: '1px solid #2e3348',
-        borderRadius: 10, padding: '18px 16px', marginBottom: 20,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <span style={{ fontSize: 18 }}>🔥</span>
-          <span style={{ color: '#fb923c', fontSize: 13, fontWeight: 700 }}>トイマン</span>
-        </div>
-        <p style={{ color: '#e2e4ee', fontSize: 15, lineHeight: 1.8, margin: 0 }}>
-          ……見つけた
-        </p>
-      </div>
-      <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.9, margin: '0 0 24px' }}>
-        その火は、まだ誰かに受け取られたわけではありません。<br />
-        でも、もう見失われてはいません。<br /><br />
-        トイマンは、未受領の森へ向かいました。
-      </p>
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={onGoGarden} style={{
-          flex: 1, padding: '12px 0', borderRadius: 8,
-          background: '#0e2a1a', border: '1px solid #166534',
-          color: '#86efac', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-        }}>
-          未受領の森を見る
-        </button>
-        <button onClick={onGoShelf} style={{
-          flex: 1, padding: '12px 0', borderRadius: 8,
-          background: '#151820', border: '1px solid #2e3348',
-          color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-        }}>
-          棚を見る
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
   var [showForm, setShowForm] = _useState(false);
-  var [justLit, setJustLit] = _useState(false);
   var searching = game.fires.find(function(f) { return f.status === 'searching'; });
   var found = game.fires.find(function(f) { return f.status === 'found'; });
   var totalFires = game.fires.length;
 
   function handleLightFire(kindle, pain, writeState, feeling, metrics) {
+    // 灯した後は App 側の「預ける場面」へ遷移する。ここでフォームを閉じるだけ。
     onLightFire(kindle, pain, writeState, feeling, metrics);
     setShowForm(false);
-    setJustLit(true);
   }
 
   var toymanGreeting;
@@ -3279,24 +3235,6 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
     toymanGreeting = 'まだ、消えていない';
   } else {
     toymanGreeting = 'また来たんだね';
-  }
-
-  if (justLit) {
-    return (
-      <div style={{ padding: '0 16px 80px' }}>
-        <div style={{ padding: '20px 0 16px', textAlign: 'center' }}>
-          <h1 style={{ color: '#f97316', fontSize: 20, margin: '0 0 4px', letterSpacing: 1 }}>残り火の箱庭</h1>
-          <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>Nokoribi no Hakoniwa</p>
-          {game.toka > 0 && (
-            <p style={{ color: '#4b5563', fontSize: 11, margin: '6px 0 0' }}>灯貨 {game.toka}</p>
-          )}
-        </div>
-        <FireLitResult
-          onGoGarden={function() { setJustLit(false); onGoGarden(); }}
-          onGoShelf={function() { setJustLit(false); onGoShelf(); }}
-        />
-      </div>
-    );
   }
 
   return (
@@ -3639,6 +3577,105 @@ function IntroScene({ onMarkSeen, onFireLit }) {
   );
 }
 
+// ── EntrustScene ─────────────────────────────────────────────────────────────
+// 火を灯した直後。トイマンに火を預ける場面。
+// IntroScene の暗い没入感を、探索へ橋渡しする。
+// フォーム送信を「作成完了」ではなく「預ける儀式」に変える。
+
+var ENTRUST_NARRATIVE_LINES = [
+  '火に、言葉が置かれた。',
+  '',
+  'トイマンは、すぐには触れなかった。',
+  '小さな火の揺れ方を、ただ見ていた。',
+];
+
+var ENTRUST_TOYMAN_LINES = [
+  '預かる。',
+  '強く握らない。\nでも、落とさない。',
+];
+
+function EntrustScene({ fire, onDone }) {
+  var [step, setStep] = _useState(0);
+  var [visible, setVisible] = _useState(false);
+  var [leaving, setLeaving] = _useState(false);
+
+  _useEffect(function() {
+    var t = setTimeout(function() { setVisible(true); }, 80);
+    return function() { clearTimeout(t); };
+  }, []);
+
+  function advance() {
+    if (step < ENTRUST_TOYMAN_LINES.length) {
+      setStep(function(s) { return s + 1; });
+    }
+  }
+
+  function handleDone() {
+    // 暗転してから森へ。落差ではなく、ひと呼吸の沈黙で繋ぐ。
+    setLeaving(true);
+    setTimeout(function() { onDone(); }, 620);
+  }
+
+  var isNarrative = step === 0;
+  var toymanIdx = step - 1; // 0-based index into ENTRUST_TOYMAN_LINES
+  var isFinal = step === ENTRUST_TOYMAN_LINES.length;
+
+  // プレイヤー自身の言葉が、火に置かれている。
+  var words = (fire && fire.kindle) ? fire.kindle.trim() : '';
+
+  return (
+    <div
+      className={'intro-scene entrust-scene' + (leaving ? ' entrust-leaving' : '')}
+      onClick={!isFinal && !leaving ? advance : undefined}
+    >
+      <div className="intro-fire-glow entrust-fire-glow" />
+
+      {words && (
+        <p className="entrust-words">「{words}」</p>
+      )}
+
+      <div key={step} className={'intro-content' + (visible ? ' intro-content-in' : '')}>
+        {isNarrative && (
+          <div className="intro-narrative">
+            {ENTRUST_NARRATIVE_LINES.map(function(line, i) {
+              if (!line) return React.createElement('div', { key: i, style: { height: 10 } });
+              return (
+                <p key={i} className="intro-narrative-line">{line}</p>
+              );
+            })}
+          </div>
+        )}
+
+        {!isNarrative && (
+          <div className="intro-toyman-block">
+            <span className="intro-toyman-label">トイマン</span>
+            <p className="intro-toyman-line">
+              {ENTRUST_TOYMAN_LINES[toymanIdx].split('\n').map(function(seg, si) {
+                return React.createElement(React.Fragment, { key: si },
+                  si > 0 && React.createElement('br', null),
+                  seg
+                );
+              })}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="intro-btn-row" onClick={function(e) { e.stopPropagation(); }}>
+        {isFinal ? (
+          <button className="intro-btn-fire entrust-btn" onClick={handleDone} disabled={leaving}>
+            未受領の森へ
+          </button>
+        ) : (
+          <button className="intro-btn-next" onClick={advance}>
+            つづき
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -3655,6 +3692,8 @@ function App() {
   var [kotaeDialog, setKotaeDialog] = _useState(null); // { fireId, kind }
   var [activeUnreceivedFireId, setActiveUnreceivedFireId] = _useState(null);
   var [actionResult, setActionResult] = _useState(null);
+  // 火を灯した直後の「預ける場面」。対象 fire の id を持つ。
+  var [entrustFireId, setEntrustFireId] = _useState(null);
   // 受領の旅: { fireId, phase: 'journey'|'card' }
   var [receiptJourney, setReceiptJourney] = _useState(null);
   var [milestoneDialog, setMilestoneDialog] = _useState(null);
@@ -3691,7 +3730,10 @@ function App() {
   }, []);
 
   var handleLightFire = _useCallback(function(kindle, pain, writeState, feeling, metrics) {
-    setGame(function(prev) { return lightFire(prev, kindle, pain, writeState, feeling, metrics).game; });
+    var result = lightFire(gameRef.current, kindle, pain, writeState, feeling, metrics);
+    setGame(result.game);
+    // 灯した直後は「預ける場面」へ。通常UIに即戻さない。
+    setEntrustFireId(result.fire.id);
   }, []);
 
   var handleDoBattle = _useCallback(function(fireId, answer) {
@@ -3778,13 +3820,13 @@ function App() {
   }, []);
 
   var handleIntroFireLit = _useCallback(function(kindle, pain, writeState, feeling, metrics) {
-    setGame(function(prev) {
-      var result = lightFire(prev, kindle, pain, writeState, feeling, metrics);
-      var ng = result.game;
-      ng.seenWorldIntro = true;
-      return ng;
-    });
+    var result = lightFire(gameRef.current, kindle, pain, writeState, feeling, metrics);
+    var ng = result.game;
+    ng.seenWorldIntro = true;
+    setGame(ng);
     setIntroActive(false);
+    // イントロ → 火に言葉を置く → 預ける場面、と熱を切らさず繋ぐ。
+    setEntrustFireId(result.fire.id);
   }, []);
 
   var handleReplayIntro = _useCallback(function() {
@@ -3801,6 +3843,7 @@ function App() {
       clearSave();
       setGame(initGame());
       setIntroActive(true);
+      setEntrustFireId(null);
       setScreen('home');
     }
   }, []);
@@ -3848,6 +3891,20 @@ function App() {
           onFireLit={handleIntroFireLit}
         />
       )}
+      {/* 火を灯した直後の「預ける場面」— イントロより前面、探索への橋渡し */}
+      {!introActive && entrustFireId && (function() {
+        var fire = game.fires.find(function(f) { return f.id === entrustFireId; });
+        if (!fire) return null;
+        return (
+          <EntrustScene
+            fire={fire}
+            onDone={function() {
+              setEntrustFireId(null);
+              setScreen('garden');
+            }}
+          />
+        );
+      })()}
       {!introActive && screen === 'home' && (
         <HomeView
           game={game}

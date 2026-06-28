@@ -4944,3 +4944,31 @@ html,body{
   color:#fb923c;font-size:14px;margin:0 0 18px;
   font-weight:400;letter-spacing:.04em;line-height:1.7;
 }
+
+/* ── EntrustScene（火を灯した直後の預ける場面） ── */
+@keyframes entrustFadeToBlack{
+  from{opacity:1}
+  to{opacity:0}
+}
+.entrust-scene{transition:none}
+.entrust-scene.entrust-leaving{
+  animation:entrustFadeToBlack .6s ease forwards;
+  pointer-events:none;
+}
+.entrust-fire-glow{margin-bottom:22px}
+.entrust-words{
+  color:#b9824f;font-size:13px;line-height:1.85;
+  max-width:300px;text-align:center;margin:0 0 40px;
+  font-style:italic;letter-spacing:.03em;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  opacity:0;animation:introFadeIn .9s ease .25s both;
+  text-shadow:0 0 18px rgba(251,146,60,.12);
+}
+/* 森へ向かう一歩。暖色から、ひとつ緑を差して移行を予感させる。 */
+.entrust-btn{
+  border-color:#166534;background:rgba(22,101,52,.08);color:#86efac;
+}
+.entrust-btn:hover{
+  background:rgba(22,101,52,.16);box-shadow:0 0 24px 4px rgba(52,211,153,.12);
+}
+.entrust-btn:disabled{opacity:.4;cursor:default;box-shadow:none}
