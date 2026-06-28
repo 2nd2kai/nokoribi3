@@ -254,6 +254,7 @@ function initGame() {
     materials: initMaterials(),
     tinyfolk: initTinyfolk(),
     gardenItems: [],
+    gardenItemCounts: {},
     lastVisualEvent: null,
     lastAutoAt: nowISO(),
     lastSeenAt: nowISO(),
@@ -336,6 +337,11 @@ function migrateGame(g) {
   if (!g.tinyfolk) g.tinyfolk = initTinyfolk();
   if (!g.gardenItems) g.gardenItems = [];
   if (!Array.isArray(g.gardenItems)) g.gardenItems = [];
+  if (!g.gardenItemCounts || typeof g.gardenItemCounts !== 'object') {
+    // 旧セーブは既存アイテムを各1個として数え直す
+    g.gardenItemCounts = {};
+    g.gardenItems.forEach(function(it) { g.gardenItemCounts[it] = 1; });
+  }
   if (!g.workerTasks || typeof g.workerTasks !== 'object') g.workerTasks = {};
   if (!('lastVisualEvent' in g)) g.lastVisualEvent = null;
   if (!g.unlocks.tearsSpring) g.unlocks.tearsSpring = false;
@@ -384,6 +390,9 @@ function addGardenItem(game, item) {
   if (!game.gardenItems.includes(item)) {
     game.gardenItems = game.gardenItems.concat([item]);
   }
+  // gardenItems = 「存在するか」 / gardenItemCounts = 「積み重なったか」
+  if (!game.gardenItemCounts) game.gardenItemCounts = {};
+  game.gardenItemCounts[item] = (game.gardenItemCounts[item] || 0) + 1;
 }
 
 var BATTLE_LOGS = [
@@ -510,70 +519,111 @@ function unreceivedStage(pct) {
   return '静かな痕跡';
 }
 
+// 段階を跨いだ時の節目メッセージ（薄くなる方向のみ）。type × 到達段階。
+var STAGE_CHANGE_MESSAGES = {
+  meaning: {
+    '薄い影': '意味の影が、薄い影になった。\n森の奥に、細い道が見えた。',
+    '残り火': '意味は、もう影ではなく、残り火のように静かになった。',
+    '静かな痕跡': '意味の影は、静かな痕跡になった。',
+  },
+  value: {
+    '薄い影': '黒札の重さが、少しだけ軽くなった。',
+    '残り火': '価値の黒札は、もう判決ではなく、ただの札になった。',
+    '静かな痕跡': '黒い札は、静かな痕跡になった。',
+  },
+  satisfaction: {
+    '薄い影': '灰の中に、かすかな熱が残っているのが見えた。',
+    '残り火': '満足の灰の中に、未完の種が見えた。',
+    '静かな痕跡': '灰は、静かな痕跡になった。',
+  },
+};
+
+var UNRECEIVED_TYPE_LABELS = { meaning: '意味の影', value: '価値の黒札', satisfaction: '満足の灰' };
+
+// 未受領3領域がすべて静かな痕跡（14%以下）になっているか
+function isAllSettled(fire) {
+  var ur = fire.unreceived || { meaning: 0, value: 0, satisfaction: 0 };
+  return (ur.meaning <= 14) && (ur.value <= 14) && (ur.satisfaction <= 14);
+}
+
+// 段階が濃いほど大きく減らす（節目が出やすく、手応えが出る）。
+function reexploreGain(pct) {
+  if (pct >= 70) return 12 + Math.floor(rnd() * 7); // 濃い影: 12〜18
+  if (pct >= 40) return 8 + Math.floor(rnd() * 5);  // 薄い影: 8〜12
+  return 5 + Math.floor(rnd() * 4);                 // 残り火: 5〜8
+}
+
+var REEXPLORE_CFG = {
+  meaning: {
+    item: 'meaning_fragment', logs: 'REEXPLORE_MEANING_LOGS',
+    ve: { work: '拾う', actor: 'toyman', trace: 'meaning_fragment', message: '答えではない。\nでも、向きはある。' },
+    title: '意味の影を追った',
+    gains: [{ label: '灯貨', amount: 1 }, { label: '意味片', amount: 1 }, { label: '紙片', amount: 1 }],
+    baseTrace: '意味になりかけた光が、塔の方へ流れた。',
+  },
+  value: {
+    item: 'black_tag', logs: 'REEXPLORE_VALUE_LOGS',
+    ve: { work: '剥がす', actor: 'toyman', trace: 'black_tag', message: '黒い札が落ちていた。\nトイマンは、それを判決ではなく\nただの札として拾った。' },
+    title: '価値の黒札を拾った',
+    gains: [{ label: '灯貨', amount: 1 }, { label: '黒札片', amount: 1 }],
+    baseTrace: '黒い札が、火から剥がされた。',
+  },
+  satisfaction: {
+    item: 'small_seed', logs: 'REEXPLORE_SATISFACTION_LOGS',
+    ve: { work: '育てる', actor: 'toyman', trace: 'small_seed', message: '灰の中に、まだ熱い種が残っていた。\n終わりではない。\n残りだった。' },
+    title: '満足の灰を探した',
+    gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }, { label: '未完の種', amount: 1 }],
+    baseTrace: '灰の中から、未完の種が見つかった。',
+  },
+};
+
 function reexploreFire(game, fireId, type) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'received') return { ok: false, game: game };
+  var cfg = REEXPLORE_CFG[type];
+  if (!cfg) return { ok: false, game: game };
   ns.materials = safeMat(ns.materials);
-  var logText = '';
-  if (type === 'meaning') {
-    var mGain = 5 + Math.floor(rnd() * 8);
-    fire.unreceived.meaning = Math.max(0, fire.unreceived.meaning - mGain);
-    ns.materials.meaningPiece += 1;
-    ns.materials.paper += 1;
-    ns.toka = (ns.toka || 0) + 1;
-    fire.reexploreCounts.meaning = (fire.reexploreCounts.meaning || 0) + 1;
-    addGardenItem(ns, 'meaning_fragment');
-    logText = pick(REEXPLORE_MEANING_LOGS);
-  } else if (type === 'value') {
-    var vGain = 3 + Math.floor(rnd() * 6);
-    fire.unreceived.value = Math.max(0, fire.unreceived.value - vGain);
-    ns.materials.blackTag += 1;
-    ns.toka = (ns.toka || 0) + 1;
-    fire.reexploreCounts.value = (fire.reexploreCounts.value || 0) + 1;
-    addGardenItem(ns, 'black_tag');
-    logText = pick(REEXPLORE_VALUE_LOGS);
-  } else if (type === 'satisfaction') {
-    var sGain = 5 + Math.floor(rnd() * 6);
-    fire.unreceived.satisfaction = Math.max(0, fire.unreceived.satisfaction - sGain);
-    ns.materials.ash += 1;
-    ns.materials.unfinishedSeed += 1;
-    ns.toka = (ns.toka || 0) + 1;
-    fire.reexploreCounts.satisfaction = (fire.reexploreCounts.satisfaction || 0) + 1;
-    addGardenItem(ns, 'small_seed');
-    logText = pick(REEXPLORE_SATISFACTION_LOGS);
-  } else {
-    return { ok: false, game: game };
-  }
-  fire.unreceivedLogs = [{ text: logText, at: nowISO() }].concat(
-    (fire.unreceivedLogs || []).slice(0, 9)
-  );
+
+  // 変化量を捕捉
+  var before = fire.unreceived[type] || 0;
+  var after = Math.max(0, before - reexploreGain(before));
+  fire.unreceived[type] = after;
+  fire.reexploreCounts[type] = (fire.reexploreCounts[type] || 0) + 1;
+  ns.toka = (ns.toka || 0) + 1;
+
+  if (type === 'meaning') { ns.materials.meaningPiece += 1; ns.materials.paper += 1; }
+  else if (type === 'value') { ns.materials.blackTag += 1; }
+  else { ns.materials.ash += 1; ns.materials.unfinishedSeed += 1; }
+  addGardenItem(ns, cfg.item);
+
+  var logText = pick({ REEXPLORE_MEANING_LOGS: REEXPLORE_MEANING_LOGS, REEXPLORE_VALUE_LOGS: REEXPLORE_VALUE_LOGS, REEXPLORE_SATISFACTION_LOGS: REEXPLORE_SATISFACTION_LOGS }[cfg.logs]);
+  fire.unreceivedLogs = [{ text: logText, at: nowISO() }].concat((fire.unreceivedLogs || []).slice(0, 9));
   fire.reexploredAt = nowISO();
   fire.updatedAt = nowISO();
-  var veMap = {
-    meaning: { work: '拾う', actor: 'toyman', trace: 'meaning_fragment',
-      message: '答えではない。\nでも、向きはある。' },
-    value:   { work: '剥がす', actor: 'toyman', trace: 'black_tag',
-      message: '黒い札が落ちていた。\nトイマンは、それを判決ではなく\nただの札として拾った。' },
-    satisfaction: { work: '育てる', actor: 'toyman', trace: 'small_seed',
-      message: '灰の中に、まだ熱い種が残っていた。\n終わりではない。\n残りだった。' },
-  };
-  var veOpts = veMap[type];
+
+  var beforeStage = unreceivedStage(before);
+  var afterStage = unreceivedStage(after);
+  var stageChanged = beforeStage !== afterStage;
+
   var ve = makeVisualEvent({ fireId: fireId, source: 'manual', type: type,
-    work: veOpts.work, actor: veOpts.actor, trace: veOpts.trace, message: veOpts.message });
+    work: cfg.ve.work, actor: cfg.ve.actor, trace: cfg.ve.trace, message: cfg.ve.message });
   ns.lastVisualEvent = ve;
-  var arMap = {
-    meaning: { title: '意味の影を追った',
-      gains: [{ label: '灯貨', amount: 1 }, { label: '意味片', amount: 1 }, { label: '紙片', amount: 1 }],
-      traces: ['意味になりかけた光が、塔の方へ流れた。'] },
-    value: { title: '価値の黒札を拾った',
-      gains: [{ label: '灯貨', amount: 1 }, { label: '黒札片', amount: 1 }],
-      traces: ['黒い札が、火から剥がされた。'] },
-    satisfaction: { title: '満足の灰を探した',
-      gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }, { label: '未完の種', amount: 1 }],
-      traces: ['灰の中から、未完の種が見つかった。'] },
-  };
-  var actionResult = makeActionResult(arMap[type]);
+
+  var traces = [cfg.baseTrace];
+  if (stageChanged && STAGE_CHANGE_MESSAGES[type] && STAGE_CHANGE_MESSAGES[type][afterStage]) {
+    traces = [STAGE_CHANGE_MESSAGES[type][afterStage]].concat(traces);
+  }
+
+  var actionResult = makeActionResult({
+    title: cfg.title, context: 'unreceived', fireId: fireId,
+    gains: cfg.gains, traces: traces,
+    progress: {
+      label: UNRECEIVED_TYPE_LABELS[type],
+      before: before, after: after, delta: before - after,
+      beforeStage: beforeStage, afterStage: afterStage, stageChanged: stageChanged,
+    },
+  });
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
 }
 
@@ -619,8 +669,35 @@ function restUnreceived(game, fireId) {
   ns.lastVisualEvent = ve;
   var actionResult = makeActionResult({
     title: '今日は置いておいた',
+    context: 'unreceived', fireId: fireId,
     gains: [{ label: '灯貨', amount: 1 }, { label: '水滴', amount: 1 }],
     traces: ['火は、今日もここに置かれた。', '水滴が、火の近くに置かれた。'],
+  });
+  return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
+}
+
+// 未受領3領域がすべて静かな痕跡になった火を、心へ返す（このサイクルの終点）。
+function returnFireToHeart(game, fireId) {
+  var ns = cloneS(game);
+  var fire = ns.fires.find(function(f) { return f.id === fireId; });
+  if (!fire || fire.status !== 'received') return { ok: false, game: game };
+  if (!isAllSettled(fire)) return { ok: false, reason: 'not_settled', game: game };
+  fire.status = 'returned';
+  fire.returnedAt = nowISO();
+  fire.updatedAt = nowISO();
+  ns.toka = (ns.toka || 0) + 5;
+  addGardenItem(ns, 'returned_ember');
+  var ve = makeVisualEvent({
+    fireId: fireId, source: 'manual', type: 'returned',
+    work: '還す', actor: 'toyman', trace: 'returned_ember',
+    message: '火を、心へ返した。\n問いは記録に残り、火は静かになった。\nこのサイクルは、ここで一区切り。',
+  });
+  ns.lastVisualEvent = ve;
+  var actionResult = makeActionResult({
+    title: '火を心へ返した',
+    context: 'unreceived', fireId: fireId,
+    gains: [{ label: '灯貨', amount: 5 }],
+    traces: ['心へ還った火が、箱庭に置かれた。'],
   });
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
 }
@@ -726,9 +803,12 @@ function makeActionResult(opts) {
   opts = opts || {};
   return {
     title: opts.title || '',
+    context: opts.context || null,   // 'unreceived' など。UI がどこに出すか判断する
+    fireId: opts.fireId || null,     // どの火の結果か
     gains: opts.gains || [],
     work: opts.work || [],
     completions: opts.completions || [],
+    progress: opts.progress || null, // 未受領領域の変化量 {label, before, after, delta, ...}
     traces: opts.traces || [],
     at: nowISO(),
   };
@@ -1026,6 +1106,8 @@ function ShadowPanel({ fire, onAnswer, onWatch, onSkip }) {
         {voice}
       </p>
 
+      {/* choice / confront でパネルの高さが変わって押しづらくならないよう min-height を固定 */}
+      <div style={{ minHeight: 156 }}>
       {mode === 'confront' ? (
         <div>
           <textarea
@@ -1090,6 +1172,7 @@ function ShadowPanel({ fire, onAnswer, onWatch, onSkip }) {
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -1360,13 +1443,17 @@ function FireCard({ fire, onSelect, selected }) {
   );
 }
 
-function UnreceivedPanel({ fire, onReexplore, onRest }) {
+function UnreceivedPanel({ fire, onReexplore, onRest, onReturnToHeart, actionResult, onCloseActionResult }) {
   var ur = fire.unreceived || { meaning: 0, value: 0, satisfaction: 0 };
 
   // 結果表示は共通の ActionResultPanel（App の actionResult）に一本化。
   // ここは操作と未受領領域の状態表示に専念する。
   function doReexplore(type) { onReexplore(fire.id, type); }
   function doRest() { onRest(fire.id); }
+
+  // この火・未受領コンテキストの結果だけを、押した場所の近くに出す
+  var localResult = (actionResult && actionResult.context === 'unreceived' && actionResult.fireId === fire.id)
+    ? actionResult : null;
 
   var TYPES = [
     {
@@ -1453,12 +1540,17 @@ function UnreceivedPanel({ fire, onReexplore, onRest }) {
         );
       })}
 
+      {/* 直近の結果を、押した場所のすぐ近くに出す */}
+      {localResult && (
+        <ActionResultPanel result={localResult} onClose={onCloseActionResult} />
+      )}
+
       {/* 最新再探索ログ */}
       {fire.unreceivedLogs && fire.unreceivedLogs.length > 0 && (
         <div style={{ margin: '4px 0 14px', borderTop: '1px solid #1e2230', paddingTop: 10 }}>
           {fire.unreceivedLogs.slice(0, 3).map(function(l, i) {
             return (
-              <p key={i} style={{ color: '#4b5563', fontSize: 11, margin: '3px 0', lineHeight: 1.6 }}>
+              <p key={i} style={{ color: '#8f9bb3', fontSize: 11, margin: '3px 0', lineHeight: 1.6 }}>
                 ・{l.text}
               </p>
             );
@@ -1466,22 +1558,33 @@ function UnreceivedPanel({ fire, onReexplore, onRest }) {
         </div>
       )}
 
-      {/* 今日は置いておく */}
-      <button
-        onClick={doRest}
-        style={{
-          width: '100%', padding: '10px', borderRadius: 8,
-          background: 'transparent', border: '1px solid #1e2230',
-          color: '#8f9bb3', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-        }}
-      >
-        今日は置いておく
-      </button>
+      {/* 3領域すべて静かな痕跡になったら、火を心へ返す（このサイクルの終点） */}
+      {allSettled ? (
+        <div className="return-heart-box">
+          <p className="return-heart-msg">
+            3つの影は、もう火を覆っていない。<br />この火を、心へ返せます。
+          </p>
+          <button className="return-heart-btn" onClick={function() { onReturnToHeart(fire.id); }}>
+            🏮 火を心へ返す
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={doRest}
+          style={{
+            width: '100%', padding: '10px', borderRadius: 8,
+            background: 'transparent', border: '1px solid #1e2230',
+            color: '#8f9bb3', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+          }}
+        >
+          今日は置いておく
+        </button>
+      )}
     </div>
   );
 }
 
-function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onReceive, onReexplore, onRestUnreceived, actionResult, onCloseActionResult }) {
+function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onReceive, onReexplore, onRestUnreceived, onReturnToHeart, actionResult, onCloseActionResult }) {
   var [selectedId, setSelectedId] = _useState(null);
   var [receiveAnswer, setReceiveAnswer] = _useState('');
   var [phase, setPhase] = _useState('list');
@@ -1521,8 +1624,11 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
         <h2 style={{ color: '#e2e4ee', fontSize: 17, margin: 0 }}>残り火の棚</h2>
       </div>
 
-      {/* 行動結果（GardenView と共通の一時通知） */}
-      <ActionResultPanel result={actionResult} onClose={onCloseActionResult} />
+      {/* 行動結果（未受領コンテキストは UnreceivedPanel 内に出すので除外） */}
+      <ActionResultPanel
+        result={actionResult && actionResult.context !== 'unreceived' ? actionResult : null}
+        onClose={onCloseActionResult}
+      />
 
       {game.fires.length === 0 && (
         <p style={{ color: '#6b7280', fontSize: 14, textAlign: 'center', marginTop: 40, lineHeight: 1.8 }}>
@@ -1611,6 +1717,9 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
           fire={selected}
           onReexplore={onReexplore}
           onRest={onRestUnreceived}
+          onReturnToHeart={onReturnToHeart}
+          actionResult={actionResult}
+          onCloseActionResult={onCloseActionResult}
         />
       )}
     </div>
@@ -1706,10 +1815,11 @@ var GARDEN_ITEM_DEFS = {
   small_seed:       { emoji: '🌱', label: '未完の種',   anim: null },
   lamp_stand:       { emoji: '🕯', label: '灯火台',     anim: 'blink' },
   paper_box:        { emoji: '📦', label: '焦げ紙箱',   anim: null },
+  returned_ember:   { emoji: '🏮', label: '還した火',   anim: 'blink' },
 };
 
 // GardenBoard のアイテム表示ヘルパー
-function GardenItem({ def, isNew }) {
+function GardenItem({ def, isNew, count }) {
   var cls = 'garden-item';
   if (isNew) cls += ' garden-trace-appear';
   if (def.anim === 'blink') cls += ' garden-blink';
@@ -1717,7 +1827,7 @@ function GardenItem({ def, isNew }) {
   return (
     <div className={cls}>
       <span className="garden-item-emoji">{def.emoji}</span>
-      <span className="garden-item-label">{def.label}</span>
+      <span className="garden-item-label">{def.label}{count > 1 ? ' ×' + count : ''}</span>
     </div>
   );
 }
@@ -1725,8 +1835,9 @@ function GardenItem({ def, isNew }) {
 function WorkerPanel({ game }) {
   var lk = game.workerTasks && game.workerTasks.lightkeeper;
   if (!lk || !lk.isUnlocked || !game.tinyfolk.lightkeeper) return null;
-  var hasFire = game.fires.some(function(f) { return f.status === 'searching' || f.status === 'received'; });
-  if (!hasFire) return null;
+  // 灯守りは searching の火がある時だけ進む（received だけの時は止まって見えるので隠す）
+  var hasSearching = game.fires.some(function(f) { return f.status === 'searching'; });
+  if (!hasSearching) return null;
   var progress = lk.progress || 0;
   return (
     <div className="worker-panel">
@@ -1753,11 +1864,12 @@ function GardenBoard({ game }) {
   var ve    = game.lastVisualEvent;
   var now   = Date.now();
   var freshTrace = (ve && ve.trace && (now - new Date(ve.at).getTime()) < 3000) ? ve.trace : null;
+  var counts = game.gardenItemCounts || {};
 
   function Item(key) {
     var def = GARDEN_ITEM_DEFS[key];
     if (!def) return null;
-    return <GardenItem key={key} def={def} isNew={freshTrace === key} />;
+    return <GardenItem key={key} def={def} isNew={freshTrace === key} count={counts[key]} />;
   }
 
   var showTop = (items.includes('record_light') || game.unlocks.recordTower || items.includes('meaning_fragment'));
@@ -2006,6 +2118,22 @@ function ActionResultPanel({ result, onClose }) {
         <button className="action-result-close" onClick={onClose}>✕</button>
       </div>
 
+      {/* 0. 変化量（未受領領域の再探索など） */}
+      {result.progress && (
+        <div className="action-result-progress">
+          <div className="arp-row">
+            <span className="arp-label">{result.progress.label}</span>
+            <span className="arp-delta">
+              {result.progress.before}% → {result.progress.after}%
+              <span className="arp-minus"> （-{result.progress.delta}）</span>
+            </span>
+          </div>
+          {result.progress.stageChanged && (
+            <p className="arp-stage">{result.progress.beforeStage} → {result.progress.afterStage}</p>
+          )}
+        </div>
+      )}
+
       {/* 1. 増えたもの */}
       {result.gains && result.gains.length > 0 && (
         <div className="action-result-section">
@@ -2052,7 +2180,7 @@ function ActionResultPanel({ result, onClose }) {
   );
 }
 
-function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived, actionResult, onCloseActionResult }) {
+function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived, onReturnToHeart, actionResult, onCloseActionResult }) {
   var [recordOpen, setRecordOpen] = _useState(false);
   var [shadowOpen, setShadowOpen] = _useState(false);
 
@@ -2090,13 +2218,7 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
       {/* 2. WorkerPanel */}
       <WorkerPanel game={game} />
 
-      {/* 3. EventCard */}
-      <EventCard event={game.lastVisualEvent} />
-
-      {/* 3. actionResult（行動ボタンを隠さない一時通知） */}
-      <ActionResultPanel result={actionResult} onClose={onCloseActionResult} />
-
-      {/* 4a. 行動ボタン（actionResult 表示中でも操作可能） */}
+      {/* 3. 行動ボタン（先頭側に固定して、押しても位置が動かないようにする） */}
       {sf && !shadowOpen && (
         <div className="action-btns">
           <button className="btn-shadow" onClick={function() { setShadowOpen(true); }}>
@@ -2111,7 +2233,7 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
         </div>
       )}
 
-      {/* 4b. ShadowPanel */}
+      {/* 3b. ShadowPanel */}
       {sf && shadowOpen && (
         <div className="shadow-panel-wrap">
           <div className="shadow-panel-close-row">
@@ -2125,6 +2247,15 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
           />
         </div>
       )}
+
+      {/* 4. EventCard（物語） */}
+      <EventCard event={game.lastVisualEvent} />
+
+      {/* 5. actionResult（明細）。未受領コンテキストは UnreceivedPanel 内に出すので除外 */}
+      <ActionResultPanel
+        result={actionResult && actionResult.context !== 'unreceived' ? actionResult : null}
+        onClose={onCloseActionResult}
+      />
 
       {/* 問いが見つかった（棚誘導） */}
       {found && !sf && (
@@ -2143,6 +2274,9 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
             fire={rf}
             onReexplore={onReexplore}
             onRest={onRestUnreceived}
+            onReturnToHeart={onReturnToHeart}
+            actionResult={actionResult}
+            onCloseActionResult={onCloseActionResult}
           />
         );
       })}
@@ -2560,6 +2694,14 @@ function App() {
     }
   }, []);
 
+  var handleReturnToHeart = _useCallback(function(fireId) {
+    var result = returnFireToHeart(gameRef.current, fireId);
+    if (result.ok) {
+      setGame(result.game);
+      setActionResult(result.actionResult || null);
+    }
+  }, []);
+
   var handleWatchFire = _useCallback(function(fireId) {
     var result = watchFire(gameRef.current, fireId);
     if (result.ok) {
@@ -2643,6 +2785,7 @@ function App() {
           onReceive={handleReceive}
           onReexplore={handleReexplore}
           onRestUnreceived={handleRestUnreceived}
+          onReturnToHeart={handleReturnToHeart}
           actionResult={actionResult}
           onCloseActionResult={closeActionResult}
         />
@@ -2658,6 +2801,7 @@ function App() {
           onBuyMarket={handleBuyMarket}
           onReexplore={handleReexplore}
           onRestUnreceived={handleRestUnreceived}
+          onReturnToHeart={handleReturnToHeart}
           actionResult={actionResult}
           onCloseActionResult={closeActionResult}
         />

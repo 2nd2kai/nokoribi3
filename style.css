@@ -4726,6 +4726,20 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .action-result-completion{border-top:1px solid #14532d;padding-top:8px}
 .action-result-completion-msg{color:#d6f5df;font-size:12px;margin:0 0 4px;line-height:1.6}
 
+/* 変化量（未受領領域の再探索） */
+.action-result-progress{background:#0b1020;border:1px solid #2a2340;border-radius:8px;padding:8px 10px;margin-bottom:10px}
+.arp-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.arp-label{color:#c4b5fd;font-size:12px;font-weight:600}
+.arp-delta{color:#e2e4ee;font-size:13px;font-family:monospace}
+.arp-minus{color:#34d399;font-size:12px}
+.arp-stage{color:#a78bfa;font-size:11px;margin:4px 0 0}
+
+/* 火を心へ返す（サイクルの終点） */
+.return-heart-box{background:linear-gradient(160deg,#1a1230 0%,#0e0b1a 100%);border:1px solid #7c3aed;border-radius:12px;padding:16px;text-align:center}
+.return-heart-msg{color:#c4b5fd;font-size:13px;line-height:1.8;margin:0 0 12px}
+.return-heart-btn{width:100%;padding:13px 0;border-radius:10px;background:#4c1d95;border:1px solid #7c3aed;color:#ede9fe;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.04em}
+.return-heart-btn:active{background:#5b21b6}
+
 /* ── 進度バーセクション ── */
 .progress-section{margin-bottom:12px;padding:10px 12px;background:#0a0c0f;border:1px solid #1e2230;border-radius:10px}
 .progress-row{display:flex;justify-content:space-between;margin-bottom:2px}
