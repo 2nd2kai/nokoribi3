@@ -880,7 +880,8 @@ function doBattle(game, fireId, answer) {
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'searching') return { ok: false, game: game };
   var qGain = BATTLE_GAIN_MIN + Math.floor(rnd() * (BATTLE_GAIN_MAX - BATTLE_GAIN_MIN + 1));
-  fire.questionProgress = Math.min(100, (fire.questionProgress || 0) + qGain);
+  var prevQ = fire.questionProgress || 0;
+  fire.questionProgress = Math.min(100, prevQ + qGain);
   fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + 5);
   fire.battleCount = (fire.battleCount || 0) + 1;
   fire.shadowVoiceIdx = (fire.shadowVoiceIdx || 0) + 1;
@@ -920,7 +921,12 @@ function doBattle(game, fireId, answer) {
   if (fire.status === 'found') {
     actionResult.traces.push('トイマンが、問いの欠片を見つけた。');
   }
-  return { ok: true, game: ns, fire: fire, visualEvent: ve, actionResult: actionResult };
+  var milestone = null;
+  for (var mi = 0; mi < SHADOW_MILESTONES.length; mi++) {
+    var ms = SHADOW_MILESTONES[mi];
+    if (prevQ < ms.threshold && fire.questionProgress >= ms.threshold) { milestone = ms; break; }
+  }
+  return { ok: true, game: ns, fire: fire, visualEvent: ve, actionResult: actionResult, milestone: milestone };
 }
 
 // 自動進行: gardenProgress のみ、questionProgress は触れない、found にしない
@@ -1141,6 +1147,42 @@ function receiveFire(game, fireId, answer) {
 
 // ── 受領の旅 ヘルパー ────────────────────────────────────────────────────────
 
+function stabilityStage(pct) {
+  if (pct >= 85) return 'よく守られた火';
+  if (pct >= 60) return '落ち着いた火';
+  if (pct >= 30) return '守られた火';
+  return '揺れている火';
+}
+
+var SHADOW_MILESTONES = [
+  {
+    threshold: 30,
+    place: '未受領の森',
+    lines: [
+      { name: '影',     color: '#4b5563', text: 'どうせ、何にもならない。' },
+      { name: 'トイマン', color: '#fb923c', text: 'まだ決まっていない。' },
+    ],
+  },
+  {
+    threshold: 60,
+    place: '未受領の森・深部',
+    lines: [
+      { name: '影',     color: '#4b5563', text: 'お前が拾っても、意味はない。' },
+      { name: '影',     color: '#4b5563', text: '持ち帰っても、誰も受け取らない。' },
+      { name: 'トイマン', color: '#fb923c', text: 'それでも、落ちていた。' },
+    ],
+  },
+  {
+    threshold: 90,
+    place: '未受領の森・最深部',
+    lines: [
+      { name: 'トイマン', color: '#fb923c', text: '見つけた。' },
+      { name: '影',     color: '#4b5563', text: 'それは答えじゃない。' },
+      { name: 'トイマン', color: '#fb923c', text: '知っている。\n受け取るところまで、運ぶ。' },
+    ],
+  },
+];
+
 function normalizeMetrics(m) {
   return {
     meaning:      Math.max(0, Math.min(100, m.meaning      || 0)),
@@ -1192,7 +1234,7 @@ var RECEIPT_ACC_BY_FEELING = {
 var RECEIPT_AXIS_QUESTIONS = {
   meaning:      'この問いは、あなたにとって何だったのでしょうか？',
   value:        'この火の値打ちは、誰が決めるものでしょうか？',
-  satisfaction: '何が満たされたら、十分だったのでしょうか？',
+  satisfaction: 'この火を、今の形のまま置いておけますか？',
 };
 
 function generateAcceptanceText(fire, growth) {
@@ -1255,6 +1297,10 @@ function completeReceiptJourney(game, fireId, journeyData) {
     acceptanceText: accText.text,
     holdText: accText.holdText,
     nextQuestion: accText.nextQuestion,
+    stability: {
+      value: fire.gardenProgress || 0,
+      stage: stabilityStage(fire.gardenProgress || 0),
+    },
   };
   fire.updatedAt = nowISO();
 
@@ -1676,7 +1722,7 @@ function FireInputForm({ onSubmit, onCancel }) {
           </div>
           <div style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ color: '#d1d5db', fontSize: 13 }}>満足できた</span>
+              <span style={{ color: '#d1d5db', fontSize: 13 }}>今、置いておける</span>
               <span style={{ color: '#f97316', fontSize: 13 }}>{satisfaction}</span>
             </div>
             <input type="range" min={0} max={100} value={satisfaction}
@@ -2188,7 +2234,17 @@ var JOURNEY_LAYERS = [
     ],
   },
   {
-    id: 'metrics', isIntro: false, isMetrics: true,
+    id: 'silence', isIntro: false, isMetrics: false, isSilence: true,
+    place: '記録塔',
+    charName: null, charColor: null,
+    dialogue: [
+      { name: null, color: null, text: '記録塔は、しばらく静かだった。\n\nコタエは、火のそばに置いた紙片を並べ直した。\nかなは、水滴を置いた。\n審査官は、黒札を本文から離した。\nうつろは、空白の場所を空けた。\n\nトイマンは、黙って見ていた。' },
+      { name: 'コタエ', color: '#a78bfa', text: '受領証を、発行します。' },
+    ],
+    question: null, options: null,
+  },
+  {
+    id: 'metrics', isIntro: false, isMetrics: true, isSilence: false,
     place: '記録塔',
     charName: 'コタエ', charColor: '#a78bfa',
     dialogue: [],
@@ -2214,25 +2270,44 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
 
   var layers = receipt && receipt.layers;
   var hasLayers = layers && ['remained', 'pain', 'judgment', 'wish'].some(function(k) { return layers[k]; });
-  var metricDeltas  = receipt && receipt.metricDeltas;
+  var metricDeltas   = receipt && receipt.metricDeltas;
   var initialMetrics = receipt && receipt.initialMetrics;
   var currentMetrics = receipt && receipt.currentMetrics;
+  var stability      = receipt && receipt.stability;
 
   return (
     <div className="receipt-card">
       <p className="receipt-title">受領証</p>
-      <p className="receipt-subtitle">この残り火は、受け取られました。</p>
 
-      <div className="receipt-row">
-        <p className="receipt-label">問い</p>
-        <p className="receipt-value">「{fire.question || '—'}」</p>
-      </div>
+      {/* 1. 受け取り文 — 最初に届ける */}
+      {receipt && receipt.acceptanceText && (
+        <div className="receipt-acceptance" style={{ marginTop: 6 }}>
+          <p className="receipt-acceptance-text" style={{ fontSize: 15, color: '#c4b5fd' }}>
+            {receipt.acceptanceText}
+          </p>
+          {receipt.holdText && <p className="receipt-hold-text">{receipt.holdText}</p>}
+        </div>
+      )}
 
-      <div className="receipt-row">
-        <p className="receipt-label">残り火</p>
-        <p className="receipt-value receipt-ember">「{fire.kindle}」</p>
-      </div>
+      {/* 2. 次の問いへ */}
+      {receipt && receipt.nextQuestion && (
+        <div className="receipt-next-q">
+          <p className="receipt-next-q-label">次の問いへ</p>
+          <p className="receipt-next-q-text">{receipt.nextQuestion}</p>
+        </div>
+      )}
 
+      {/* 3. 火の安定 */}
+      {stability && (
+        <div style={{ margin: '10px 0', padding: '8px 12px', background: '#0a0c14', borderRadius: 8, border: '1px solid #1e2230' }}>
+          <span style={{ color: '#374151', fontSize: 10, letterSpacing: 1 }}>火の安定</span>
+          <span style={{ color: '#34d399', fontSize: 12, marginLeft: 10, fontFamily: 'monospace' }}>
+            {stability.value}% ／ {stability.stage}
+          </span>
+        </div>
+      )}
+
+      {/* 4. 旅の記録 */}
       {hasLayers && (
         <div className="receipt-layers">
           <p className="receipt-layers-title">旅の記録</p>
@@ -2249,12 +2324,13 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
         </div>
       )}
 
+      {/* 5. 三軸の変化 */}
       {metricDeltas && initialMetrics && currentMetrics && (
         <div className="receipt-metrics-section">
           {[
             { key: 'meaning', label: '意味' },
             { key: 'value',   label: '価値' },
-            { key: 'satisfaction', label: '満足' },
+            { key: 'satisfaction', label: '納得' },
           ].map(function(m) {
             var delta = metricDeltas[m.key] || 0;
             var cls = 'receipt-metric-delta' + (delta > 0 ? ' pos' : delta < 0 ? ' neg' : '');
@@ -2270,17 +2346,15 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
         </div>
       )}
 
-      {receipt && receipt.acceptanceText && (
-        <div className="receipt-acceptance">
-          <p className="receipt-acceptance-text">{receipt.acceptanceText}</p>
-          {receipt.holdText && <p className="receipt-hold-text">{receipt.holdText}</p>}
-        </div>
-      )}
-
-      {receipt && receipt.nextQuestion && (
-        <div className="receipt-next-q">
-          <p className="receipt-next-q-label">次の問いへ</p>
-          <p className="receipt-next-q-text">{receipt.nextQuestion}</p>
+      {/* 6. 詳細 */}
+      <div className="receipt-row" style={{ marginTop: 12 }}>
+        <p className="receipt-label">残り火</p>
+        <p className="receipt-value receipt-ember">「{fire.kindle}」</p>
+      </div>
+      {fire.question && (
+        <div className="receipt-row">
+          <p className="receipt-label">問い</p>
+          <p className="receipt-value">「{fire.question}」</p>
         </div>
       )}
 
@@ -2291,7 +2365,7 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
       </div>
 
       <button className="receipt-btn" onClick={onAction}>
-        {buttonLabel || '未受領領域へ進む'}
+        {buttonLabel || '余熱に会い直す'}
       </button>
     </div>
   );
@@ -2299,11 +2373,49 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
 
 // ── 受領の旅 コンポーネント ─────────────────────────────────────────────────
 
+function buildIntroDialogue(fire) {
+  var gp = fire.gardenProgress || 0;
+  var stage = stabilityStage(gp);
+  var kindleQuoted = fire.kindle ? '「' + fire.kindle + '」' : '（本文なし）';
+  var kotaeStabilityLine;
+  if (gp >= 85) {
+    kotaeStabilityLine = 'この火は、よく守られていました。\n急がされずに、ここまで届いています。\n\n火の安定：' + gp + '% ／ ' + stage;
+  } else if (gp >= 60) {
+    kotaeStabilityLine = '落ち着いた状態で届きました。\n\n火の安定：' + gp + '% ／ ' + stage;
+  } else if (gp >= 30) {
+    kotaeStabilityLine = 'まだ少し揺れています。\n丁寧に記録します。\n\n火の安定：' + gp + '% ／ ' + stage;
+  } else {
+    kotaeStabilityLine = 'この火は、まだ揺れています。\n欠けないよう、慎重に記録します。\n\n火の安定：' + gp + '% ／ ' + stage;
+  }
+  return [
+    { name: 'トイマン', color: '#fb923c', text: '戻った。' },
+    { name: 'トイマン', color: '#fb923c', text: '答えではない。\nでも、欠片はあった。' },
+    { name: 'コタエ',   color: '#a78bfa', text: 'ノコリビ、確認しました。\n記録を開始します。' },
+    { name: 'コタエ',   color: '#a78bfa', text: '本文を、そのまま読み上げます。\n\n' + kindleQuoted },
+    { name: 'コタエ',   color: '#a78bfa', text: '分類は、まだしません。\n先に、欠けないように置きます。' },
+    { name: 'トイマン', color: '#fb923c', text: '……消すな。' },
+    { name: 'コタエ',   color: '#a78bfa', text: '消しません。' },
+    { name: 'コタエ',   color: '#a78bfa', text: kotaeStabilityLine },
+    { name: 'トイマン', color: '#fb923c', text: 'なら、預ける。' },
+  ];
+}
+
+function getLayerResponse(layerId, opt) {
+  if (layerId === 'remained') return { name: 'コタエ',   color: '#a78bfa', text: '「' + opt + '」。\n記録します。\nまだ、答えにはしません。' };
+  if (layerId === 'pain')     return { name: 'かな',     color: '#60a5fa', text: '「' + opt + '」。\nそこが痛かったんだね。\n急がなくていい。' };
+  if (layerId === 'judgment') return { name: '審査官',   color: '#f87171', text: '「' + opt + '」。\nこれは本文ではない。\n札として分ける。' };
+  if (layerId === 'wish')     return { name: 'うつろ',   color: '#9ca3af', text: '「' + opt + '」。\nならなかったものではなく、\nなってほしかったものとして置く。' };
+  return null;
+}
+
 function ReceiptJourney({ fire, onJourneyDone }) {
   var [layerIdx, setLayerIdx] = _useState(0);
   var [dialogueStep, setDialogueStep] = _useState(0);
   var [showChoice, setShowChoice] = _useState(false);
+  var [showResponse, setShowResponse] = _useState(false);
+  var [responseData, setResponseData] = _useState(null);
   var [selectedOption, setSelectedOption] = _useState(null);
+  var [pendingOption, setPendingOption] = _useState(null);
   var [layerSelections, setLayerSelections] = _useState({ remained: null, pain: null, judgment: null, wish: null });
   var [metrics, setMetrics] = _useState(
     fire.metrics
@@ -2311,15 +2423,19 @@ function ReceiptJourney({ fire, onJourneyDone }) {
       : { meaning: 50, value: 50, satisfaction: 50 }
   );
 
+  var introDialogue = React.useMemo(function() { return buildIntroDialogue(fire); }, []);
+
   var layer = JOURNEY_LAYERS[layerIdx];
   var isMetrics = !!layer.isMetrics;
-  var hasDialogue = layer.dialogue && layer.dialogue.length > 0;
-  var dialogueLine = hasDialogue ? layer.dialogue[Math.min(dialogueStep, layer.dialogue.length - 1)] : null;
-  var isLastDialogue = !hasDialogue || dialogueStep >= layer.dialogue.length - 1;
+  var isIntro   = !!layer.isIntro;
+  var isSilence = !!layer.isSilence;
+  var activeDialogue = isIntro ? introDialogue : (layer.dialogue || []);
+  var hasDialogue = activeDialogue.length > 0;
+  var isLastDialogue = !hasDialogue || dialogueStep >= activeDialogue.length - 1;
 
   function goNextLayer(selection) {
     var newSel = layerSelections;
-    if (!layer.isIntro && !layer.isMetrics && selection) {
+    if (!isIntro && !isMetrics && !isSilence && layer.id && selection) {
       newSel = Object.assign({}, layerSelections);
       newSel[layer.id] = selection;
       setLayerSelections(newSel);
@@ -2331,7 +2447,10 @@ function ReceiptJourney({ fire, onJourneyDone }) {
       setLayerIdx(nextIdx);
       setDialogueStep(0);
       setShowChoice(false);
+      setShowResponse(false);
+      setResponseData(null);
       setSelectedOption(null);
+      setPendingOption(null);
     }
   }
 
@@ -2345,9 +2464,45 @@ function ReceiptJourney({ fire, onJourneyDone }) {
     }
   }
 
-  var showDialogueSec = hasDialogue && !showChoice;
-  var showChoiceSec   = !isMetrics && !!layer.question && (showChoice || !hasDialogue);
-  var showMetricsSec  = isMetrics;
+  function confirmSelection() {
+    if (!selectedOption) return;
+    var resp = getLayerResponse(layer.id, selectedOption);
+    if (resp) {
+      setPendingOption(selectedOption);
+      setResponseData(resp);
+      setShowResponse(true);
+    } else {
+      goNextLayer(selectedOption);
+    }
+  }
+
+  var showDialogueSec  = hasDialogue && !showChoice && !showResponse;
+  var showChoiceSec    = !isMetrics && !isSilence && !!layer.question && (showChoice || !hasDialogue) && !showResponse;
+  var showResponseSec  = showResponse;
+  var showMetricsSec   = isMetrics;
+
+  function renderDialogue(lines, step) {
+    return lines.slice(0, step + 1).map(function(dl, i) {
+      var isCurrent = i === step;
+      var isNarrative = !dl.name;
+      var prevDl = i > 0 ? lines[i - 1] : null;
+      var showHeader = !isNarrative && (i === 0 || !prevDl || !prevDl.name || prevDl.name !== dl.name);
+      return (
+        <div key={i}>
+          {showHeader && (
+            <div className={'kotae-head' + (i > 0 ? ' journey-speaker-gap' : '')}>
+              <span className="kotae-dot" style={{ background: dl.color }} />
+              <span className="kotae-name" style={{ color: dl.color }}>{dl.name}</span>
+            </div>
+          )}
+          <p className={'kotae-line' + (isCurrent ? ' kotae-line-now' : '')}
+             style={isNarrative ? { fontStyle: 'italic', color: '#6b7280', textAlign: 'center', lineHeight: 2, whiteSpace: 'pre-line' } : {}}>
+            {dl.text}
+          </p>
+        </div>
+      );
+    });
+  }
 
   return (
     <div className="kotae-ov">
@@ -2366,24 +2521,10 @@ function ReceiptJourney({ fire, onJourneyDone }) {
 
         <p style={{ color: '#4b5563', fontSize: 10, margin: '0 0 10px', letterSpacing: 1 }}>{layer.place}</p>
 
-        {/* 対話セクション */}
+        {/* 対話セクション（イントロ・通常層の台詞・沈黙） */}
         {showDialogueSec && (
           <div>
-            {layer.dialogue.slice(0, dialogueStep + 1).map(function(dl, i) {
-              var isCurrent = i === dialogueStep;
-              var showHeader = i === 0 || dl.name !== layer.dialogue[i - 1].name;
-              return (
-                <div key={i}>
-                  {showHeader && (
-                    <div className={'kotae-head' + (i > 0 ? ' journey-speaker-gap' : '')}>
-                      <span className="kotae-dot" style={{ background: dl.color }} />
-                      <span className="kotae-name" style={{ color: dl.color }}>{dl.name}</span>
-                    </div>
-                  )}
-                  <p className={'kotae-line' + (isCurrent ? ' kotae-line-now' : '')}>{dl.text}</p>
-                </div>
-              );
-            })}
+            {renderDialogue(activeDialogue, dialogueStep)}
             <button className="kotae-btn" onClick={advance}>
               {isLastDialogue ? (layer.question ? '問いへ進む ▽' : '次へ ▽') : '▽ つづき'}
             </button>
@@ -2419,9 +2560,26 @@ function ReceiptJourney({ fire, onJourneyDone }) {
             <button
               className="kotae-btn"
               style={{ opacity: selectedOption ? 1 : 0.35, cursor: selectedOption ? 'pointer' : 'default', marginTop: 14 }}
-              onClick={function() { if (selectedOption) goNextLayer(selectedOption); }}
+              onClick={confirmSelection}
             >
               記録する
+            </button>
+          </div>
+        )}
+
+        {/* 応答セクション — キャラが選択を受け取る */}
+        {showResponseSec && responseData && (
+          <div>
+            <p style={{ color: '#4b5563', fontSize: 11, margin: '0 0 12px', fontStyle: 'italic' }}>
+              「{pendingOption}」
+            </p>
+            <div className="kotae-head">
+              <span className="kotae-dot" style={{ background: responseData.color }} />
+              <span className="kotae-name" style={{ color: responseData.color }}>{responseData.name}</span>
+            </div>
+            <p className="kotae-line kotae-line-now" style={{ whiteSpace: 'pre-line' }}>{responseData.text}</p>
+            <button className="kotae-btn" onClick={function() { goNextLayer(pendingOption); }}>
+              次へ ▽
             </button>
           </div>
         )}
@@ -2429,19 +2587,17 @@ function ReceiptJourney({ fire, onJourneyDone }) {
         {/* 感触スライダー */}
         {showMetricsSec && (
           <div>
-            {layer.charName && (
-              <div className="kotae-head">
-                <span className="kotae-dot" style={{ background: layer.charColor }} />
-                <span className="kotae-name" style={{ color: layer.charColor }}>{layer.charName}</span>
-              </div>
-            )}
+            <div className="kotae-head">
+              <span className="kotae-dot" style={{ background: '#a78bfa' }} />
+              <span className="kotae-name" style={{ color: '#a78bfa' }}>コタエ</span>
+            </div>
             <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.8, margin: '0 0 14px' }}>
-              今、この火をどのように受け取っていますか？
+              今、この火をどのように感じていますか？
             </p>
             {[
               { key: 'meaning',      label: '意味があった' },
               { key: 'value',        label: '価値があった' },
-              { key: 'satisfaction', label: '満足できた' },
+              { key: 'satisfaction', label: '今、置いておける' },
             ].map(function(m) {
               var mKey = m.key;
               return (
@@ -3437,6 +3593,43 @@ function DevBar({ game, onReset, onForceFound, onAddBattle }) {
   );
 }
 
+function MilestoneDialog({ milestone, onClose }) {
+  var [step, setStep] = _useState(0);
+  var lines = milestone.lines;
+  var isLast = step >= lines.length - 1;
+  function advance() {
+    if (isLast) onClose();
+    else setStep(function(s) { return s + 1; });
+  }
+  return (
+    <div className="kotae-ov" onClick={advance}>
+      <div className="kotae-sheet" onClick={function(e) { e.stopPropagation(); }}>
+        <div className="kotae-grip" />
+        <p style={{ color: '#4b5563', fontSize: 10, margin: '0 0 10px', letterSpacing: 1 }}>{milestone.place}</p>
+        {lines.slice(0, step + 1).map(function(l, i) {
+          var isCurrent = i === step;
+          var prevL = i > 0 ? lines[i - 1] : null;
+          var showHeader = i === 0 || !prevL || prevL.name !== l.name;
+          return (
+            <div key={i}>
+              {showHeader && (
+                <div className={'kotae-head' + (i > 0 ? ' journey-speaker-gap' : '')}>
+                  <span className="kotae-dot" style={{ background: l.color }} />
+                  <span className="kotae-name" style={{ color: l.color }}>{l.name}</span>
+                </div>
+              )}
+              <p className={'kotae-line' + (isCurrent ? ' kotae-line-now' : '')}>{l.text}</p>
+            </div>
+          );
+        })}
+        <button className="kotae-btn" onClick={advance}>
+          {isLast ? '▽ 続ける' : '▽ つづき'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -3450,6 +3643,7 @@ function App() {
   var [actionResult, setActionResult] = _useState(null);
   // 受領の旅: { fireId, phase: 'journey'|'card' }
   var [receiptJourney, setReceiptJourney] = _useState(null);
+  var [milestoneDialog, setMilestoneDialog] = _useState(null);
   // 受領証閲覧: RecordTower「受領証を見る」用
   var [activeReceiptView, setActiveReceiptView] = _useState(null); // fireId
   var tickRef = _useRef(null);
@@ -3491,6 +3685,7 @@ function App() {
     if (result.ok) {
       setGame(result.game);
       setActionResult(result.actionResult || null);
+      if (result.milestone) setMilestoneDialog(result.milestone);
     }
   }, []);
 
@@ -3680,6 +3875,14 @@ function App() {
         />
       )}
 
+      {/* 節目イベント */}
+      {milestoneDialog && !receiptJourney && (
+        <MilestoneDialog
+          milestone={milestoneDialog}
+          onClose={function() { setMilestoneDialog(null); }}
+        />
+      )}
+
       {/* 受領の旅 — 常に最前面 */}
       {receiptJourney && receiptJourney.phase === 'journey' && (function() {
         var fire = gameRef.current.fires.find(function(f) { return f.id === receiptJourney.fireId; });
@@ -3708,7 +3911,7 @@ function App() {
               <div className="kotae-grip" />
               <ReceiptCard
                 fire={fire}
-                buttonLabel="未受領領域へ進む"
+                buttonLabel="余熱に会い直す"
                 onAction={function() {
                   var fid = receiptJourney.fireId;
                   setReceiptJourney(null);
