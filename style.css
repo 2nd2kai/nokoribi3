@@ -5101,3 +5101,38 @@ html,body{
   font-size:12px;cursor:pointer;font-family:inherit;letter-spacing:.03em;
 }
 .reset-btn-erase:hover{color:#a06b6b;text-decoration:underline}
+
+/* ── 今日の箱庭（ホーム現在地カード）── ダッシュボードではなく、世界の窓。 */
+.today-card{
+  background:linear-gradient(180deg,#0e1016,#0b0d12);
+  border:1px solid #20283a;border-radius:14px;
+  padding:18px 18px 16px;margin:6px 0 14px;
+}
+.today-label{color:#5b6678;font-size:10px;letter-spacing:.18em;margin:0 0 14px}
+.today-fire-label{color:#4b5563;font-size:10px;letter-spacing:.1em;margin:0 0 4px}
+.today-fire-kindle{color:#e8c79a;font-size:16px;line-height:1.7;margin:0 0 16px;font-style:italic}
+.today-meta{display:flex;flex-direction:column;gap:7px;margin:0 0 14px;padding-bottom:14px;border-bottom:1px solid #1a2130}
+.today-meta-row{display:flex;justify-content:space-between;align-items:baseline}
+.today-meta-k{color:#4b5563;font-size:11px;letter-spacing:.06em}
+.today-meta-v{color:#c2cad8;font-size:14px}
+.today-traces{margin:0 0 14px}
+.today-traces-label{color:#4b5563;font-size:10px;letter-spacing:.1em;margin:0 0 5px}
+.today-trace{color:#6b8a78;font-size:12px;line-height:1.7;margin:0}
+.today-voice{margin:0 0 16px;padding:12px 14px;background:#0a0c12;border-radius:10px;border:1px solid #1a2130}
+.today-voice-who{display:block;color:#9aa3b5;font-size:10px;letter-spacing:.12em;margin-bottom:6px}
+.today-voice-text{color:#cbd2e0;font-size:14px;line-height:1.8;margin:0}
+.today-actions-label{color:#4b5563;font-size:10px;letter-spacing:.1em;margin:0 0 8px}
+.today-action-btn{
+  display:block;width:100%;padding:13px 0;margin-bottom:8px;border-radius:10px;
+  background:#3a1d0a;border:1px solid #b4540f;color:#fed7aa;
+  font-size:15px;cursor:pointer;font-family:inherit;letter-spacing:.04em;
+}
+.today-action-btn:last-child{margin-bottom:0}
+.today-action-btn:hover{background:#4a2510;border-color:#d2691e}
+/* 別の火を灯すボタンは、現在地カードがある時は控えめに */
+.home-light-secondary{
+  width:100%;padding:11px 0;border-radius:8px;margin-top:6px;
+  background:transparent;border:1px solid #2e3348;color:#8a93a6;
+  font-size:13px;cursor:pointer;font-family:inherit;
+}
+.home-light-secondary:hover{border-color:#c2410c;color:#fed7aa}

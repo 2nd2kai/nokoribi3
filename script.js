@@ -3383,11 +3383,83 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
   );
 }
 
-function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
+// ── ホーム「今日の箱庭」ヘルパー ──────────────────────────────────────────────
+// いま向き合う火を1つ選ぶ。最も手当てが必要な状態を前に出す（一覧は棚に逃がす）。
+function pickCurrentFire(fires) {
+  if (!fires || !fires.length) return null;
+  var by = function(s) { return fires.find(function(f) { return f.status === s; }); };
+  return by('found') || by('receiving') || by('searching')
+    || fires.find(function(f) { return f.status === 'received' && !isAllSettled(f); })
+    || by('received') || by('lit') || by('returned') || fires[0];
+}
+
+function fireReexploreStarted(fire) {
+  var rc = fire.reexploreCounts || {};
+  return ((rc.meaning || 0) + (rc.value || 0) + (rc.satisfaction || 0)) > 0;
+}
+
+// 火の現在地。ステータスを「居場所」として見せる。
+function fireCurrentPlace(fire) {
+  switch (fire.status) {
+    case 'searching': return '未受領の森';
+    case 'found':     return '森の奥';
+    case 'receiving': return '記録塔への道';
+    case 'received':
+      if (isAllSettled(fire)) return '記録塔の奥';
+      return fireReexploreStarted(fire) ? '余熱の棚' : '記録塔';
+    case 'returned':  return '記録塔の奥';
+    case 'lit':       return '焚き口';
+    default:          return '箱庭';
+  }
+}
+
+// そばにいる子＋その一言。「……さがしたよ」「……みつけた」は使わない（各シーン専用）。
+function fireCompanionLine(fire) {
+  switch (fire.status) {
+    case 'searching': return { who: 'トイマン', text: '火は、まだある。' };
+    case 'found':     return { who: 'トイマン', text: '問いの欠片は、もう見つかっている。' };
+    case 'receiving': return { who: 'トイマン', text: '欠けないように、運ぶ。' };
+    case 'received':
+      return isAllSettled(fire)
+        ? { who: 'コタエ', text: 'もう、同じ場所には置きません。返せます。' }
+        : { who: 'コタエ', text: '記録済みです。ただし、余熱が残っています。' };
+    case 'returned':  return { who: 'トイマン', text: '帰った。' };
+    case 'lit':       return { who: 'トイマン', text: '預かった火が、まだ焚き口にある。' };
+    default:          return { who: 'トイマン', text: '火は、まだある。' };
+  }
+}
+
+// 最近の痕跡（最大3）。守られた痕跡＋会い直した痕跡＋返却灯。報酬ではなく証拠。
+function homeRecentTraces(fire) {
+  var traces = getStabilityTraces(fire.gardenProgress || 0).slice();
+  var rc = fire.reexploreCounts || {};
+  if ((rc.value || 0) > 0)        traces.unshift('本文から離した黒札');
+  if ((rc.meaning || 0) > 0)      traces.unshift('塔へ流れた意味の光');
+  if ((rc.satisfaction || 0) > 0) traces.unshift('灰から拾った種');
+  if (fire.status === 'returned') traces.unshift('心へ返した灯');
+  return traces.slice(0, 3);
+}
+
+// 次にできること（1〜3）。ホームから、その動作の起きる場所へ橋渡しする。
+function homeNextActions(fire) {
+  switch (fire.status) {
+    case 'searching': return [{ label: '未受領の森へ', go: 'garden' }];
+    case 'lit':       return [{ label: '未受領の森へ', go: 'garden' }];
+    case 'found':     return [{ label: '記録塔へ届ける', go: 'deliver' }];
+    case 'receiving': return [];
+    case 'received':
+      return isAllSettled(fire)
+        ? [{ label: '記録塔を見る', go: 'garden' }]
+        : [{ label: '余熱に会い直す', go: 'unreceived' }];
+    case 'returned':  return [{ label: '箱庭を見る', go: 'garden' }];
+    default:          return [{ label: '箱庭を見る', go: 'garden' }];
+  }
+}
+
+function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
   var [showForm, setShowForm] = _useState(false);
-  var searching = game.fires.find(function(f) { return f.status === 'searching'; });
-  var found = game.fires.find(function(f) { return f.status === 'found'; });
   var totalFires = game.fires.length;
+  var currentFire = pickCurrentFire(game.fires);
 
   function handleLightFire(kindle, pain, writeState, feeling, metrics) {
     // 灯した後は App 側の「預ける場面」へ遷移する。ここでフォームを閉じるだけ。
@@ -3395,58 +3467,88 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
     setShowForm(false);
   }
 
-  // 状態別のトイマンの一言。「……さがしたよ」は入口専用、「……みつけた」は
-  // 発見シーン専用。ホームの汎用挨拶では名台詞を連打しない（軽くしない）。
-  var receiving = game.fires.find(function(f) { return f.status === 'receiving'; });
-  var received = game.fires.find(function(f) { return f.status === 'received'; });
-  var anyReturned = game.fires.some(function(f) { return f.status === 'returned'; });
-  var toymanGreeting;
-  if (totalFires === 0) {
-    toymanGreeting = 'まだ、消えていない';
-  } else if (found) {
-    // 発見済みでまだ届けていない火（発見シーンの後に滞在した稀なケース）
-    toymanGreeting = '問いの欠片は、もう見つかっている';
-  } else if (receiving || game.toyman.state === 'returning') {
-    toymanGreeting = '記録塔へ運ぶ';
-  } else if (searching) {
-    toymanGreeting = '火は、まだある';
-  } else if (received) {
-    toymanGreeting = '受け取られた。でも、まだ余熱がある';
-  } else if (anyReturned) {
-    toymanGreeting = '帰った';
-  } else {
-    toymanGreeting = 'また来たんだね';
-  }
+  var place = currentFire ? fireCurrentPlace(currentFire) : '';
+  var companion = currentFire ? fireCompanionLine(currentFire) : null;
+  var traces = currentFire ? homeRecentTraces(currentFire) : [];
+  var nextActions = currentFire ? homeNextActions(currentFire) : [];
+  var stage = currentFire ? stabilityStage(currentFire.gardenProgress || 0) : '';
 
   return (
     <div style={{ padding: '0 16px 80px' }}>
-      <div style={{ padding: '20px 0 16px', textAlign: 'center', position: 'relative' }}>
+      <div style={{ padding: '20px 0 12px', textAlign: 'center', position: 'relative' }}>
         <h1 style={{ color: '#f97316', fontSize: 20, margin: '0 0 4px', letterSpacing: 1 }}>
           残り火の箱庭
         </h1>
         <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>Nokoribi no Hakoniwa</p>
-        {game.toka > 0 && (
-          <p style={{ color: '#4b5563', fontSize: 11, margin: '6px 0 0' }}>
-            灯貨 {game.toka}
-          </p>
-        )}
       </div>
 
       {totalFires === 0 && !showForm && (
-        <div style={{
-          background: '#111318', border: '1px solid #1e2230',
-          borderRadius: 10, padding: '16px', marginBottom: 16,
-        }}>
-          <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.8, margin: 0 }}>
-            ここは、言葉にまつわる痛みを置いていける場所。<br />
-            あなたが作った言葉、届かなかった言葉、消えてしまいそうな言葉を、<br />
-            残り火として灯すことができます。
-          </p>
+        <div>
+          <ToymanVoice text="まだ、消えていない" />
+          <div style={{
+            background: '#111318', border: '1px solid #1e2230',
+            borderRadius: 10, padding: '16px', margin: '12px 0 16px',
+          }}>
+            <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.8, margin: 0 }}>
+              ここは、言葉にまつわる痛みを置いていける場所。<br />
+              あなたが作った言葉、届かなかった言葉、消えてしまいそうな言葉を、<br />
+              残り火として灯すことができます。
+            </p>
+          </div>
         </div>
       )}
 
-      {!showForm && (
-        <ToymanVoice text={toymanGreeting} />
+      {/* 今日の箱庭 — ホームを「現在地の窓」にする */}
+      {currentFire && !showForm && (
+        <div className="today-card">
+          <p className="today-label">今日の箱庭</p>
+
+          <p className="today-fire-label">いま向き合う火</p>
+          <p className="today-fire-kindle">「{fireTitle(currentFire)}」</p>
+
+          <div className="today-meta">
+            <div className="today-meta-row">
+              <span className="today-meta-k">現在地</span>
+              <span className="today-meta-v">{place}</span>
+            </div>
+            <div className="today-meta-row">
+              <span className="today-meta-k">そばにいる子</span>
+              <span className="today-meta-v">{companion.who}</span>
+            </div>
+            <div className="today-meta-row">
+              <span className="today-meta-k">火の状態</span>
+              <span className="today-meta-v">{stage}</span>
+            </div>
+          </div>
+
+          {traces.length > 0 && (
+            <div className="today-traces">
+              <p className="today-traces-label">最近の痕跡</p>
+              {traces.map(function(t, i) {
+                return <p key={i} className="today-trace">・{t}</p>;
+              })}
+            </div>
+          )}
+
+          <div className="today-voice">
+            <span className="today-voice-who">{companion.who}</span>
+            <p className="today-voice-text">{companion.text}</p>
+          </div>
+
+          {nextActions.length > 0 && (
+            <div className="today-actions">
+              <p className="today-actions-label">次にできること</p>
+              {nextActions.map(function(a, i) {
+                return (
+                  <button key={i} className="today-action-btn"
+                    onClick={function() { onNextAction(a.go, currentFire.id); }}>
+                    {a.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* 灯守り初登場 — 灯貨の意味をここで伝える */}
@@ -3468,35 +3570,6 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
         </div>
       )}
 
-      {!showForm && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '10px 0' }}>
-          {searching && (
-            <span style={{
-              fontSize: 12, padding: '4px 10px', borderRadius: 12,
-              background: '#7c3aed22', color: '#a78bfa',
-            }}>
-              問い {searching.questionProgress || 0}%
-            </span>
-          )}
-          {searching && (
-            <span style={{
-              fontSize: 12, padding: '4px 10px', borderRadius: 12,
-              background: '#06472222', color: '#34d399',
-            }}>
-              安定 {searching.gardenProgress || 0}%
-            </span>
-          )}
-          {found && (
-            <span style={{
-              fontSize: 12, padding: '4px 10px', borderRadius: 12,
-              background: '#a78bfa22', color: '#a78bfa',
-            }}>
-              ✦ 問いが届いた
-            </span>
-          )}
-        </div>
-      )}
-
       {showForm ? (
         <div style={{
           background: '#111318', border: '1px solid #2e3348',
@@ -3511,19 +3584,20 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
       ) : (
         <button
           onClick={function() { setShowForm(true); }}
-          style={{
+          className={currentFire ? 'home-light-secondary' : ''}
+          style={currentFire ? null : {
             width: '100%', padding: '14px', borderRadius: 10,
             background: '#7c1d0a', border: '1px solid #c2410c',
             color: '#fed7aa', fontSize: 15, cursor: 'pointer',
             fontFamily: 'inherit', marginTop: 8, letterSpacing: 0.5,
           }}
         >
-          + 火に言葉を置く
+          {currentFire ? '＋ 別の火に言葉を置く' : '+ 火に言葉を置く'}
         </button>
       )}
 
       {!showForm && (
-        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center' }}>
           <button onClick={onGoShelf} style={{
             flex: 1, padding: '11px 0', borderRadius: 8,
             background: '#151820', border: '1px solid #2e3348',
@@ -3539,6 +3613,13 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden }) {
             🌿 箱庭
           </button>
         </div>
+      )}
+
+      {/* 灯貨は補助表示へ下げる（主役にしない） */}
+      {!showForm && game.toka > 0 && (
+        <p style={{ color: '#3e4656', fontSize: 11, textAlign: 'center', margin: '14px 0 0' }}>
+          灯貨 {game.toka}
+        </p>
       )}
     </div>
   );
@@ -4281,6 +4362,12 @@ function App() {
           onLightFire={handleLightFire}
           onGoShelf={function() { setScreen('shelf'); }}
           onGoGarden={function() { setScreen('garden'); }}
+          onNextAction={function(go, fireId) {
+            if (go === 'garden') { setScreen('garden'); }
+            else if (go === 'shelf') { setScreen('shelf'); }
+            else if (go === 'unreceived') { setActiveUnreceivedFireId(fireId); setScreen('garden'); }
+            else if (go === 'deliver') { handleDeliverToTower(fireId); }
+          }}
         />
       )}
       {screen === 'shelf' && (
