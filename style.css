@@ -4741,6 +4741,75 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .return-heart-btn:active{background:#5b21b6}
 .return-heart-wait{color:#5b6678;font-size:12px;line-height:1.7;margin:8px 0 0;text-align:center}
 
+/* UnreceivedPanel — world-language cards */
+.unreceived-panel{background:#0d0f1a;border:1px solid #2a2340;border-radius:12px;padding:18px 16px;margin-top:12px}
+.unreceived-header{color:#3d4460;font-size:10px;letter-spacing:.1em;margin:0 0 12px}
+.unreceived-toyman{display:flex;align-items:center;gap:8px;margin:0 0 16px}
+.unreceived-toyman-name{font-size:11px;color:#4a5470;letter-spacing:.08em}
+.unreceived-toyman-line{color:#9ca3af;font-size:13px;line-height:1.7}
+.unreceived-card{background:#111318;border-radius:10px;padding:14px 13px;margin-bottom:10px;border:1px solid #2a2340;transition:opacity .2s}
+.unreceived-card-settled{border-color:#1e2a1e;opacity:.65}
+.unreceived-card-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.unreceived-card-label{color:#9ca3af;font-size:13px;letter-spacing:.02em}
+.unreceived-card-settled .unreceived-card-label{color:#374151}
+.unreceived-card-stage{color:#374151;font-size:10px;letter-spacing:.06em}
+.unreceived-card-settled-msg{color:#4a5470;font-size:12px;margin:0;line-height:1.6}
+.unreceived-card-btn{
+  padding:8px 14px;border-radius:7px;font-size:12px;cursor:pointer;
+  background:transparent;border:1px solid #3a2a60;color:#a78bfa;
+  font-family:inherit;letter-spacing:.03em;transition:all .15s;
+}
+.unreceived-card-btn:hover{background:rgba(76,29,149,.18);border-color:#6d4aaa}
+.unreceived-traces{border-top:1px solid #1e2230;padding-top:10px;margin:8px 0 12px}
+.unreceived-trace-line{color:#4a5470;font-size:11px;margin:3px 0;line-height:1.6}
+.unreceived-rest-btn{
+  width:100%;padding:10px;border-radius:8px;background:transparent;
+  border:1px solid #1e2230;font-size:13px;font-family:inherit;
+}
+
+/* HeatRevisitScene — 余熱への会い直し儀式 */
+.heat-revisit-wrap{background:#08080f}
+.heat-revisit-label{
+  font-size:10px;letter-spacing:.14em;color:#4a5470;
+  text-align:center;margin:0 0 14px;text-transform:uppercase;
+}
+.heat-revisit-narrative{
+  font-size:14px;line-height:1.9;color:#8f9bb3;text-align:center;margin:0 0 20px;
+}
+.heat-revisit-beat{margin:0 0 18px;text-align:left}
+.heat-revisit-char{font-size:11px;letter-spacing:.12em;margin:0 0 4px}
+.heat-revisit-line{
+  font-size:14px;line-height:1.9;color:#9aa3b5;margin:0;
+  white-space:pre-wrap;
+}
+.heat-revisit-question{
+  font-size:13px;color:#8f9bb3;line-height:1.8;text-align:center;margin:0 0 20px;
+}
+.heat-revisit-touch-opts{display:flex;flex-direction:column;gap:8px}
+.heat-revisit-touch-btn{
+  display:flex;flex-direction:column;gap:3px;padding:12px 14px;border-radius:10px;
+  background:rgba(20,18,30,.8);border:1px solid #2a2340;cursor:pointer;
+  font-family:inherit;text-align:left;transition:all .15s;
+}
+.heat-revisit-touch-btn:hover{background:rgba(42,28,80,.25);border-color:#4a3470}
+.heat-revisit-touch-id{font-size:13px;color:#c4b5fd;letter-spacing:.04em}
+.heat-revisit-touch-desc{font-size:11px;color:#4a5470}
+.heat-revisit-choices{display:flex;flex-direction:column;gap:7px}
+.heat-revisit-choice-btn{
+  width:100%;padding:10px 14px;border-radius:8px;font-size:13px;cursor:pointer;
+  background:rgba(20,18,30,.8);border:1px solid #2a2340;color:#9aa3b5;
+  font-family:inherit;text-align:left;transition:all .15s;
+}
+.heat-revisit-choice-btn:hover{background:rgba(42,28,80,.2);border-color:#3a2a50;color:#c4b5fd}
+.heat-revisit-trace-box{
+  padding:14px;border-radius:10px;background:#0d0f1a;border:1px solid #2a2340;
+  margin-bottom:16px;text-align:center;
+}
+.heat-revisit-trace-text{font-size:14px;color:#9aa3b5;margin:0;letter-spacing:.04em}
+.heat-revisit-touch-chosen{font-size:12px;color:#4a5470;text-align:center;margin:0 0 20px;line-height:1.7}
+.heat-btn{border-color:#3a4a5c;background:rgba(58,74,92,.12);color:#cbd6e4}
+.heat-btn:hover{background:rgba(58,74,92,.22)}
+
 /* FinalReturnScene — 心へ返す署名儀式 */
 .final-return-wrap{background:#070810}
 .final-return-heading{font-size:14px;letter-spacing:.08em;color:#9aa3b5;margin:0 0 20px;text-align:center}

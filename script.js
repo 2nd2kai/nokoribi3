@@ -451,6 +451,7 @@ function normalizeFire(f) {
   if (f.finalReturn === undefined) f.finalReturn = null;
   if (f.finalReturnAttemptedAt === undefined) f.finalReturnAttemptedAt = null;
   if (f.returnHoldLog === undefined) f.returnHoldLog = [];
+  if (f.heatTraces === undefined) f.heatTraces = [];
   // receiving → found 回復（旅途中にアプリが終了した場合）
   if (f.status === 'receiving') { f.status = 'found'; f.receiptDraft = null; }
   // 既存の received fire に receipt を補完
@@ -934,6 +935,53 @@ function reexploreFire(game, fireId, type) {
   }
 
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
+}
+
+// 余熱への会い直し。数値を主役にせず、触れ方と選択で変化量を決める。
+// touchMode: '少しだけ触れる' | '正面から見る' | '今日はそばに置く'
+var HEAT_TRACE_LABELS = {
+  meaning: '問い札',
+  value: '本文から離した黒札',
+  satisfaction: '棚に置いた灰',
+};
+
+function revisitHeat(game, fireId, heatType, touchMode, selected) {
+  var ns = cloneS(game);
+  var fire = ns.fires.find(function(f) { return f.id === fireId; });
+  if (!fire || fire.status !== 'received') return { ok: false, game: game };
+  if (!fire.unreceived) fire.unreceived = { meaning: 0, value: 0, satisfaction: 0 };
+
+  var before = fire.unreceived[heatType] || 0;
+  var base = reexploreGain(before);
+  var reduction = 0;
+  if (touchMode === '少しだけ触れる') reduction = base;
+  else if (touchMode === '正面から見る') reduction = Math.min(base * 2, before);
+  // 今日はそばに置く: reduction = 0（急がなかった痕跡だけ残す）
+
+  var after = Math.max(0, before - reduction);
+  fire.unreceived[heatType] = after;
+
+  var traceText = (HEAT_TRACE_LABELS[heatType] || heatType) + '：' + selected;
+
+  if (!Array.isArray(fire.heatTraces)) fire.heatTraces = [];
+  fire.heatTraces = fire.heatTraces.concat([{
+    type: heatType, touchMode: touchMode, selected: selected, traceText: traceText,
+    createdAt: Date.now(),
+  }]);
+
+  fire.logs = [{ text: traceText, at: nowISO() }].concat(fire.logs || []).slice(0, LOG_CAP_FIRE);
+  fire.updatedAt = nowISO();
+
+  // 審査官エンカウント: 価値が静かな痕跡に達した時
+  var beforeStage = unreceivedStage(before);
+  var afterStage = unreceivedStage(after);
+  if (heatType === 'value' && afterStage === '静かな痕跡' && beforeStage !== '静かな痕跡') {
+    if (hasSeenPlaceEncounter(ns, 'black_tags')) {
+      ns = triggerEncounter(ns, 'auditor_first_value', { fireId: fireId });
+    }
+  }
+
+  return { ok: true, game: ns };
 }
 
 function buyMarketItem(game, key) {
@@ -2246,93 +2294,61 @@ function FireCard({ fire, onSelect, selected }) {
 
 function UnreceivedPanel({ fire, onReexplore, onRest, onReturnToHeart, actionResult, onCloseActionResult }) {
   var ur = fire.unreceived || { meaning: 0, value: 0, satisfaction: 0 };
-
-  // 結果表示は共通の ActionResultPanel（App の actionResult）に一本化。
-  // ここは操作と未受領領域の状態表示に専念する。
-  function doReexplore(type) { onReexplore(fire.id, type); }
   function doRest() { onRest(fire.id); }
-
-  // この火・未受領コンテキストの結果だけを、押した場所の近くに出す
-  var localResult = (actionResult && actionResult.context === 'unreceived' && actionResult.fireId === fire.id)
-    ? actionResult : null;
 
   var TYPES = [
     {
       key: 'meaning',
       label: '意味の影',
-      desc: '意味として、まだ受け取れていないものがあります。',
-      btnLabel: '意味の影を追う',
+      settledLabel: '問いとして置かれた',
+      btnLabel: '影に会い直す',
       pct: ur.meaning,
     },
     {
       key: 'value',
       label: '価値の黒札',
-      desc: '価値判定から、まだ切り離せていない黒札があります。',
-      btnLabel: '価値の黒札を拾う',
+      settledLabel: '本文から離された',
+      btnLabel: '黒札を本文から離す',
       pct: ur.value,
     },
     {
       key: 'satisfaction',
       label: '納得の灰',
-      desc: '納得にならず、灰として残ったものがあります。',
-      btnLabel: '納得の灰を探す',
+      settledLabel: '棚に置かれた',
+      btnLabel: '灰を棚に置き直す',
       pct: ur.satisfaction,
     },
   ];
 
-  var allSettled = TYPES.every(function(t) { return t.pct <= 14; });
+  var allSettled = isAllSettled(fire);
 
   return (
-    <div style={{
-      background: '#0d0f1a', border: '1px solid #2a2340',
-      borderRadius: 12, padding: '18px 16px', marginTop: 12,
-    }}>
-      <p style={{ color: '#4b5563', fontSize: 10, margin: '0 0 10px', letterSpacing: 1 }}>
-        会い直す領域
-      </p>
+    <div className="unreceived-panel">
+      <p className="unreceived-header">火の中に残ったもの</p>
 
-      {/* トイマン */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 14px' }}>
-        <span style={{ fontSize: 16 }}>🔥</span>
-        <span style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.7 }}>
+      <div className="unreceived-toyman">
+        <span className="unreceived-toyman-name">トイマン</span>
+        <span className="unreceived-toyman-line">
           {allSettled ? '「静かに、置かれた」' : '「まだ、残っている」'}
         </span>
       </div>
 
-      {/* 3領域 */}
+      {/* 3つの余熱カード */}
       {TYPES.map(function(t) {
-        var stage = unreceivedStage(t.pct);
         var settled = t.pct <= 14;
+        var stage = unreceivedStage(t.pct);
         return (
-          <div key={t.key} style={{
-            marginBottom: 14,
-            background: '#111318', borderRadius: 8, padding: '12px 13px',
-            border: '1px solid ' + (settled ? '#1e2a1e' : '#2a2340'),
-            opacity: settled ? 0.7 : 1,
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-              <span style={{ color: settled ? '#374151' : '#9ca3af', fontSize: 13 }}>{t.label}</span>
-              <span style={{ color: '#6b7280', fontSize: 11, fontFamily: 'monospace' }}>
-                {t.pct}% / {stage}
-              </span>
+          <div key={t.key} className={'unreceived-card' + (settled ? ' unreceived-card-settled' : '')}>
+            <div className="unreceived-card-header">
+              <span className="unreceived-card-label">{t.label}</span>
+              <span className="unreceived-card-stage">{stage}</span>
             </div>
-            <ProgressBar
-              value={t.pct}
-              color={settled
-                ? 'linear-gradient(90deg, #1e2a1e, #374151)'
-                : 'linear-gradient(90deg, #4c1d95, #7c3aed)'}
-            />
-            <p style={{ color: '#4b5563', fontSize: 11, margin: '6px 0 8px', lineHeight: 1.6 }}>
-              {settled ? 'この領域は、もう火を支配するほどではありません。' : t.desc}
-            </p>
-            {!settled && (
+            {settled ? (
+              <p className="unreceived-card-settled-msg">{t.settledLabel}</p>
+            ) : (
               <button
-                onClick={function() { doReexplore(t.key); }}
-                style={{
-                  padding: '7px 12px', borderRadius: 6, fontSize: 12,
-                  background: 'transparent', border: '1px solid #4c1d95',
-                  color: '#a78bfa', cursor: 'pointer', fontFamily: 'inherit',
-                }}
+                className="unreceived-card-btn"
+                onClick={function() { onReexplore(fire.id, t.key); }}
               >
                 {t.btnLabel}
               </button>
@@ -2341,19 +2357,12 @@ function UnreceivedPanel({ fire, onReexplore, onRest, onReturnToHeart, actionRes
         );
       })}
 
-      {/* 直近の結果を、押した場所のすぐ近くに出す */}
-      {localResult && (
-        <ActionResultPanel result={localResult} onClose={onCloseActionResult} />
-      )}
-
-      {/* 最新再探索ログ */}
-      {fire.unreceivedLogs && fire.unreceivedLogs.length > 0 && (
-        <div style={{ margin: '4px 0 14px', borderTop: '1px solid #1e2230', paddingTop: 10 }}>
-          {fire.unreceivedLogs.slice(0, 3).map(function(l, i) {
+      {/* 会い直した余熱の痕跡 */}
+      {fire.heatTraces && fire.heatTraces.length > 0 && (
+        <div className="unreceived-traces">
+          {fire.heatTraces.slice(-3).map(function(ht, i) {
             return (
-              <p key={i} style={{ color: '#8f9bb3', fontSize: 11, margin: '3px 0', lineHeight: 1.6 }}>
-                ・{l.text}
-              </p>
+              <p key={i} className="unreceived-trace-line">・{ht.traceText}</p>
             );
           })}
         </div>
@@ -2386,12 +2395,8 @@ function UnreceivedPanel({ fire, onReexplore, onRest, onReturnToHeart, actionRes
         return (
           <button
             onClick={cd > 0 ? null : doRest}
-            style={{
-              width: '100%', padding: '10px', borderRadius: 8,
-              background: 'transparent', border: '1px solid #1e2230',
-              color: cd > 0 ? '#374151' : '#8f9bb3', fontSize: 13,
-              cursor: cd > 0 ? 'default' : 'pointer', fontFamily: 'inherit',
-            }}
+            className="unreceived-rest-btn"
+            style={{ color: cd > 0 ? '#374151' : '#8f9bb3', cursor: cd > 0 ? 'default' : 'pointer' }}
           >
             {cd > 0 ? '今日は置いておく（あと' + cd + '秒）' : '今日は置いておく'}
           </button>
@@ -4534,6 +4539,199 @@ function PlaceEncounterScene({ fire, onComplete }) {
   );
 }
 
+// ── HeatRevisitScene ─────────────────────────────────────────────────────────
+// 余熱への会い直し儀式。数値を主役にせず、触れ方と言葉で置き直す。
+var HEAT_REVISIT_DEFS = {
+  meaning: {
+    label: '意味の影',
+    introNarrative: '火の奥に、薄い影が残っていた。',
+    beats: [
+      { who: 'トイマン', charColor: '#7EB8D4', text: 'まだ、何か探している。' },
+      { who: 'コタエ', charColor: '#b0a8cc', text: '問いとして記録できます。\n答えにはしません。' },
+    ],
+    question: 'この火は、何になってほしかったと思いますか？',
+    choices: ['誰かに届くもの', '自分を残すもの', '次へ進むためのもの', '意味があったと思えるもの', 'まだ分からない'],
+    traceLabel: '問い札',
+  },
+  value: {
+    label: '価値の黒札',
+    introNarrative: '黒い札が、火の端に貼りついていた。',
+    beatsIfMet: [
+      { who: '審査官', charColor: '#f87171', text: '確認する。' },
+      { who: 'トイマン', charColor: '#7EB8D4', text: '判決は不要。' },
+      { who: '審査官', charColor: '#f87171', text: 'では、札として分ける。\n本文には戻さない。' },
+    ],
+    beatsIfNotMet: [
+      { who: 'コタエ', charColor: '#b0a8cc', text: 'この札は、本文ではありません。\nいまは仮置きします。' },
+    ],
+    question: 'この火には、どんな黒札が貼られていましたか？',
+    choices: ['数字', '反応', '評価', '収益', '役に立つかどうか', '過去の自分'],
+    traceLabel: '本文から離した黒札',
+  },
+  satisfaction: {
+    label: '納得の灰',
+    introNarrative: '棚の奥に、置き場所のない灰が残っていた。',
+    beatsIfMet: [
+      { who: 'うつろ', charColor: '#9ca3af', text: '終わったね。' },
+      { who: 'トイマン', charColor: '#7EB8D4', text: '消えたのか。' },
+      { who: 'うつろ', charColor: '#9ca3af', text: '違う。\n置き場所がなかっただけ。' },
+    ],
+    beatsIfNotMet: [
+      { who: 'コタエ', charColor: '#b0a8cc', text: 'この灰は、まだ置き場所を探しています。\nいまは棚に仮置きします。' },
+    ],
+    question: 'この火は、本当は何になってほしかったと思いますか？',
+    choices: ['誰かに届くもの', '自分を残すもの', '価値の証明', 'ただ、消えないもの', 'まだ分からない'],
+    traceLabel: '棚に置いた灰',
+  },
+};
+
+var TOUCH_MODES = [
+  { id: '少しだけ触れる', desc: '余熱を少しほどく' },
+  { id: '正面から見る', desc: '余熱を大きくほどく' },
+  { id: '今日はそばに置く', desc: '急がなかった痕跡を残す' },
+];
+
+function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete }) {
+  var def = HEAT_REVISIT_DEFS[heatType];
+  var [phase, setPhase] = _useState('intro'); // intro | touch | choose | trace
+  var [step, setStep] = _useState(0);
+  var [touchMode, setTouchMode] = _useState(null);
+  var [selected, setSelected] = _useState(null);
+  var [visible, setVisible] = _useState(false);
+  var [leaving, setLeaving] = _useState(false);
+
+  _useEffect(function() {
+    var t = setTimeout(function() { setVisible(true); }, 80);
+    return function() { clearTimeout(t); };
+  }, []);
+
+  function doLeave(cb) { setLeaving(true); setTimeout(cb, 620); }
+
+  var beats = def ? (
+    heatType === 'meaning' ? def.beats :
+    (heatType === 'value' ? (metAuditor ? def.beatsIfMet : def.beatsIfNotMet) :
+    (metUtsuro ? def.beatsIfMet : def.beatsIfNotMet))
+  ) : [];
+
+  var atLastBeat = step >= beats.length - 1;
+
+  function advanceIntro() {
+    if (!atLastBeat) setStep(function(s) { return s + 1; });
+    else setPhase('touch');
+  }
+
+  useOverlayKeys({
+    onEnter: leaving ? null
+      : phase === 'intro' ? advanceIntro
+      : phase === 'trace' ? function() { doLeave(function() { onComplete(touchMode, selected); }); }
+      : null,
+    onEscape: (phase === 'touch' || phase === 'choose') ? function() {
+      if (phase === 'choose') { setPhase('touch'); setTouchMode(null); }
+      else doLeave(function() { onComplete(null, null); });
+    } : null,
+  });
+
+  if (!def) return null;
+
+  var wrapCls = 'intro-wrap heat-revisit-wrap' + (visible ? ' intro-visible' : '') + (leaving ? ' intro-leaving' : '');
+  var beat = beats[step] || {};
+  var traceText = selected ? (def.traceLabel + '：' + selected) : '';
+
+  function renderBeatContent(b) {
+    return (
+      <div className="heat-revisit-beat">
+        {b.who && (
+          <p className="heat-revisit-char" style={{ color: b.charColor || '#9aa3b5' }}>{b.who}</p>
+        )}
+        <p className="heat-revisit-line">{b.text}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={wrapCls} onClick={function(e) { e.stopPropagation(); }}>
+      <div className="intro-content">
+
+        {phase === 'intro' && (
+          <div className="heat-revisit-intro intro-content-in">
+            <p className="heat-revisit-label">{def.label}</p>
+            <p className="heat-revisit-narrative">{def.introNarrative}</p>
+            {renderBeatContent(beat)}
+            <div className="intro-btn-row">
+              <button className="intro-btn-fire place-btn heat-btn" onClick={advanceIntro} disabled={leaving}>
+                {atLastBeat ? '触れ方を選ぶ' : '次へ'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === 'touch' && (
+          <div className="heat-revisit-touch intro-content-in">
+            <p className="heat-revisit-label">{def.label}</p>
+            <p className="heat-revisit-question">どのように触れますか？</p>
+            <div className="heat-revisit-touch-opts">
+              {TOUCH_MODES.map(function(tm) {
+                return (
+                  <button key={tm.id} className="heat-revisit-touch-btn" onClick={function() {
+                    setTouchMode(tm.id);
+                    setPhase('choose');
+                  }}>
+                    <span className="heat-revisit-touch-id">{tm.id}</span>
+                    <span className="heat-revisit-touch-desc">{tm.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {phase === 'choose' && (
+          <div className="heat-revisit-choose intro-content-in">
+            <p className="heat-revisit-label">{def.label}</p>
+            <p className="heat-revisit-question">{def.question}</p>
+            <div className="heat-revisit-choices">
+              {def.choices.map(function(c) {
+                return (
+                  <button key={c} className="heat-revisit-choice-btn" onClick={function() {
+                    setSelected(c);
+                    setPhase('trace');
+                  }}>
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {phase === 'trace' && (
+          <div className="heat-revisit-trace intro-content-in">
+            <p className="heat-revisit-label">{def.label}</p>
+            <div className="heat-revisit-trace-box">
+              <p className="heat-revisit-trace-text">{traceText}</p>
+            </div>
+            <p className="heat-revisit-touch-chosen">
+              {touchMode === '今日はそばに置く'
+                ? '急がなかった。それも記録になる。'
+                : '余熱が、少し落ち着いた。'}
+            </p>
+            <div className="intro-btn-row">
+              <button
+                className="intro-btn-fire place-btn heat-btn"
+                onClick={function() { doLeave(function() { onComplete(touchMode, selected); }); }}
+                disabled={leaving}
+              >
+                ここに置いていく
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 // ── FinalReturnScene ─────────────────────────────────────────────────────────
 // 心へ返す署名儀式。記録確認 → 三軸署名 → 返し方の選択 → 完了 or 保留。
 // 灯貨は増やさない。プレイヤーが「言葉」で終点を選ぶ。
@@ -4639,6 +4837,30 @@ function FinalReturnScene({ fire, onReturn, onHold }) {
                   <span className="final-return-value">{pt.traceText}</span>
                 </div>
               )}
+              {fire.heatTraces && fire.heatTraces.length > 0 && (
+                <div className="final-return-row">
+                  <span className="final-return-label">会い直した余熱</span>
+                  {fire.heatTraces.map(function(ht, i) {
+                    return <span key={i} className="final-return-value">{ht.traceText}</span>;
+                  })}
+                </div>
+              )}
+              {(function() {
+                var ur = fire.unreceived || {};
+                var remaining = [];
+                if ((ur.meaning || 0) > 14) remaining.push('意味の影');
+                if ((ur.value || 0) > 14) remaining.push('価値の黒札');
+                if ((ur.satisfaction || 0) > 14) remaining.push('納得の灰');
+                if (remaining.length === 0) return null;
+                return (
+                  <div className="final-return-row">
+                    <span className="final-return-label">まだ残っている余熱</span>
+                    {remaining.map(function(r, i) {
+                      return <span key={i} className="final-return-value">{r}</span>;
+                    })}
+                  </div>
+                );
+              })()}
             </div>
             <div className="intro-btn-row">
               <button className="intro-btn-fire place-btn" onClick={function() { setPhase('sign'); }} disabled={leaving}>
@@ -4795,6 +5017,8 @@ function App() {
   var [placeEncounter, setPlaceEncounter] = _useState(null);
   // 心へ返す署名儀式 — fireId
   var [finalReturnFireId, setFinalReturnFireId] = _useState(null);
+  // 余熱への会い直し儀式 — { fireId, heatType }
+  var [heatRevisitState, setHeatRevisitState] = _useState(null);
   var tickRef = _useRef(null);
 
   // 各ハンドラが常に最新の committed game から実処理できるよう、
@@ -4897,10 +5121,14 @@ function App() {
   }, []);
 
   var handleReexplore = _useCallback(function(fireId, type) {
-    var result = reexploreFire(gameRef.current, fireId, type);
-    if (result.ok) {
-      setGame(result.game);
-      setActionResult(result.actionResult || null);
+    setHeatRevisitState({ fireId: fireId, heatType: type });
+  }, []);
+
+  var handleRevisitHeatDone = _useCallback(function(fireId, heatType, touchMode, selected) {
+    setHeatRevisitState(null);
+    if (touchMode && selected) {
+      var result = revisitHeat(gameRef.current, fireId, heatType, touchMode, selected);
+      if (result.ok) setGame(result.game);
     }
   }, []);
 
@@ -5086,8 +5314,24 @@ function App() {
           />
         );
       })()}
+      {/* 余熱への会い直し儀式 — HeatRevisitScene */}
+      {!introActive && !entrustFireId && !placeEncounter && !finalReturnFireId && heatRevisitState && (function() {
+        var fire = game.fires.find(function(f) { return f.id === heatRevisitState.fireId; });
+        if (!fire) return null;
+        return (
+          <HeatRevisitScene
+            fire={fire}
+            heatType={heatRevisitState.heatType}
+            metAuditor={hasSeenPlaceEncounter(game, 'black_tags')}
+            metUtsuro={hasSeenPlaceEncounter(game, 'back_shelf')}
+            onComplete={function(touchMode, selected) {
+              handleRevisitHeatDone(heatRevisitState.fireId, heatRevisitState.heatType, touchMode, selected);
+            }}
+          />
+        );
+      })()}
       {/* 心へ返す署名儀式 — FinalReturnScene */}
-      {!introActive && !entrustFireId && !placeEncounter && finalReturnFireId && (function() {
+      {!introActive && !entrustFireId && !placeEncounter && !heatRevisitState && finalReturnFireId && (function() {
         var fire = game.fires.find(function(f) { return f.id === finalReturnFireId; });
         if (!fire) return null;
         return (
