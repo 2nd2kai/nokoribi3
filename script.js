@@ -4,7 +4,11 @@
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const SAVE_KEY = 'nokoribi_v2';
+const SAVE_KEY_BAK = 'nokoribi_v2_bak'; // 直前の正常な save の控え。本体が壊れた時の復旧用。
 const SAVE_VERSION = 1;
+// ログ上限。預けた言葉（answers）は決して捨てないが、自動生成される情景ログは古い順に間引く。
+const LOG_CAP_FIRE = 50;  // fire.logs / fire.restLogs の保持上限
+const LOG_CAP_GAME = 100; // 将来 game.logs を持つ場合の保持上限
 const TICK_INTERVAL = 30000; // 30s passive tick
 const PASSIVE_GAIN = 1;
 const BATTLE_GAIN_MIN = 15;
@@ -172,6 +176,12 @@ function rnd() { return Math.random(); }
 
 function pick(arr) { return arr[Math.floor(rnd() * arr.length)]; }
 
+// ログ配列を最新 max 件に保つ（古いものから捨てる）。無限肥大で localStorage を殺さないため。
+function capLog(arr, max) {
+  if (!Array.isArray(arr)) return [];
+  return arr.length > max ? arr.slice(arr.length - max) : arr;
+}
+
 function hasDanger(text) {
   if (!text) return false;
   return FIRE_DANGER_WORDS.some(function(w) { return text.includes(w); });
@@ -182,27 +192,74 @@ function fireTitle(fire) {
   return fire.kindle.slice(0, 20) + (fire.kindle.length > 20 ? '…' : '');
 }
 
-function loadSave() {
+// ひとつの保存スロットを読む。戻り値で状態を区別する:
+//   undefined = ストレージ自体にアクセスできない（プライベートモード等）
+//   null      = 空（まだ何も保存されていない）
+//   false     = 存在するが壊れている（JSON parse 失敗 / ゲームオブジェクトでない）
+//   object    = 復元候補（version 違い・フィールド欠損があっても、ここでは捨てない）
+function readSaveSlot(key) {
+  var raw;
+  try { raw = localStorage.getItem(key); } catch (e) { return undefined; }
+  if (!raw) return null;
+  var parsed;
+  try { parsed = JSON.parse(raw); } catch (e) { return false; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  return parsed;
+}
+
+// 候補オブジェクトを、現行バージョンの起動可能なゲームへ復元する。
+// version 移行 → 欠損補完 の順。途中で例外が出たら null（呼び出し側がバックアップ/初期化へ）。
+function restoreGame(parsed) {
   try {
-    var raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return null;
-    var parsed = JSON.parse(raw);
-    if (parsed.version !== SAVE_VERSION) return null;
-    return migrateGame(parsed);
+    return normalizeGame(migrateGame(parsed));
   } catch (e) {
     return null;
   }
 }
 
+// 預けた火は、簡単には捨てない。
+// 本体が壊れていてもバックアップから復旧を試み、それも駄目な時だけ初期化する。
+function loadSave() {
+  var main = readSaveSlot(SAVE_KEY);
+  // 本体がオブジェクトとして読めた → version 違いでも欠損でも、移行＋補完して使う
+  if (main && typeof main === 'object') {
+    var g = restoreGame(main);
+    if (g) return g;
+  }
+  // 本体が壊れている / 復元に失敗 → 直前の控えから救う
+  var bak = readSaveSlot(SAVE_KEY_BAK);
+  if (bak && typeof bak === 'object') {
+    var gb = restoreGame(bak);
+    if (gb) return gb;
+  }
+  // どちらも無い・両方壊れている時だけ、新しい世界を始める
+  return null;
+}
+
+// 保存結果を必ず返す（呼び出し側が失敗を検知して通知できるように）。
+// { ok: true } / { ok: false, error }
 function persistSave(game) {
+  var json;
   try {
-    var data = Object.assign({}, game, { lastSavedAt: nowISO() });
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-  } catch (e) {}
+    var data = Object.assign({}, game, { version: SAVE_VERSION, lastSavedAt: nowISO() });
+    json = JSON.stringify(data);
+  } catch (e) {
+    return { ok: false, error: e }; // 直列化自体の失敗（循環参照など）
+  }
+  try {
+    localStorage.setItem(SAVE_KEY, json);
+  } catch (e) {
+    return { ok: false, error: e }; // 保存領域不足・書き込み不可
+  }
+  // 本体が書けたら、最後に成功した状態として控えへ複製する（ベストエフォート）。
+  // 控えへの書き込みが失敗しても、本体は保存できているので成功扱い。
+  try { localStorage.setItem(SAVE_KEY_BAK, json); } catch (e) {}
+  return { ok: true };
 }
 
 function clearSave() {
-  localStorage.removeItem(SAVE_KEY);
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  try { localStorage.removeItem(SAVE_KEY_BAK); } catch (e) {}
 }
 
 // ── Game Logic ─────────────────────────────────────────────────────────────
@@ -316,15 +373,18 @@ function createFire(kindle, pain, writeState, feeling, metrics) {
 }
 
 // 旧セーブの fire に新フィールドを補完する
-function migrateFire(f) {
+// 1つの火の欠損フィールドを補完する（バージョン移行ではなく正規化）。
+function normalizeFire(f) {
+  if (!f || typeof f !== 'object') return createFire('', '', '', '', null);
   if (f.questionProgress === undefined) {
     f.questionProgress = f.progress || 0;
   }
   if (f.gardenProgress === undefined) {
     f.gardenProgress = Math.min(50, f.questionProgress);
   }
-  if (!f.logs) f.logs = [];
-  if (!f.restLogs) f.restLogs = [];
+  // 情景ログは最新 LOG_CAP_FIRE 件まで（古い save の肥大も load 時にここで healing する）。
+  f.logs = capLog(f.logs || [], LOG_CAP_FIRE);
+  f.restLogs = capLog(f.restLogs || [], LOG_CAP_FIRE);
   if (f.watchCount === undefined) f.watchCount = 0;
   if (f.restCount === undefined) f.restCount = 0;
   if (!f.unreceived) f.unreceived = initUnreceived(f.metrics);
@@ -355,8 +415,41 @@ function migrateFire(f) {
   return f;
 }
 
+// ── バージョン移行 ────────────────────────────────────────────────────────────
+// migrateGame: 古い save version を、現在の SAVE_VERSION の構造へ段階的に変換する。
+//   各 step は「version N → N+1」の構造変換だけを担当する（フィールド名変更・統合・分割など）。
+//   欠損フィールドの補完は normalizeGame の責務。ここでは作り替えのみ行う。
+//   ここを必ず通すことで、SAVE_VERSION を上げても既存の火は決して捨てられない。
+var SAVE_MIGRATIONS = {
+  // 0 → 1: version フィールドが無かった最初期の save。
+  //   v1 と構造はほぼ同じなので作り替えるものは無い（欠損は normalize が補う）。
+  0: function(g) { return g; },
+  // 1 → 2: 将来 SAVE_VERSION を 2 に上げる時、ここに 1→2 の構造変換を書く。
+  //   例) 1: function(g) { g.newField = g.oldField; delete g.oldField; return g; },
+};
+
 function migrateGame(g) {
-  if (!g) return g;
+  if (!g || typeof g !== 'object' || Array.isArray(g)) return g;
+  // version が無い古いデータは 0 とみなす（捨てずに 0→…→現行へ上げる）。
+  var v = (typeof g.version === 'number' && g.version >= 0) ? g.version : 0;
+  var guard = 0;
+  while (v < SAVE_VERSION && guard++ < 1000) {
+    var step = SAVE_MIGRATIONS[v];
+    if (typeof step === 'function') {
+      var next = step(g);
+      if (next) g = next;
+    }
+    v += 1;
+  }
+  g.version = SAVE_VERSION;
+  return g;
+}
+
+// ── 正規化（欠損フィールド補完） ──────────────────────────────────────────────
+// normalizeGame: 現在の構造に対して、欠けているフィールドを既定値で補う。
+//   バージョンに依存しない。壊れた save・古い save でも App が起動できる形に整える。
+function normalizeGame(g) {
+  if (!g || typeof g !== 'object') return initGame();
   // 旧セーブ・破損セーブに備えてトップレベルを先に補完する
   if (!g.unlocks || typeof g.unlocks !== 'object') g.unlocks = {};
   if (!g.toyman || typeof g.toyman !== 'object') g.toyman = { location: 'starting_room', state: 'waiting' };
@@ -386,7 +479,9 @@ function migrateGame(g) {
   if (!Array.isArray(g.relationshipNotes)) g.relationshipNotes = [];
   if (!('activeEncounter' in g)) g.activeEncounter = null;
   if (!g.toka) g.toka = 0;
-  g.fires = (g.fires || []).map(migrateFire);
+  g.fires = (Array.isArray(g.fires) ? g.fires : []).map(normalizeFire);
+  // 将来 game.logs を持つ場合の保険（無ければ何もしない）。預けた火の記録は触らない。
+  if (Array.isArray(g.logs)) g.logs = capLog(g.logs, LOG_CAP_GAME);
   // 既存の灯守り状態を推測
   if (!g.tinyfolk.lightkeeper && g.fires.length > 0) {
     g.tinyfolk.lightkeeper = true;
@@ -416,7 +511,7 @@ function makeQuestion(fire) {
 }
 
 function addLog(fire, text) {
-  fire.logs = (fire.logs || []).concat([{ text: text, at: nowISO() }]);
+  fire.logs = capLog((fire.logs || []).concat([{ text: text, at: nowISO() }]), LOG_CAP_FIRE);
 }
 
 function addGardenItem(game, item) {
@@ -1077,7 +1172,7 @@ function restToday(game, fireId) {
   fire.restCount = (fire.restCount || 0) + 1;
   fire.lastRestAt = nowISO();
   var logText = pick(REST_LOGS);
-  fire.restLogs = (fire.restLogs || []).concat([{ text: logText, at: nowISO() }]);
+  fire.restLogs = capLog((fire.restLogs || []).concat([{ text: logText, at: nowISO() }]), LOG_CAP_FIRE);
   addLog(fire, logText);
   // 休ませることも灯貨稼ぎではない。火のそばに痕跡だけが残る。
   ns.materials = safeMat(ns.materials);
@@ -3403,6 +3498,21 @@ function DevBar({ game, onReset, onForceFound, onAddBattle, onReplayIntro }) {
   );
 }
 
+// 保存失敗を、世界観を壊さずに伝える通知。コタエの声で一度だけ。
+function SaveErrorNotice({ onDismiss }) {
+  return (
+    <div className="save-error-notice" role="alert">
+      <div className="save-error-card">
+        <span className="save-error-name">コタエ</span>
+        <p className="save-error-line">保存に失敗しました。</p>
+        <p className="save-error-line">この火は、まだ安全に記録できていません。</p>
+        <p className="save-error-sub">ブラウザの保存領域が足りない可能性があります。</p>
+        <button className="save-error-btn" onClick={onDismiss}>とじる</button>
+      </div>
+    </div>
+  );
+}
+
 function MilestoneDialog({ milestone, onClose }) {
   var [step, setStep] = _useState(0);
   var lines = milestone.lines;
@@ -3671,6 +3781,9 @@ function App() {
   var [milestoneDialog, setMilestoneDialog] = _useState(null);
   // 受領証閲覧: RecordTower「受領証を見る」用
   var [activeReceiptView, setActiveReceiptView] = _useState(null); // fireId
+  // 保存失敗の通知。一度だけ出す（連続失敗で何度も出さない）。
+  var [saveError, setSaveError] = _useState(false);
+  var saveErrorShownRef = _useRef(false);
   var tickRef = _useRef(null);
 
   // 各ハンドラが常に最新の committed game から実処理できるよう、
@@ -3680,7 +3793,12 @@ function App() {
   gameRef.current = game;
 
   _useEffect(function() {
-    persistSave(game);
+    var res = persistSave(game);
+    // 保存に失敗したら、世界の言葉で一度だけ知らせる（黙殺しない）。
+    if (res && !res.ok && !saveErrorShownRef.current) {
+      saveErrorShownRef.current = true;
+      setSaveError(true);
+    }
   }, [game]);
 
   // actionResult は一時通知。タブ（screen）を切り替えたら消す。
@@ -4018,6 +4136,9 @@ function App() {
           </div>
         );
       })()}
+      {saveError && (
+        <SaveErrorNotice onDismiss={function() { setSaveError(false); }} />
+      )}
       <DevBar
         game={game}
         onReset={handleReset}
