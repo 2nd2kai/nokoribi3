@@ -176,6 +176,15 @@ const CRISIS_WORDS = [
   'killmyself', 'suicide', 'wanttodie', 'endmylife', 'iwanttodie',
 ];
 
+// 支援案内。番号や文言が将来変わってもここ一箇所だけ直せばよいようにまとめる。
+// コード中に散らばらせない。
+const SUPPORT_INFO = {
+  lead: 'もし今、つらくて誰かに話したいとき。',
+  name: 'よりそいホットライン',
+  number: '0120-279-338',
+  sub: '24時間・通話無料。ひとりで抱えなくて大丈夫です。',
+};
+
 // ── Utilities ──────────────────────────────────────────────────────────────
 
 function nowISO() { return new Date().toISOString(); }
@@ -386,6 +395,7 @@ function createFire(kindle, pain, writeState, feeling, metrics) {
     watchCount: 0,
     restCount: 0,
     shadowVoiceIdx: 0,
+    discoverySeen: false,
     logs: [],
     restLogs: [],
     unreceived: initUnreceived(met),
@@ -418,6 +428,12 @@ function normalizeFire(f) {
   f.restLogs = capLog(f.restLogs || [], LOG_CAP_FIRE);
   if (f.watchCount === undefined) f.watchCount = 0;
   if (f.restCount === undefined) f.restCount = 0;
+  // 発見シーンを見たか。旧 save で既に受領段階以降の火は「見た」とみなし、
+  // まだ found のままの火は未見（= 復帰時に一度だけ発見シーンを見せる）。
+  if (f.discoverySeen === undefined) {
+    f.discoverySeen = (f.status === 'receiving' || f.status === 'received' ||
+                       f.status === 'returned' || f.status === 'held');
+  }
   if (!f.unreceived) f.unreceived = initUnreceived(f.metrics);
   if (!f.unreceivedLogs) f.unreceivedLogs = [];
   if (!f.reexploreCounts) f.reexploreCounts = { meaning: 0, value: 0, satisfaction: 0 };
@@ -1570,15 +1586,15 @@ function CrisisHold({ onHold, onProceed, proceedLabel }) {
           <p className="crisis-soft">今は、答えを出さなくていい。<br />今は、決めなくていい。</p>
         </div>
         <div className="crisis-support">
-          <p className="crisis-support-lead">もし今、つらくて誰かに話したいとき。</p>
-          <p className="crisis-support-name">よりそいホットライン</p>
-          <p className="crisis-support-num">0120-279-338</p>
-          <p className="crisis-support-sub">24時間・通話無料。ひとりで抱えなくて大丈夫です。</p>
+          <p className="crisis-support-lead">{SUPPORT_INFO.lead}</p>
+          <p className="crisis-support-name">{SUPPORT_INFO.name}</p>
+          <p className="crisis-support-num">{SUPPORT_INFO.number}</p>
+          <p className="crisis-support-sub">{SUPPORT_INFO.sub}</p>
         </div>
         <button className="crisis-hold-btn" onClick={onHold}>今は、ここに置いておく</button>
         {onProceed && (
           <button className="crisis-proceed-btn" onClick={onProceed}>
-            それでも、{proceedLabel || '置く'}
+            {proceedLabel || '内容を確認して、進む'}
           </button>
         )}
       </div>
@@ -1610,7 +1626,7 @@ function ShadowPanel({ fire, onAnswer, onWatch, onSkip }) {
       <CrisisHold
         onHold={function() { setCrisisHold(false); }}
         onProceed={function() { setCrisisHold(false); doAnswer(); }}
-        proceedLabel="向き合う"
+        proceedLabel="内容を確認して、向き合う"
       />
     );
   }
@@ -1734,7 +1750,7 @@ function FireInputForm({ onSubmit, onCancel }) {
     if (step === 0 && !kindle.trim()) return;
     // 言葉を置く前（step0→1）に検知する。書いている途中は遮らない。
     if (step === 0 && (hasDanger(kindle) || hasDanger(pain))) {
-      triggerCrisis(function() { setStep(1); }, 'つづける');
+      triggerCrisis(function() { setStep(1); }, '内容を確認して、つづける');
       return;
     }
     setStep(function(s) { return s + 1; });
@@ -1748,7 +1764,7 @@ function FireInputForm({ onSubmit, onCancel }) {
     if (!kindle.trim()) return;
     // 火に「置く」瞬間に再チェック（貼り付け・遷移の取りこぼしを拾う）。
     if (hasDanger(kindle) || hasDanger(pain)) {
-      triggerCrisis(function() { doLight(); }, '火に置く');
+      triggerCrisis(function() { doLight(); }, '内容を確認して、火に置く');
       return;
     }
     doLight();
@@ -3844,6 +3860,106 @@ function EntrustScene({ fire, onDone }) {
   );
 }
 
+// ── DiscoveryScene ───────────────────────────────────────────────────────────
+// 問いの欠片を見つけた瞬間。found 状態の初回だけ、森の奥での発見を場面にする。
+// IntroScene の「……さがしたよ」（入口・火を迎えに来た言葉）に対して、
+// ここは「……みつけた」（発見・問いの欠片を掘り当てた言葉）。役割を分ける。
+
+var DISCOVERY_NARRATIVE_LINES = [
+  '森の奥で、火が一度だけ強く揺れた。',
+  '',
+  '影の声が遠のく。',
+  '残っていた問いが、火の中でかすかに形を持った。',
+];
+
+var DISCOVERY_TOYMAN_LINES = [
+  '……みつけた。',
+  '答えじゃない。\nでも、欠片はあった。',
+  '記録塔へ運ぶ。',
+];
+
+function DiscoveryScene({ fire, onDeliver }) {
+  var [step, setStep] = _useState(0);
+  var [visible, setVisible] = _useState(false);
+  var [leaving, setLeaving] = _useState(false);
+
+  _useEffect(function() {
+    var t = setTimeout(function() { setVisible(true); }, 80);
+    return function() { clearTimeout(t); };
+  }, []);
+
+  function advance() {
+    if (step < DISCOVERY_TOYMAN_LINES.length) {
+      setStep(function(s) { return s + 1; });
+    }
+  }
+
+  function handleDeliver() {
+    // 暗転してから記録塔（受領の旅）へ。EntrustScene と同じ呼吸で繋ぐ。
+    setLeaving(true);
+    setTimeout(function() { onDeliver(); }, 620);
+  }
+
+  var isNarrative = step === 0;
+  var toymanIdx = step - 1; // 0-based index into DISCOVERY_TOYMAN_LINES
+  var isFinal = step === DISCOVERY_TOYMAN_LINES.length;
+
+  // 火の中で形を持ちかけた問い。かすかに見せる（受領の旅で本格的に向き合う）。
+  var q = (fire && fire.question) ? fire.question : '';
+
+  return (
+    <div
+      className={'intro-scene discovery-scene' + (leaving ? ' entrust-leaving' : '')}
+      onClick={!isFinal && !leaving ? advance : undefined}
+    >
+      <div className="intro-fire-glow discovery-fire-glow" />
+
+      {q && (
+        <p className="discovery-question">「{q}」</p>
+      )}
+
+      <div key={step} className={'intro-content' + (visible ? ' intro-content-in' : '')}>
+        {isNarrative && (
+          <div className="intro-narrative">
+            {DISCOVERY_NARRATIVE_LINES.map(function(line, i) {
+              if (!line) return React.createElement('div', { key: i, style: { height: 10 } });
+              return (
+                <p key={i} className="intro-narrative-line">{line}</p>
+              );
+            })}
+          </div>
+        )}
+
+        {!isNarrative && (
+          <div className="intro-toyman-block">
+            <span className="intro-toyman-label">トイマン</span>
+            <p className="intro-toyman-line">
+              {DISCOVERY_TOYMAN_LINES[toymanIdx].split('\n').map(function(seg, si) {
+                return React.createElement(React.Fragment, { key: si },
+                  si > 0 && React.createElement('br', null),
+                  seg
+                );
+              })}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="intro-btn-row" onClick={function(e) { e.stopPropagation(); }}>
+        {isFinal ? (
+          <button className="intro-btn-fire discovery-btn" onClick={handleDeliver} disabled={leaving}>
+            記録塔へ届ける
+          </button>
+        ) : (
+          <button className="intro-btn-next" onClick={advance}>
+            つづき
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -3917,7 +4033,11 @@ function App() {
     if (result.ok) {
       setGame(result.game);
       setActionResult(result.actionResult || null);
-      if (result.milestone) setMilestoneDialog(result.milestone);
+      // 問いの欠片を見つけた瞬間は DiscoveryScene が引き受ける。
+      // 節目ダイアログと二重に被せない（found に達した戦闘では milestone を出さない）。
+      if (result.milestone && result.fire && result.fire.status !== 'found') {
+        setMilestoneDialog(result.milestone);
+      }
     }
   }, []);
 
@@ -3926,6 +4046,20 @@ function App() {
     if (result.ok) {
       setGame(result.game);
       setReceiptJourney({ fireId: fireId, phase: 'journey' });
+    }
+  }, []);
+
+  // 発見シーンの「記録塔へ届ける」。発見済みフラグを立て、そのまま受領の旅へ運ぶ。
+  var handleDeliverToTower = _useCallback(function(fireId) {
+    var g = cloneS(gameRef.current);
+    var fire = g.fires.find(function(f) { return f.id === fireId; });
+    if (fire) fire.discoverySeen = true;
+    var result = beginReceiptJourney(g, fireId);
+    if (result.ok) {
+      setGame(result.game);
+      setReceiptJourney({ fireId: fireId, phase: 'journey' });
+    } else {
+      setGame(g); // 旅に入れなくても、発見済みフラグだけは残す
     }
   }, []);
 
@@ -4078,6 +4212,17 @@ function App() {
               setEntrustFireId(null);
               setScreen('garden');
             }}
+          />
+        );
+      })()}
+      {/* 発見シーン — found の初回だけ。バナーではなく場面で迎える。 */}
+      {!introActive && !entrustFireId && !receiptJourney && (function() {
+        var fire = game.fires.find(function(f) { return f.status === 'found' && !f.discoverySeen; });
+        if (!fire) return null;
+        return (
+          <DiscoveryScene
+            fire={fire}
+            onDeliver={function() { handleDeliverToTower(fire.id); }}
           />
         );
       })()}

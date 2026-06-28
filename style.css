@@ -5034,3 +5034,32 @@ html,body{
   font-size:12px;cursor:pointer;font-family:inherit;letter-spacing:.03em;
 }
 .crisis-proceed-btn:hover{color:#7a8699;text-decoration:underline}
+
+/* ── DiscoveryScene（問いの欠片を見つけた場面）── */
+@keyframes discoveryPulse{
+  0%{opacity:.85;transform:scale(1)}
+  18%{opacity:1;transform:scale(1.28) translateY(-3px)}
+  40%{opacity:.78;transform:scale(.98)}
+  100%{opacity:.9;transform:scale(1)}
+}
+/* 「火が一度だけ強く揺れた」— 通常の揺らぎに加え、入場時に一度だけ強く脈打つ */
+.discovery-fire-glow{
+  margin-bottom:24px;
+  animation:fireFlicker 2.8s ease-in-out infinite,fireGlow 3.2s ease-in-out infinite,discoveryPulse 1.6s ease-out 1;
+}
+.discovery-question{
+  color:#b3a6e0;font-size:13px;line-height:1.9;
+  max-width:300px;text-align:center;margin:0 0 40px;
+  font-style:italic;letter-spacing:.03em;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  opacity:0;animation:introFadeIn 1s ease .3s both;
+  text-shadow:0 0 18px rgba(124,58,237,.14);
+}
+/* 記録塔へ向かう一歩。紫を差して、コタエ/記録塔の領域を予感させる。 */
+.discovery-btn{
+  border-color:#5b21b6;background:rgba(91,33,182,.1);color:#c4b5fd;
+}
+.discovery-btn:hover{
+  background:rgba(91,33,182,.2);box-shadow:0 0 24px 4px rgba(167,139,250,.16);
+}
+.discovery-btn:disabled{opacity:.4;cursor:default;box-shadow:none}
