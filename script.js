@@ -600,6 +600,26 @@ function dismissEncounter(game) {
   return ns;
 }
 
+// 受領証発行儀式の完了時に worldNotes / relationshipNotes を保存する（重複防止）。
+// kotae_first_receive をマーカーとして使う（EncounterDialog は発火しない）。
+function saveReceiptNotes(game) {
+  if ((game.seenEncounters || []).includes('kotae_first_receive')) return game;
+  var ns = cloneS(game);
+  ns.seenEncounters = (ns.seenEncounters || []).concat(['kotae_first_receive']);
+  ns.worldNotes = (ns.worldNotes || []).concat([{
+    id: 'receipt_ceremony',
+    text: '記録塔：トイマンが持ち帰った問いの欠片を、受領証として保存する場所。',
+    at: nowISO(),
+  }]);
+  ns.relationshipNotes = (ns.relationshipNotes || []).concat([{
+    id: 'receipt_ceremony',
+    characterId: 'toyman_kotae',
+    text: 'トイマンは問いの欠片を持ち帰る。コタエは、それを消えない形で記録する。',
+    at: nowISO(),
+  }]);
+  return ns;
+}
+
 var AUTO_VISUAL_EVENTS = [
   {
     type: 'auto', work: '守る', actor: 'lightkeeper', trace: null,
@@ -1848,7 +1868,6 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
             onClick={function() {
               onReceive(selected.id, receiveAnswer);
               setReceiveAnswer('');
-              setPhase('unreceived');
             }}
             style={{
               width: '100%', marginTop: 12, padding: '11px 0', borderRadius: 8,
@@ -1856,7 +1875,7 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
               fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
             }}
           >
-            受け取る
+            受領証を発行する
           </button>
         </div>
       )}
@@ -1875,7 +1894,7 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
   );
 }
 
-function RecordTower({ game, onGoUnreceived }) {
+function RecordTower({ game, onGoUnreceived, onViewReceipt }) {
   var records = game.fires.filter(function(f) {
     return f.status === 'received' || f.status === 'held' || f.status === 'returned';
   });
@@ -1909,21 +1928,128 @@ function RecordTower({ game, onGoUnreceived }) {
                 → {fire.answer}
               </p>
             )}
-            {fire.status === 'received' && onGoUnreceived && (
-              <button
-                onClick={function() { onGoUnreceived(fire.id); }}
-                style={{
-                  marginTop: 4, padding: '6px 12px', borderRadius: 7,
-                  background: 'transparent', border: '1px solid #4c1d95',
-                  color: '#a78bfa', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >
-                未受領領域へ進む →
-              </button>
-            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+              {onViewReceipt && fire.receipt && (
+                <button
+                  onClick={function() { onViewReceipt(fire.id); }}
+                  style={{
+                    padding: '5px 11px', borderRadius: 7,
+                    background: 'transparent', border: '1px solid #2a2340',
+                    color: '#6b7280', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  受領証を見る
+                </button>
+              )}
+              {fire.status === 'received' && onGoUnreceived && (
+                <button
+                  onClick={function() { onGoUnreceived(fire.id); }}
+                  style={{
+                    padding: '5px 11px', borderRadius: 7,
+                    background: 'transparent', border: '1px solid #4c1d95',
+                    color: '#a78bfa', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  未受領領域へ進む →
+                </button>
+              )}
+            </div>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── 受領証カード ────────────────────────────────────────────────────────────
+
+function ReceiptCard({ fire, buttonLabel, onAction }) {
+  var receipt = fire.receipt;
+  var issuedDate = receipt ? new Date(receipt.issuedAt) : new Date(fire.receivedAt || fire.updatedAt);
+  var dateStr = issuedDate.getFullYear() + '/' +
+    String(issuedDate.getMonth() + 1).padStart(2, '0') + '/' +
+    String(issuedDate.getDate()).padStart(2, '0');
+
+  return (
+    <div className="receipt-card">
+      <p className="receipt-title">受領証</p>
+      <p className="receipt-subtitle">この残り火は、受領されました。</p>
+
+      <div className="receipt-row">
+        <p className="receipt-label">問い</p>
+        <p className="receipt-value">「{fire.question || '—'}」</p>
+      </div>
+
+      <div className="receipt-row">
+        <p className="receipt-label">残り火</p>
+        <p className="receipt-value receipt-ember">「{fire.kindle}」</p>
+      </div>
+
+      <div className="receipt-meta">
+        <span className="receipt-meta-item">持ち帰った者：トイマン</span>
+        <span className="receipt-meta-item">記録した者：コタエ</span>
+        <span className="receipt-meta-item">発行日：{dateStr}</span>
+      </div>
+
+      <button className="receipt-btn" onClick={onAction}>
+        {buttonLabel || '未受領領域へ進む'}
+      </button>
+    </div>
+  );
+}
+
+// ── 受領証発行儀式 ───────────────────────────────────────────────────────────
+
+var CEREMONY_LINES = [
+  { speaker: 'toyman', color: '#fb923c', name: 'トイマン', place: '記録塔の入口',
+    text: '戻った。' },
+  { speaker: 'toyman', color: '#fb923c', name: 'トイマン', place: '記録塔の入口',
+    text: '答えではない。\nでも、欠片はあった。' },
+  { speaker: 'kotae',  color: '#a78bfa', name: 'コタエ',   place: '記録塔の入口',
+    text: 'ノコリビ、確認しました。\nデータ取得中。' },
+  { speaker: 'kotae',  color: '#a78bfa', name: 'コタエ',   place: '記録塔の入口',
+    text: 'これは答えではありません。\n問いの欠片です。' },
+  { speaker: 'toyman', color: '#fb923c', name: 'トイマン', place: '記録塔',
+    text: '消すな。' },
+  { speaker: 'kotae',  color: '#a78bfa', name: 'コタエ',   place: '記録塔',
+    text: '消しません。\n記録します。' },
+  { speaker: 'toyman', color: '#fb923c', name: 'トイマン', place: '記録塔',
+    text: 'なら、預ける。' },
+  { speaker: 'kotae',  color: '#a78bfa', name: 'コタエ',   place: '記録塔',
+    text: '受領証を発行します。' },
+  { speaker: 'receipt', color: null, name: null, place: '記録塔', text: null },
+];
+
+function ReceiptCeremony({ fire, onComplete }) {
+  var [idx, setIdx] = _useState(0);
+  var line = CEREMONY_LINES[idx];
+  var isReceipt = line.speaker === 'receipt';
+
+  function advance() {
+    if (!isReceipt) setIdx(function(i) { return i + 1; });
+  }
+
+  return (
+    <div className="kotae-ov" onClick={advance}>
+      <div className="kotae-sheet" onClick={function(e) { e.stopPropagation(); }}>
+        <div className="kotae-grip" />
+        <p style={{ color: '#4b5563', fontSize: 10, margin: '0 0 8px', letterSpacing: 1 }}>
+          {line.place}
+        </p>
+
+        {!isReceipt ? (
+          <div>
+            <div className="kotae-head">
+              <span className="kotae-dot" style={{ background: line.color }} />
+              <span className="kotae-name" style={{ color: line.color }}>{line.name}</span>
+            </div>
+            <p className="kotae-line kotae-line-now">{line.text}</p>
+            <button className="kotae-btn" onClick={advance}>▽ つづき</button>
+          </div>
+        ) : (
+          <ReceiptCard fire={fire} buttonLabel="未受領領域へ進む" onAction={onComplete} />
+        )}
+      </div>
     </div>
   );
 }
@@ -2399,11 +2525,9 @@ function ActionResultPanel({ result, onClose }) {
   );
 }
 
-function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestToday, onReceive, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived, onReturnToHeart, actionResult, onCloseActionResult, activeUnreceivedFireId }) {
+function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestToday, onReceive, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived, onReturnToHeart, actionResult, onCloseActionResult, activeUnreceivedFireId, onGoUnreceivedFromTower, onViewReceipt }) {
   var [recordOpen, setRecordOpen] = _useState(false);
   var [shadowOpen, setShadowOpen] = _useState(false);
-  var [inlineReceiveOpen, setInlineReceiveOpen] = _useState(false);
-  var [inlineReceiveAnswer, setInlineReceiveAnswer] = _useState('');
   var [localSelectedReceivedId, setLocalSelectedReceivedId] = _useState(null);
 
   var sf       = game.fires.find(function(f) { return f.status === 'searching'; });
@@ -2490,83 +2614,27 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
         onClose={onCloseActionResult}
       />
 
-      {/* 問いが見つかった（箱庭でそのまま受け取れる） */}
+      {/* 問いが見つかった — 受領証発行へ */}
       {found && !sf && (
         <div className="found-banner">
-          <p className="found-banner-label">問いの欠片が届いています</p>
+          <p className="found-banner-label">問いの欠片が届いています。</p>
           <p className="found-banner-question">{found.question}</p>
-          {!inlineReceiveOpen ? (
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <button
-                onClick={function() { setInlineReceiveOpen(true); }}
-                style={{
-                  flex: 1, padding: '9px 0', borderRadius: 8,
-                  background: '#4c1d95', border: 'none', color: '#ede9fe',
-                  fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
-                }}
-              >
-                この場で受け取る
-              </button>
-              {onGoShelf && (
-                <button
-                  onClick={onGoShelf}
-                  style={{
-                    padding: '9px 14px', borderRadius: 8,
-                    background: 'transparent', border: '1px solid #2e3348',
-                    color: '#9ca3af', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  棚で見る
-                </button>
-              )}
-            </div>
-          ) : (
-            <div style={{ marginTop: 10 }}>
-              <label style={{ color: '#9ca3af', fontSize: 12, display: 'block', marginBottom: 6 }}>
-                答え（任意）
-              </label>
-              <textarea
-                value={inlineReceiveAnswer}
-                onChange={function(e) { setInlineReceiveAnswer(e.target.value); }}
-                placeholder="今思うことを書いてもいい。書かなくてもいい。"
-                rows={3}
-                autoFocus
-                style={{
-                  width: '100%', boxSizing: 'border-box',
-                  background: '#1a1a2e', border: '1px solid #3d2d5c',
-                  borderRadius: 8, padding: '10px 12px',
-                  color: '#e2e4ee', fontSize: 14, resize: 'vertical',
-                  fontFamily: 'inherit', lineHeight: 1.6,
-                }}
-              />
-              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <button
-                  onClick={function() {
-                    onReceive(found.id, inlineReceiveAnswer);
-                    setInlineReceiveAnswer('');
-                    setInlineReceiveOpen(false);
-                  }}
-                  style={{
-                    flex: 1, padding: '10px 0', borderRadius: 8,
-                    background: '#4c1d95', border: 'none', color: '#ede9fe',
-                    fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
-                  }}
-                >
-                  受け取る
-                </button>
-                <button
-                  onClick={function() { setInlineReceiveOpen(false); setInlineReceiveAnswer(''); }}
-                  style={{
-                    padding: '10px 14px', borderRadius: 8,
-                    background: 'transparent', border: '1px solid #2e3348',
-                    color: '#6b7280', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  戻る
-                </button>
-              </div>
-            </div>
-          )}
+          <p style={{ color: '#6b7280', fontSize: 12, lineHeight: 1.8, margin: '8px 0 14px' }}>
+            トイマンが、火の奥から問いの欠片を持ち帰りました。<br />
+            まだ答えではありません。<br />
+            まず、受領証として記録します。
+          </p>
+          <button
+            onClick={function() { onReceive(found.id, ''); }}
+            style={{
+              width: '100%', padding: '12px 0', borderRadius: 8,
+              background: '#4c1d95', border: 'none', color: '#ede9fe',
+              fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
+              letterSpacing: 0.5,
+            }}
+          >
+            受領証を発行する
+          </button>
         </div>
       )}
 
@@ -2656,7 +2724,11 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
               <span className="record-tower-header-title">🗼 記録塔</span>
               <button className="record-tower-close" onClick={function() { setRecordOpen(false); }}>閉じる</button>
             </div>
-            <RecordTower game={game} onGoUnreceived={function() { setRecordOpen(false); }} />
+            <RecordTower
+              game={game}
+              onGoUnreceived={function(fid) { setRecordOpen(false); onGoUnreceivedFromTower(fid); }}
+              onViewReceipt={onViewReceipt}
+            />
           </div>
         )
       )}
@@ -2954,6 +3026,10 @@ function App() {
   var [kotaeDialog, setKotaeDialog] = _useState(null); // { fireId, kind }
   var [activeUnreceivedFireId, setActiveUnreceivedFireId] = _useState(null);
   var [actionResult, setActionResult] = _useState(null);
+  // 受領証発行儀式: ReceiptCeremony を表示するための state
+  var [activeReceiptCeremony, setActiveReceiptCeremony] = _useState(null); // { fireId }
+  // 受領証閲覧: RecordTower「受領証を見る」用
+  var [activeReceiptView, setActiveReceiptView] = _useState(null); // fireId
   var tickRef = _useRef(null);
 
   // 各ハンドラが常に最新の committed game から実処理できるよう、
@@ -2999,15 +3075,10 @@ function App() {
   var handleReceive = _useCallback(function(fireId, answer) {
     var result = receiveFire(gameRef.current, fireId, answer);
     if (result.ok) {
-      var ng = triggerEncounter(result.game, 'kotae_first_receive', { fireId: fireId });
-      setGame(ng);
+      setGame(result.game);
       setActionResult(result.actionResult || null);
-      if (ng.activeEncounter) {
-        // EncounterDialog が閉じた後に garden_unreceived ナビを行う（onConfirm 内）
-      } else {
-        // 2回目以降はコタエ会話（旧フロー）
-        setKotaeDialog({ fireId: fireId, kind: 'receive' });
-      }
+      // 受領は常に ReceiptCeremony — KotaeDialog / EncounterDialog は使わない
+      setActiveReceiptCeremony({ fireId: fireId });
     }
   }, []);
 
@@ -3154,6 +3225,8 @@ function App() {
           actionResult={actionResult}
           onCloseActionResult={closeActionResult}
           activeUnreceivedFireId={activeUnreceivedFireId}
+          onGoUnreceivedFromTower={function(fid) { setActiveUnreceivedFireId(fid); }}
+          onViewReceipt={function(fid) { setActiveReceiptView(fid); }}
         />
       )}
       {kotaeDialog && (
@@ -3186,6 +3259,43 @@ function App() {
           }}
         />
       )}
+
+      {/* 受領証発行儀式 — 常に最前面 */}
+      {activeReceiptCeremony && (function() {
+        var fire = gameRef.current.fires.find(function(f) { return f.id === activeReceiptCeremony.fireId; });
+        if (!fire) return null;
+        return (
+          <ReceiptCeremony
+            fire={fire}
+            onComplete={function() {
+              var fid = activeReceiptCeremony.fireId;
+              setActiveReceiptCeremony(null);
+              // worldNotes / relationshipNotes を保存（初回のみ）
+              setGame(function(prev) { return saveReceiptNotes(prev); });
+              setActiveUnreceivedFireId(fid);
+              setScreen('garden');
+            }}
+          />
+        );
+      })()}
+
+      {/* 受領証閲覧 — RecordTower「受領証を見る」から */}
+      {activeReceiptView && (function() {
+        var fire = gameRef.current.fires.find(function(f) { return f.id === activeReceiptView; });
+        if (!fire) return null;
+        return (
+          <div className="kotae-ov" onClick={function() { setActiveReceiptView(null); }}>
+            <div className="kotae-sheet" onClick={function(e) { e.stopPropagation(); }}>
+              <div className="kotae-grip" />
+              <ReceiptCard
+                fire={fire}
+                buttonLabel="閉じる"
+                onAction={function() { setActiveReceiptView(null); }}
+              />
+            </div>
+          </div>
+        );
+      })()}
       <DevBar
         game={game}
         onReset={handleReset}
