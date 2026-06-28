@@ -524,7 +524,7 @@ var ENCOUNTER_DEFS = {
     lines: [
       'ノコリビ、受領しました。',
       'これは答えではありません。\n問いの欠片です。',
-      '意味の影、価値の黒札、満足の灰。\nまだ受け取れていないものがあります。',
+      '意味の影、価値の黒札、納得の灰。\nまだ受け取れていないものがあります。',
       'ここに記録します。\n消えることはありません。',
     ],
     worldNote: '記録塔は、受け取られた問いを保管する場所だ。コタエがひとりで守っている。',
@@ -681,12 +681,12 @@ var STAGE_CHANGE_MESSAGES = {
   },
   satisfaction: {
     '薄い影': '灰の中に、かすかな熱が残っているのが見えた。',
-    '残り火': '満足の灰の中に、未完の種が見えた。',
+    '残り火': '納得の灰の中に、未完の種が見えた。',
     '静かな痕跡': '灰は、静かな痕跡になった。',
   },
 };
 
-var UNRECEIVED_TYPE_LABELS = { meaning: '意味の影', value: '価値の黒札', satisfaction: '満足の灰' };
+var UNRECEIVED_TYPE_LABELS = { meaning: '意味の影', value: '価値の黒札', satisfaction: '納得の灰' };
 
 // 未受領3領域がすべて静かな痕跡（14%以下）になっているか
 function isAllSettled(fire) {
@@ -719,7 +719,7 @@ var REEXPLORE_CFG = {
   satisfaction: {
     item: 'small_seed', logs: 'REEXPLORE_SATISFACTION_LOGS',
     ve: { work: '育てる', actor: 'toyman', trace: 'small_seed', message: '灰の中に、まだ熱い種が残っていた。\n終わりではない。\n残りだった。' },
-    title: '満足の灰を探した',
+    title: '納得の灰を探した',
     gains: [{ label: '灯貨', amount: 1 }, { label: '灰片', amount: 1 }, { label: '未完の種', amount: 1 }],
     baseTrace: '灰の中から、未完の種が見つかった。',
   },
@@ -1154,6 +1154,16 @@ function stabilityStage(pct) {
   return '揺れている火';
 }
 
+function getStabilityTraces(gp) {
+  var traces = [];
+  if (gp >= 10) traces.push('見守られた時間');
+  if (gp >= 25) traces.push('小さな石');
+  if (gp >= 45) traces.push('急がなかった日');
+  if (gp >= 65) traces.push('灯守りの働き');
+  if (gp >= 80) traces.push('水音');
+  return traces;
+}
+
 var SHADOW_MILESTONES = [
   {
     threshold: 30,
@@ -1259,7 +1269,6 @@ function beginReceiptJourney(game, fireId) {
   fire.receiptDraft = {
     status: 'layering',
     startedAt: nowISO(),
-    layers: { remained: null, pain: null, judgment: null, wish: null },
   };
   return { ok: true, game: ns, fireId: fireId };
 }
@@ -1269,11 +1278,11 @@ function completeReceiptJourney(game, fireId, journeyData) {
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'receiving') return { ok: false, game: game };
 
-  var layers = journeyData.layers || {};
   var currentMetrics = journeyData.currentMetrics || { meaning: 50, value: 50, satisfaction: 50 };
   var initialMetrics = fire.metrics || { meaning: 50, value: 50, satisfaction: 50 };
   var growth = calcReceiptGrowth(initialMetrics, currentMetrics);
   var accText = generateAcceptanceText(fire, growth);
+  var gp = fire.gardenProgress || 0;
 
   fire.status = 'received';
   fire.receivedAt = nowISO();
@@ -1288,7 +1297,6 @@ function completeReceiptJourney(game, fireId, journeyData) {
     broughtBy: 'toyman',
     recordedBy: 'kotae',
     status: 'issued',
-    layers: layers,
     initialMetrics: initialMetrics,
     currentMetrics: currentMetrics,
     metricDeltas: growth.metricDeltas,
@@ -1298,8 +1306,9 @@ function completeReceiptJourney(game, fireId, journeyData) {
     holdText: accText.holdText,
     nextQuestion: accText.nextQuestion,
     stability: {
-      value: fire.gardenProgress || 0,
-      stage: stabilityStage(fire.gardenProgress || 0),
+      value: gp,
+      stage: stabilityStage(gp),
+      traces: getStabilityTraces(gp),
     },
   };
   fire.updatedAt = nowISO();
@@ -1722,7 +1731,7 @@ function FireInputForm({ onSubmit, onCancel }) {
           </div>
           <div style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ color: '#d1d5db', fontSize: 13 }}>今、置いておける</span>
+              <span style={{ color: '#d1d5db', fontSize: 13 }}>納得があった</span>
               <span style={{ color: '#f97316', fontSize: 13 }}>{satisfaction}</span>
             </div>
             <input type="range" min={0} max={100} value={satisfaction}
@@ -1836,9 +1845,9 @@ function UnreceivedPanel({ fire, onReexplore, onRest, onReturnToHeart, actionRes
     },
     {
       key: 'satisfaction',
-      label: '満足の灰',
-      desc: '満足にならず、灰として残ったものがあります。',
-      btnLabel: '満足の灰を探す',
+      label: '納得の灰',
+      desc: '納得にならず、灰として残ったものがあります。',
+      btnLabel: '納得の灰を探す',
       pct: ur.satisfaction,
     },
   ];
@@ -2145,121 +2154,32 @@ function RecordTower({ game, onGoUnreceived, onViewReceipt }) {
   );
 }
 
-// ── 受領の旅 6層 ────────────────────────────────────────────────────────────
+// ── 受領の旅 5層 ────────────────────────────────────────────────────────────
 
 var JOURNEY_LAYERS = [
   {
-    id: 'intro', isIntro: true, isMetrics: false,
+    id: 'intro', isIntro: true,
     place: '記録塔の入口',
-    charName: null, charColor: null,
-    dialogue: [
-      { name: 'トイマン', color: '#fb923c', text: '戻った。' },
-      { name: 'トイマン', color: '#fb923c', text: '答えではない。\nでも、欠片はあった。' },
-      { name: 'コタエ',   color: '#a78bfa', text: 'ノコリビ、確認しました。\n記録を開始します。' },
-      { name: 'トイマン', color: '#fb923c', text: 'なら、預ける。' },
-    ],
-    question: null, options: null,
   },
   {
-    id: 'remained', isIntro: false, isMetrics: false,
-    place: '記録塔・第一層',
-    charName: 'コタエ', charColor: '#a78bfa',
-    dialogue: [],
-    question: 'この火には、何が残っていますか？',
-    options: [
-      '言いたかったのに言えなかった言葉',
-      '分かってほしかったという気持ち',
-      '頑張ったのに届かなかった悔しさ',
-      '誰にも見せられなかった何か',
-      '終わったはずなのにまだある虚しさ',
-      'まだ分からない',
-    ],
+    id: 'kindle', isKindle: true,
+    place: '記録塔・本文の間',
   },
   {
-    id: 'pain', isIntro: false, isMetrics: false,
-    place: '記録塔・第二層',
-    charName: 'かな', charColor: '#60a5fa',
-    dialogue: [
-      { name: 'かな', color: '#60a5fa', text: '……聞かせてほしいんだけど。' },
-      { name: 'かな', color: '#60a5fa', text: 'この火、ずっと持ってたんだね。' },
-    ],
-    question: 'この火で、何が一番痛かったですか？',
-    options: [
-      '誰にも気づいてもらえなかったこと',
-      '届けたのに受け取ってもらえなかったこと',
-      '誰にも見せられなかったこと',
-      '意味がないと思われたこと（思ったこと）',
-      '努力したのに何も残らなかったこと',
-      'まだうまく言葉にできない',
-    ],
+    id: 'stability', isStability: true,
+    place: '記録塔・守護の間',
   },
   {
-    id: 'judgment', isIntro: false, isMetrics: false,
-    place: '記録塔・第三層',
-    charName: '審査官', charColor: '#f87171',
-    dialogue: [
-      { name: '審査官', color: '#f87171', text: '……また来たか。' },
-      { name: '審査官', color: '#f87171', text: '黒札は、わたしが貼ったものだ。\n判決ではない。ただの紙だ。' },
-      { name: '審査官', color: '#f87171', text: '……それでも、何に裁かれていた？' },
-    ],
-    question: 'この火は、何に裁かれていましたか？',
-    options: [
-      '「価値がない」という声',
-      '「誰にも必要とされない」という声',
-      '「努力が足りなかった」という声',
-      '「もっとうまくできたはずだ」という声',
-      '「これはただの自己満足だ」という声',
-      '「他の人はもっとうまくやっている」という声',
-      '特定の声というよりも、静寂そのもの',
-    ],
-  },
-  {
-    id: 'wish', isIntro: false, isMetrics: false,
-    place: '記録塔・第四層',
-    charName: 'うつろ', charColor: '#9ca3af',
-    dialogue: [
-      { name: 'うつろ', color: '#9ca3af', text: '……。' },
-      { name: 'うつろ', color: '#9ca3af', text: '何に、なってほしかったんだろう。' },
-      { name: 'うつろ', color: '#9ca3af', text: '答えなくていい。\nただ、ここに置いてくれれば。' },
-    ],
-    question: 'この火は、何になってほしかったと思いますか？',
-    options: [
-      '誰かに受け取ってほしかった',
-      '意味があると認めてほしかった',
-      '「よかった」と言ってほしかった',
-      'ただ、見てほしかった',
-      '応えてくれる声がほしかった',
-      'もう一度、やり直したかった',
-      'ただ、ここに残したかった',
-    ],
-  },
-  {
-    id: 'silence', isIntro: false, isMetrics: false, isSilence: true,
+    id: 'metrics', isMetrics: true,
     place: '記録塔',
-    charName: null, charColor: null,
-    dialogue: [
-      { name: null, color: null, text: '記録塔は、しばらく静かだった。\n\nコタエは、火のそばに置いた紙片を並べ直した。\nかなは、水滴を置いた。\n審査官は、黒札を本文から離した。\nうつろは、空白の場所を空けた。\n\nトイマンは、黙って見ていた。' },
-      { name: 'コタエ', color: '#a78bfa', text: '受領証を、発行します。' },
-    ],
-    question: null, options: null,
   },
   {
-    id: 'metrics', isIntro: false, isMetrics: true, isSilence: false,
-    place: '記録塔',
-    charName: 'コタエ', charColor: '#a78bfa',
-    dialogue: [],
-    question: null, options: null,
+    id: 'silence', isSilence: true,
+    place: '記録塔・沈黙の間',
   },
 ];
 
 // ── 受領証カード ────────────────────────────────────────────────────────────
-
-var LAYER_LABELS = {
-  remained: '何が残っていたか',
-  pain:     '何が痛かったか',
-  judgment: '何に裁かれていたか',
-  wish:     '何になってほしかったか',
-};
 
 function ReceiptCard({ fire, buttonLabel, onAction }) {
   var receipt = fire.receipt;
@@ -2268,12 +2188,11 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
     String(issuedDate.getMonth() + 1).padStart(2, '0') + '/' +
     String(issuedDate.getDate()).padStart(2, '0');
 
-  var layers = receipt && receipt.layers;
-  var hasLayers = layers && ['remained', 'pain', 'judgment', 'wish'].some(function(k) { return layers[k]; });
   var metricDeltas   = receipt && receipt.metricDeltas;
   var initialMetrics = receipt && receipt.initialMetrics;
   var currentMetrics = receipt && receipt.currentMetrics;
   var stability      = receipt && receipt.stability;
+  var traces         = stability && stability.traces;
 
   return (
     <div className="receipt-card">
@@ -2297,34 +2216,34 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
         </div>
       )}
 
-      {/* 3. 火の安定 */}
+      {/* 3. 火の安定 + 守られた痕跡 */}
       {stability && (
         <div style={{ margin: '10px 0', padding: '8px 12px', background: '#0a0c14', borderRadius: 8, border: '1px solid #1e2230' }}>
-          <span style={{ color: '#374151', fontSize: 10, letterSpacing: 1 }}>火の安定</span>
-          <span style={{ color: '#34d399', fontSize: 12, marginLeft: 10, fontFamily: 'monospace' }}>
-            {stability.value}% ／ {stability.stage}
-          </span>
-        </div>
-      )}
-
-      {/* 4. 旅の記録 */}
-      {hasLayers && (
-        <div className="receipt-layers">
-          <p className="receipt-layers-title">旅の記録</p>
-          {['remained', 'pain', 'judgment', 'wish'].map(function(key) {
-            var val = layers[key];
-            if (!val) return null;
-            return (
-              <div key={key} className="receipt-layer-row">
-                <p className="receipt-layer-q">{LAYER_LABELS[key]}</p>
-                <p className="receipt-layer-a">{val}</p>
+          <div style={{ marginBottom: traces && traces.length > 0 ? 6 : 0 }}>
+            <span style={{ color: '#374151', fontSize: 10, letterSpacing: 1 }}>火の安定</span>
+            <span style={{ color: '#34d399', fontSize: 12, marginLeft: 10, fontFamily: 'monospace' }}>
+              {stability.value}% ／ {stability.stage}
+            </span>
+          </div>
+          {traces && traces.length > 0 && (
+            <div>
+              <span style={{ color: '#374151', fontSize: 10, letterSpacing: 1 }}>守られた痕跡</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                {traces.map(function(t) {
+                  return (
+                    <span key={t} style={{
+                      fontSize: 10, padding: '2px 7px', borderRadius: 8,
+                      background: '#0f1420', color: '#34d399', border: '1px solid #1e3828',
+                    }}>{t}</span>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* 5. 三軸の変化 */}
+      {/* 4. 三軸の変化 */}
       {metricDeltas && initialMetrics && currentMetrics && (
         <div className="receipt-metrics-section">
           {[
@@ -2346,7 +2265,7 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
         </div>
       )}
 
-      {/* 6. 詳細 */}
+      {/* 5. 詳細 */}
       <div className="receipt-row" style={{ marginTop: 12 }}>
         <p className="receipt-label">残り火</p>
         <p className="receipt-value receipt-ember">「{fire.kindle}」</p>
@@ -2373,113 +2292,89 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
 
 // ── 受領の旅 コンポーネント ─────────────────────────────────────────────────
 
-function buildIntroDialogue(fire) {
-  var gp = fire.gardenProgress || 0;
-  var stage = stabilityStage(gp);
-  var kindleQuoted = fire.kindle ? '「' + fire.kindle + '」' : '（本文なし）';
-  var kotaeStabilityLine;
-  if (gp >= 85) {
-    kotaeStabilityLine = 'この火は、よく守られていました。\n急がされずに、ここまで届いています。\n\n火の安定：' + gp + '% ／ ' + stage;
-  } else if (gp >= 60) {
-    kotaeStabilityLine = '落ち着いた状態で届きました。\n\n火の安定：' + gp + '% ／ ' + stage;
-  } else if (gp >= 30) {
-    kotaeStabilityLine = 'まだ少し揺れています。\n丁寧に記録します。\n\n火の安定：' + gp + '% ／ ' + stage;
-  } else {
-    kotaeStabilityLine = 'この火は、まだ揺れています。\n欠けないよう、慎重に記録します。\n\n火の安定：' + gp + '% ／ ' + stage;
-  }
+function buildIntroDialogue() {
   return [
     { name: 'トイマン', color: '#fb923c', text: '戻った。' },
     { name: 'トイマン', color: '#fb923c', text: '答えではない。\nでも、欠片はあった。' },
     { name: 'コタエ',   color: '#a78bfa', text: 'ノコリビ、確認しました。\n記録を開始します。' },
-    { name: 'コタエ',   color: '#a78bfa', text: '本文を、そのまま読み上げます。\n\n' + kindleQuoted },
-    { name: 'コタエ',   color: '#a78bfa', text: '分類は、まだしません。\n先に、欠けないように置きます。' },
-    { name: 'トイマン', color: '#fb923c', text: '……消すな。' },
-    { name: 'コタエ',   color: '#a78bfa', text: '消しません。' },
-    { name: 'コタエ',   color: '#a78bfa', text: kotaeStabilityLine },
     { name: 'トイマン', color: '#fb923c', text: 'なら、預ける。' },
   ];
 }
 
-function getLayerResponse(layerId, opt) {
-  if (layerId === 'remained') return { name: 'コタエ',   color: '#a78bfa', text: '「' + opt + '」。\n記録します。\nまだ、答えにはしません。' };
-  if (layerId === 'pain')     return { name: 'かな',     color: '#60a5fa', text: '「' + opt + '」。\nそこが痛かったんだね。\n急がなくていい。' };
-  if (layerId === 'judgment') return { name: '審査官',   color: '#f87171', text: '「' + opt + '」。\nこれは本文ではない。\n札として分ける。' };
-  if (layerId === 'wish')     return { name: 'うつろ',   color: '#9ca3af', text: '「' + opt + '」。\nならなかったものではなく、\nなってほしかったものとして置く。' };
-  return null;
+function buildKindleDialogue(fire) {
+  var kindleQuoted = fire.kindle ? '「' + fire.kindle + '」' : '（本文なし）';
+  return [
+    { name: 'コタエ', color: '#a78bfa', text: '本文を、そのまま読み上げます。' },
+    { name: 'コタエ', color: '#a78bfa', text: kindleQuoted },
+    { name: 'コタエ', color: '#a78bfa', text: '分類は、まだしません。\n先に、欠けないように置きます。' },
+    { name: 'トイマン', color: '#fb923c', text: '……消すな。' },
+    { name: 'コタエ',   color: '#a78bfa', text: '消しません。' },
+  ];
+}
+
+function buildStabilityDialogue(fire) {
+  var gp = fire.gardenProgress || 0;
+  var stage = stabilityStage(gp);
+  var stabilityLine = '火の安定：' + gp + '% ／ ' + stage;
+  var kotaeLine;
+  if (gp >= 85) {
+    kotaeLine = 'この火は、よく守られていました。\n急がされずに、ここまで届いています。';
+  } else if (gp >= 60) {
+    kotaeLine = '落ち着いた状態で届きました。';
+  } else if (gp >= 30) {
+    kotaeLine = 'まだ少し揺れています。\n丁寧に記録します。';
+  } else {
+    kotaeLine = 'この火は、まだ揺れています。\n欠けないよう、慎重に記録します。';
+  }
+  return [
+    { name: 'コタエ', color: '#a78bfa', text: kotaeLine + '\n\n' + stabilityLine },
+  ];
 }
 
 function ReceiptJourney({ fire, onJourneyDone }) {
   var [layerIdx, setLayerIdx] = _useState(0);
   var [dialogueStep, setDialogueStep] = _useState(0);
-  var [showChoice, setShowChoice] = _useState(false);
-  var [showResponse, setShowResponse] = _useState(false);
-  var [responseData, setResponseData] = _useState(null);
-  var [selectedOption, setSelectedOption] = _useState(null);
-  var [pendingOption, setPendingOption] = _useState(null);
-  var [layerSelections, setLayerSelections] = _useState({ remained: null, pain: null, judgment: null, wish: null });
   var [metrics, setMetrics] = _useState(
     fire.metrics
       ? { meaning: fire.metrics.meaning, value: fire.metrics.value, satisfaction: fire.metrics.satisfaction }
       : { meaning: 50, value: 50, satisfaction: 50 }
   );
 
-  var introDialogue = React.useMemo(function() { return buildIntroDialogue(fire); }, []);
+  var introDialogue   = React.useMemo(function() { return buildIntroDialogue(); }, []);
+  var kindleDialogue  = React.useMemo(function() { return buildKindleDialogue(fire); }, []);
+  var stabilityDialogue = React.useMemo(function() { return buildStabilityDialogue(fire); }, []);
 
   var layer = JOURNEY_LAYERS[layerIdx];
-  var isMetrics = !!layer.isMetrics;
-  var isIntro   = !!layer.isIntro;
-  var isSilence = !!layer.isSilence;
-  var activeDialogue = isIntro ? introDialogue : (layer.dialogue || []);
-  var hasDialogue = activeDialogue.length > 0;
+  var isMetrics   = !!layer.isMetrics;
+  var isSilence   = !!layer.isSilence;
+  var isKindle    = !!layer.isKindle;
+  var isStability = !!layer.isStability;
+  var isIntro     = !!layer.isIntro;
+
+  var activeDialogue = isIntro ? introDialogue
+    : isKindle    ? kindleDialogue
+    : isStability ? stabilityDialogue
+    : [];
+  var hasDialogue    = activeDialogue.length > 0;
   var isLastDialogue = !hasDialogue || dialogueStep >= activeDialogue.length - 1;
 
-  function goNextLayer(selection) {
-    var newSel = layerSelections;
-    if (!isIntro && !isMetrics && !isSilence && layer.id && selection) {
-      newSel = Object.assign({}, layerSelections);
-      newSel[layer.id] = selection;
-      setLayerSelections(newSel);
-    }
+  function goNextLayer() {
     var nextIdx = layerIdx + 1;
     if (nextIdx >= JOURNEY_LAYERS.length) {
-      onJourneyDone({ layers: newSel, currentMetrics: metrics });
+      onJourneyDone({ currentMetrics: metrics });
     } else {
       setLayerIdx(nextIdx);
       setDialogueStep(0);
-      setShowChoice(false);
-      setShowResponse(false);
-      setResponseData(null);
-      setSelectedOption(null);
-      setPendingOption(null);
     }
   }
 
   function advance() {
     if (!isLastDialogue) {
       setDialogueStep(function(s) { return s + 1; });
-    } else if (layer.question) {
-      setShowChoice(true);
     } else {
-      goNextLayer(null);
+      goNextLayer();
     }
   }
-
-  function confirmSelection() {
-    if (!selectedOption) return;
-    var resp = getLayerResponse(layer.id, selectedOption);
-    if (resp) {
-      setPendingOption(selectedOption);
-      setResponseData(resp);
-      setShowResponse(true);
-    } else {
-      goNextLayer(selectedOption);
-    }
-  }
-
-  var showDialogueSec  = hasDialogue && !showChoice && !showResponse;
-  var showChoiceSec    = !isMetrics && !isSilence && !!layer.question && (showChoice || !hasDialogue) && !showResponse;
-  var showResponseSec  = showResponse;
-  var showMetricsSec   = isMetrics;
 
   function renderDialogue(lines, step) {
     return lines.slice(0, step + 1).map(function(dl, i) {
@@ -2496,13 +2391,18 @@ function ReceiptJourney({ fire, onJourneyDone }) {
             </div>
           )}
           <p className={'kotae-line' + (isCurrent ? ' kotae-line-now' : '')}
-             style={isNarrative ? { fontStyle: 'italic', color: '#6b7280', textAlign: 'center', lineHeight: 2, whiteSpace: 'pre-line' } : {}}>
+             style={isNarrative ? { fontStyle: 'italic', color: '#6b7280', textAlign: 'center', lineHeight: 2, whiteSpace: 'pre-line' } : { whiteSpace: 'pre-line' }}>
             {dl.text}
           </p>
         </div>
       );
     });
   }
+
+  var silenceLines = [
+    { name: null, color: null, text: '記録塔は、しばらく静かだった。\n\nコタエは、火のそばに置いた紙片を\nそっと並べ直した。\n\nトイマンは、黙って見ていた。' },
+    { name: 'コタエ', color: '#a78bfa', text: '受領証を、発行します。' },
+  ];
 
   return (
     <div className="kotae-ov">
@@ -2521,71 +2421,18 @@ function ReceiptJourney({ fire, onJourneyDone }) {
 
         <p style={{ color: '#4b5563', fontSize: 10, margin: '0 0 10px', letterSpacing: 1 }}>{layer.place}</p>
 
-        {/* 対話セクション（イントロ・通常層の台詞・沈黙） */}
-        {showDialogueSec && (
+        {/* 対話セクション（イントロ・本文・安定） */}
+        {(isIntro || isKindle || isStability) && hasDialogue && (
           <div>
             {renderDialogue(activeDialogue, dialogueStep)}
             <button className="kotae-btn" onClick={advance}>
-              {isLastDialogue ? (layer.question ? '問いへ進む ▽' : '次へ ▽') : '▽ つづき'}
-            </button>
-          </div>
-        )}
-
-        {/* 選択セクション */}
-        {showChoiceSec && (
-          <div>
-            {layer.charName && (
-              <div className="kotae-head">
-                <span className="kotae-dot" style={{ background: layer.charColor }} />
-                <span className="kotae-name" style={{ color: layer.charColor }}>{layer.charName}</span>
-              </div>
-            )}
-            <p style={{ color: '#e2e4ee', fontSize: 14, lineHeight: 1.8, margin: '0 0 14px', whiteSpace: 'pre-line' }}>
-              {layer.question}
-            </p>
-            <div className="journey-options">
-              {layer.options.map(function(opt) {
-                var isSel = selectedOption === opt;
-                return (
-                  <button
-                    key={opt}
-                    className={'journey-option-btn' + (isSel ? ' selected' : '')}
-                    onClick={function() { setSelectedOption(opt); }}
-                  >
-                    {opt}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              className="kotae-btn"
-              style={{ opacity: selectedOption ? 1 : 0.35, cursor: selectedOption ? 'pointer' : 'default', marginTop: 14 }}
-              onClick={confirmSelection}
-            >
-              記録する
-            </button>
-          </div>
-        )}
-
-        {/* 応答セクション — キャラが選択を受け取る */}
-        {showResponseSec && responseData && (
-          <div>
-            <p style={{ color: '#4b5563', fontSize: 11, margin: '0 0 12px', fontStyle: 'italic' }}>
-              「{pendingOption}」
-            </p>
-            <div className="kotae-head">
-              <span className="kotae-dot" style={{ background: responseData.color }} />
-              <span className="kotae-name" style={{ color: responseData.color }}>{responseData.name}</span>
-            </div>
-            <p className="kotae-line kotae-line-now" style={{ whiteSpace: 'pre-line' }}>{responseData.text}</p>
-            <button className="kotae-btn" onClick={function() { goNextLayer(pendingOption); }}>
-              次へ ▽
+              {isLastDialogue ? '次へ ▽' : '▽ つづき'}
             </button>
           </div>
         )}
 
         {/* 感触スライダー */}
-        {showMetricsSec && (
+        {isMetrics && (
           <div>
             <div className="kotae-head">
               <span className="kotae-dot" style={{ background: '#a78bfa' }} />
@@ -2597,7 +2444,7 @@ function ReceiptJourney({ fire, onJourneyDone }) {
             {[
               { key: 'meaning',      label: '意味があった' },
               { key: 'value',        label: '価値があった' },
-              { key: 'satisfaction', label: '今、置いておける' },
+              { key: 'satisfaction', label: '納得があった' },
             ].map(function(m) {
               var mKey = m.key;
               return (
@@ -2623,9 +2470,25 @@ function ReceiptJourney({ fire, onJourneyDone }) {
                 </div>
               );
             })}
-            <button className="kotae-btn" onClick={function() { goNextLayer(null); }}>
-              受領する
+            <button className="kotae-btn" onClick={goNextLayer}>
+              次へ ▽
             </button>
+          </div>
+        )}
+
+        {/* 沈黙 */}
+        {isSilence && (
+          <div>
+            {renderDialogue(silenceLines, dialogueStep)}
+            {isLastDialogue ? (
+              <button className="kotae-btn" onClick={function() { onJourneyDone({ currentMetrics: metrics }); }}>
+                受領する
+              </button>
+            ) : (
+              <button className="kotae-btn" onClick={function() { setDialogueStep(function(s) { return s + 1; }); }}>
+                ▽ つづき
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -2640,11 +2503,11 @@ var KOTAE_SCRIPTS = {
       'ノコリビ、受領しました。',
       'これは答えではありません。\n問いの欠片です。',
       '記録塔に保存します。\nただし、まだ受け取れていない領域があります。',
-      '意味の影。\n価値の黒札。\n満足の灰。',
+      '意味の影。\n価値の黒札。\n納得の灰。',
       'この火は、まだ全部を受け取られたわけではありません。',
       '次に進めます。\nどこから迎えに行くか、選んでください。',
     ],
-    button: '未受領領域を開く',
+    button: '余熱に会い直す',
   },
   open: {
     lines: ['未受領領域を展開します。\nまだ受け取れていないものを確認してください。'],
