@@ -259,6 +259,10 @@ function initGame() {
     lastAutoAt: nowISO(),
     lastSeenAt: nowISO(),
     introSeen: { kotae: false, kana: false, utsuro: false, auditor: false },
+    seenEncounters: [],
+    worldNotes: [],
+    relationshipNotes: [],
+    activeEncounter: null,
     workerTasks: {
       lightkeeper: { id: 'lightkeeper', label: '灯守り', work: '守る', progress: 0, duration: 100, trace: 'small_stone', isUnlocked: true },
     },
@@ -303,6 +307,9 @@ function createFire(kindle, pain, writeState, feeling, metrics) {
     createdAt: nowISO(),
     updatedAt: nowISO(),
     heldNote: null,
+    lastRestAt: null,
+    lastUnreceivedRestAt: null,
+    receipt: null,
   };
 }
 
@@ -323,6 +330,23 @@ function migrateFire(f) {
   if (!f.reexploreCounts) f.reexploreCounts = { meaning: 0, value: 0, satisfaction: 0 };
   if (f.activeFocus === undefined) f.activeFocus = null;
   if (f.reexploredAt === undefined) f.reexploredAt = null;
+  if (f.lastRestAt === undefined) f.lastRestAt = null;
+  if (f.lastUnreceivedRestAt === undefined) f.lastUnreceivedRestAt = null;
+  if (f.receipt === undefined) f.receipt = null;
+  // 既存の received fire に receipt を補完
+  if (!f.receipt && f.status === 'received' && f.question) {
+    f.receipt = {
+      id: 'r' + f.id,
+      fireId: f.id,
+      title: f.kindle ? f.kindle.slice(0, 20) : '',
+      question: f.question,
+      emberText: f.kindle || '',
+      issuedAt: f.receivedAt || f.updatedAt || nowISO(),
+      broughtBy: 'toyman',
+      recordedBy: 'kotae',
+      status: 'pending',
+    };
+  }
   return f;
 }
 
@@ -351,6 +375,10 @@ function migrateGame(g) {
   if (!g.lastAutoAt) g.lastAutoAt = nowISO();
   if (!g.lastSeenAt) g.lastSeenAt = nowISO();
   if (!g.introSeen) g.introSeen = { kotae: false, kana: false, utsuro: false, auditor: false };
+  if (!Array.isArray(g.seenEncounters)) g.seenEncounters = [];
+  if (!Array.isArray(g.worldNotes)) g.worldNotes = [];
+  if (!Array.isArray(g.relationshipNotes)) g.relationshipNotes = [];
+  if (!('activeEncounter' in g)) g.activeEncounter = null;
   if (!g.toka) g.toka = 0;
   g.fires = (g.fires || []).map(migrateFire);
   // 既存の灯守り状態を推測
@@ -447,11 +475,11 @@ var REEXPLORE_VALUE_LOGS = [
 
 var LIGHT_MARKET_ITEMS = [
   {
-    key: 'small_stone',
-    name: '小さな石',
-    desc: '灯守りが置いた石。火のそばに並べておく。',
-    cost: { toka: 1 },
-    gardenItem: 'small_stone',
+    key: 'stone_circle',
+    name: '石の輪',
+    desc: '小さな石を輪に並べると、火が落ち着く。灯守りに頼んで作ってもらえる。',
+    cost: { toka: 2, ash: 1 },
+    gardenItem: 'stone_circle',
   },
   {
     key: 'lamp_stand',
@@ -475,6 +503,102 @@ var REEXPLORE_SATISFACTION_LOGS = [
   'トイマンは、手応えの小片を拾い上げた。',
   '満たされなかった輪郭が、少しだけ形をなした。',
 ];
+
+// クールダウン残り秒数（0なら解除済み）
+function cooldownRemaining(lastAt, seconds) {
+  if (!lastAt) return 0;
+  var elapsed = (Date.now() - new Date(lastAt).getTime()) / 1000;
+  return Math.max(0, Math.ceil(seconds - elapsed));
+}
+
+// エンカウント台本
+var ENCOUNTER_DEFS = {
+  kotae_first_receive: {
+    place: '記録塔の入口',
+    character: 'コタエ',
+    characterColor: '#a78bfa',
+    lines: [
+      'ノコリビ、受領しました。',
+      'これは答えではありません。\n問いの欠片です。',
+      '意味の影、価値の黒札、満足の灰。\nまだ受け取れていないものがあります。',
+      'ここに記録します。\n消えることはありません。',
+    ],
+    worldNote: '記録塔は、受け取られた問いを保管する場所だ。コタエがひとりで守っている。',
+    relationshipNote: { characterId: 'kotae', text: '記録塔で初めて会った。静かで、でも確かにいた。' },
+    button: '未受領領域へ',
+    nav: 'garden_unreceived',
+  },
+  kana_first_rest: {
+    place: '涙の泉のそば',
+    character: 'かな',
+    characterColor: '#60a5fa',
+    lines: [
+      '休んでよかった。',
+      '受け取れないまま置いておくのは、\n弱さじゃない。',
+      '涙の泉は、ここにあるよ。\n来ても、来なくてもいい。',
+    ],
+    worldNote: '涙の泉は、火の近くにある。受け取れないものを、ただ置いておく場所。',
+    relationshipNote: { characterId: 'kana', text: 'かなは泉のそばにいた。押しつけない。ただそこにいた。' },
+    button: '閉じる',
+    nav: null,
+  },
+  auditor_first_value: {
+    place: '黒札置き場',
+    character: '審査官',
+    characterColor: '#f87171',
+    lines: [
+      '……また来たか。',
+      '黒札は、判決ではない。\nわたしが貼ったものだ。',
+      '剥がせるものもある。\nそれだけだ。',
+    ],
+    worldNote: '黒札置き場には、審査官がいる。価値の判定をしていた存在。でも今は、剥がしも手伝っている。',
+    relationshipNote: { characterId: 'auditor', text: '審査官と初めて会った。怖いというより、疲れているようだった。' },
+    button: '閉じる',
+    nav: null,
+  },
+  utsuro_first_return: {
+    place: '棚の奥',
+    character: 'うつろ',
+    characterColor: '#9ca3af',
+    lines: [
+      '……。',
+      '火が、返ってきた。',
+      '消えたのではない。\nここに残る。',
+      '空洞は、欠けているのではない。\n入れる場所だ。',
+    ],
+    worldNote: '棚の奥に、うつろがいる。言葉は少ないが、いつもそこにいる。',
+    relationshipNote: { characterId: 'utsuro', text: 'うつろは、棚の奥で静かに待っていた。火が戻るのを知っていたようだった。' },
+    button: '閉じる',
+    nav: null,
+  },
+};
+
+// エンカウントを発火する（未見なら activeEncounter にセット、worldNotes/relationshipNotes を追記）
+function triggerEncounter(game, encounterId, opts) {
+  if (!game || !encounterId) return game;
+  if ((game.seenEncounters || []).includes(encounterId)) return game;
+  var ns = cloneS(game);
+  ns.seenEncounters = (ns.seenEncounters || []).concat([encounterId]);
+  ns.activeEncounter = { encounterId: encounterId, fireId: (opts && opts.fireId) || null };
+  var def = ENCOUNTER_DEFS[encounterId];
+  if (def) {
+    if (def.worldNote) {
+      ns.worldNotes = (ns.worldNotes || []).concat([{ id: encounterId, text: def.worldNote, at: nowISO() }]);
+    }
+    if (def.relationshipNote) {
+      ns.relationshipNotes = (ns.relationshipNotes || []).concat([
+        Object.assign({}, def.relationshipNote, { id: encounterId, at: nowISO() }),
+      ]);
+    }
+  }
+  return ns;
+}
+
+function dismissEncounter(game) {
+  var ns = cloneS(game);
+  ns.activeEncounter = null;
+  return ns;
+}
 
 var AUTO_VISUAL_EVENTS = [
   {
@@ -624,6 +748,11 @@ function reexploreFire(game, fireId, type) {
       beforeStage: beforeStage, afterStage: afterStage, stageChanged: stageChanged,
     },
   });
+  // 審査官エンカウント: 価値の黒札が初めて「静かな痕跡」に達した時
+  if (type === 'value' && afterStage === '静かな痕跡') {
+    ns = triggerEncounter(ns, 'auditor_first_value', { fireId: fireId });
+  }
+
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
 }
 
@@ -644,9 +773,9 @@ function buyMarketItem(game, key) {
   ns.materials.ash -= (cost.ash || 0);
   ns.materials.paper -= (cost.paper || 0);
   addGardenItem(ns, item.gardenItem);
-  if (key === 'small_stone') {
+  if (key === 'stone_circle') {
     var sf = ns.fires.find(function(f) { return f.status === 'searching'; });
-    if (sf) sf.gardenProgress = Math.min(100, (sf.gardenProgress || 0) + 2);
+    if (sf) sf.gardenProgress = Math.min(100, (sf.gardenProgress || 0) + 5);
   }
   return { ok: true, game: ns };
 }
@@ -655,11 +784,13 @@ function restUnreceived(game, fireId) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'received') return { ok: false, game: game };
+  if (cooldownRemaining(fire.lastUnreceivedRestAt, 30) > 0) return { ok: false, reason: 'cooldown', game: game };
   ns.toka = (ns.toka || 0) + 1;
   ns.materials = safeMat(ns.materials);
   ns.materials.drop += 1;
   addGardenItem(ns, 'water_drop');
   fire.logs = (fire.logs || []).concat([{ text: '今日は、ここに置いておく。', at: nowISO() }]);
+  fire.lastUnreceivedRestAt = nowISO();
   fire.updatedAt = nowISO();
   var ve = makeVisualEvent({
     fireId: fireId, source: 'manual', type: 'rest',
@@ -699,6 +830,7 @@ function returnFireToHeart(game, fireId) {
     gains: [{ label: '灯貨', amount: 5 }],
     traces: ['心へ還った火が、箱庭に置かれた。'],
   });
+  ns = triggerEncounter(ns, 'utsuro_first_return', { fireId: fireId });
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
 }
 
@@ -897,9 +1029,11 @@ function restToday(game, fireId) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'searching') return { ok: false, game: game };
+  if (cooldownRemaining(fire.lastRestAt, 30) > 0) return { ok: false, reason: 'cooldown', game: game };
   // questionProgress は進めない
   fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + 5);
   fire.restCount = (fire.restCount || 0) + 1;
+  fire.lastRestAt = nowISO();
   var logText = pick(REST_LOGS);
   fire.restLogs = (fire.restLogs || []).concat([{ text: logText, at: nowISO() }]);
   addLog(fire, logText);
@@ -940,6 +1074,17 @@ function receiveFire(game, fireId, answer) {
   fire.status = 'received';
   fire.answer = (answer || '').trim() || null;
   fire.receivedAt = nowISO();
+  fire.receipt = {
+    id: 'r' + fire.id,
+    fireId: fire.id,
+    title: fire.kindle ? fire.kindle.slice(0, 20) : '',
+    question: fire.question,
+    emberText: fire.kindle || '',
+    issuedAt: nowISO(),
+    broughtBy: 'toyman',
+    recordedBy: 'kotae',
+    status: 'pending',
+  };
   ns.toka = (ns.toka || 0) + 3;
   ns.materials = safeMat(ns.materials);
   ns.materials.stamp = (ns.materials.stamp || 0) + 1;
@@ -967,7 +1112,7 @@ function receiveFire(game, fireId, answer) {
     gains: [{ label: '灯貨', amount: 3 }, { label: '受領印', amount: 1 }],
     traces: ['遠くの記録塔に、灯りがともった。'],
   });
-  return { ok: true, game: ns, newlyUnlockedKotae: newlyUnlockedKotae, visualEvent: ve, actionResult: actionResult };
+  return { ok: true, game: ns, newlyUnlockedKotae: newlyUnlockedKotae, visualEvent: ve, actionResult: actionResult, fireId: fireId };
 }
 
 // ── React Components ────────────────────────────────────────────────────────
@@ -1568,18 +1713,22 @@ function UnreceivedPanel({ fire, onReexplore, onRest, onReturnToHeart, actionRes
             🏮 火を心へ返す
           </button>
         </div>
-      ) : (
-        <button
-          onClick={doRest}
-          style={{
-            width: '100%', padding: '10px', borderRadius: 8,
-            background: 'transparent', border: '1px solid #1e2230',
-            color: '#8f9bb3', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-          }}
-        >
-          今日は置いておく
-        </button>
-      )}
+      ) : (function() {
+        var cd = cooldownRemaining(fire.lastUnreceivedRestAt, 30);
+        return (
+          <button
+            onClick={cd > 0 ? null : doRest}
+            style={{
+              width: '100%', padding: '10px', borderRadius: 8,
+              background: 'transparent', border: '1px solid #1e2230',
+              color: cd > 0 ? '#374151' : '#8f9bb3', fontSize: 13,
+              cursor: cd > 0 ? 'default' : 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            {cd > 0 ? '今日は置いておく（あと' + cd + '秒）' : '今日は置いておく'}
+          </button>
+        );
+      })()}
     </div>
   );
 }
@@ -1829,6 +1978,49 @@ function KotaeDialog({ kind, onConfirm }) {
   );
 }
 
+function EncounterDialog({ encounterId, onConfirm }) {
+  var def = ENCOUNTER_DEFS[encounterId];
+  if (!def) return null;
+  var [step, setStep] = _useState(0);
+  var isLast = step >= def.lines.length - 1;
+  function advance() {
+    if (isLast) onConfirm();
+    else setStep(function(s) { return s + 1; });
+  }
+  return (
+    <div className="kotae-ov" onClick={advance}>
+      <div className="kotae-sheet" onClick={function(e) { e.stopPropagation(); }}>
+        <div className="kotae-grip" />
+        <p style={{ color: '#4b5563', fontSize: 10, margin: '0 0 4px', letterSpacing: 1 }}>{def.place}</p>
+        <div className="kotae-head">
+          <span className="kotae-dot" style={{ background: def.characterColor }} />
+          <span className="kotae-name" style={{ color: def.characterColor }}>{def.character}</span>
+        </div>
+        {def.lines.slice(0, step + 1).map(function(line, i) {
+          return <p key={i} className={'kotae-line' + (i === step ? ' kotae-line-now' : '')}>{line}</p>;
+        })}
+        {isLast && (def.worldNote || def.relationshipNote) && (
+          <div style={{ margin: '12px 0 6px', padding: '10px 12px', borderRadius: 8, background: '#0a0c14', border: '1px solid #1e2230' }}>
+            {def.worldNote && (
+              <p style={{ color: '#4b5563', fontSize: 11, margin: '0 0 6px', lineHeight: 1.6 }}>
+                📖 {def.worldNote}
+              </p>
+            )}
+            {def.relationshipNote && (
+              <p style={{ color: '#374151', fontSize: 11, margin: 0, lineHeight: 1.6 }}>
+                ◦ {def.character}：{def.relationshipNote.text}
+              </p>
+            )}
+          </div>
+        )}
+        <button className="kotae-btn" onClick={advance}>
+          {isLast ? def.button : '▽ つづき'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 var GARDEN_ITEM_DEFS = {
   small_stone:      { emoji: '🪨', label: '小さな石',   anim: null },
   rest_chair:       { emoji: '🪑', label: '小さな椅子', anim: null },
@@ -1841,6 +2033,7 @@ var GARDEN_ITEM_DEFS = {
   lamp_stand:       { emoji: '🕯', label: '灯火台',     anim: 'blink' },
   paper_box:        { emoji: '📦', label: '焦げ紙箱',   anim: null },
   returned_ember:   { emoji: '🏮', label: '還した火',   anim: 'blink' },
+  stone_circle:     { emoji: '🪨', label: '石の輪',     anim: null },
 };
 
 // GardenBoard のアイテム表示ヘルパー
@@ -2206,19 +2399,22 @@ function ActionResultPanel({ result, onClose }) {
   );
 }
 
-function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived, onReturnToHeart, actionResult, onCloseActionResult, activeUnreceivedFireId }) {
+function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestToday, onReceive, onUpdateLastSeen, onBuyMarket, onReexplore, onRestUnreceived, onReturnToHeart, actionResult, onCloseActionResult, activeUnreceivedFireId }) {
   var [recordOpen, setRecordOpen] = _useState(false);
   var [shadowOpen, setShadowOpen] = _useState(false);
+  var [inlineReceiveOpen, setInlineReceiveOpen] = _useState(false);
+  var [inlineReceiveAnswer, setInlineReceiveAnswer] = _useState('');
+  var [localSelectedReceivedId, setLocalSelectedReceivedId] = _useState(null);
 
   var sf       = game.fires.find(function(f) { return f.status === 'searching'; });
   var found    = game.fires.find(function(f) { return f.status === 'found'; });
   var received = game.fires.filter(function(f) { return f.status === 'received'; });
-  // コタエ会話から案内された火を先頭に出す
-  if (activeUnreceivedFireId) {
-    received = received.slice().sort(function(a, b) {
-      return (b.id === activeUnreceivedFireId ? 1 : 0) - (a.id === activeUnreceivedFireId ? 1 : 0);
-    });
-  }
+
+  // 表示する received fire を1件に絞る
+  // 優先: activeUnreceivedFireId > localSelectedReceivedId > 最新 received
+  var shownReceivedId = activeUnreceivedFireId || localSelectedReceivedId
+    || (received.length > 0 ? received[0].id : null);
+  var shownReceivedFire = received.find(function(f) { return f.id === shownReceivedId; }) || null;
 
   _useEffect(function() {
     if (onUpdateLastSeen) onUpdateLastSeen();
@@ -2251,19 +2447,24 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
       <WorkerPanel game={game} />
 
       {/* 3. 行動ボタン（先頭側に固定して、押しても位置が動かないようにする） */}
-      {sf && !shadowOpen && (
-        <div className="action-btns">
-          <button className="btn-shadow" onClick={function() { setShadowOpen(true); }}>
-            <span className="btn-shadow-icon">🌑</span>影と向き合う
-          </button>
-          <button className="btn-watch" onClick={doWatch}>
-            <span className="btn-watch-icon">◎</span>ただ見守る
-          </button>
-          <button className="btn-rest" onClick={doRest}>
-            <span className="btn-rest-icon">…</span>今日は無理
-          </button>
-        </div>
-      )}
+      {sf && !shadowOpen && (function() {
+        var cdRest = cooldownRemaining(sf.lastRestAt, 30);
+        return (
+          <div className="action-btns">
+            <button className="btn-shadow" onClick={function() { setShadowOpen(true); }}>
+              <span className="btn-shadow-icon">🌑</span>影と向き合う
+            </button>
+            <button className="btn-watch" onClick={doWatch}>
+              <span className="btn-watch-icon">◎</span>ただ見守る
+            </button>
+            <button className="btn-rest" onClick={cdRest > 0 ? null : doRest}
+              style={{ opacity: cdRest > 0 ? 0.5 : 1, cursor: cdRest > 0 ? 'default' : 'pointer' }}>
+              <span className="btn-rest-icon">…</span>
+              {cdRest > 0 ? '今日は無理（あと' + cdRest + '秒）' : '今日は無理'}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* 3b. ShadowPanel */}
       {sf && shadowOpen && (
@@ -2289,16 +2490,87 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
         onClose={onCloseActionResult}
       />
 
-      {/* 問いが見つかった（棚誘導） */}
+      {/* 問いが見つかった（箱庭でそのまま受け取れる） */}
       {found && !sf && (
         <div className="found-banner">
           <p className="found-banner-label">問いの欠片が届いています</p>
           <p className="found-banner-question">{found.question}</p>
-          <p className="found-banner-hint">「残り火の棚」から受け取ってください</p>
+          {!inlineReceiveOpen ? (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button
+                onClick={function() { setInlineReceiveOpen(true); }}
+                style={{
+                  flex: 1, padding: '9px 0', borderRadius: 8,
+                  background: '#4c1d95', border: 'none', color: '#ede9fe',
+                  fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
+                }}
+              >
+                この場で受け取る
+              </button>
+              {onGoShelf && (
+                <button
+                  onClick={onGoShelf}
+                  style={{
+                    padding: '9px 14px', borderRadius: 8,
+                    background: 'transparent', border: '1px solid #2e3348',
+                    color: '#9ca3af', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  棚で見る
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ marginTop: 10 }}>
+              <label style={{ color: '#9ca3af', fontSize: 12, display: 'block', marginBottom: 6 }}>
+                答え（任意）
+              </label>
+              <textarea
+                value={inlineReceiveAnswer}
+                onChange={function(e) { setInlineReceiveAnswer(e.target.value); }}
+                placeholder="今思うことを書いてもいい。書かなくてもいい。"
+                rows={3}
+                autoFocus
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: '#1a1a2e', border: '1px solid #3d2d5c',
+                  borderRadius: 8, padding: '10px 12px',
+                  color: '#e2e4ee', fontSize: 14, resize: 'vertical',
+                  fontFamily: 'inherit', lineHeight: 1.6,
+                }}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <button
+                  onClick={function() {
+                    onReceive(found.id, inlineReceiveAnswer);
+                    setInlineReceiveAnswer('');
+                    setInlineReceiveOpen(false);
+                  }}
+                  style={{
+                    flex: 1, padding: '10px 0', borderRadius: 8,
+                    background: '#4c1d95', border: 'none', color: '#ede9fe',
+                    fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
+                  }}
+                >
+                  受け取る
+                </button>
+                <button
+                  onClick={function() { setInlineReceiveOpen(false); setInlineReceiveAnswer(''); }}
+                  style={{
+                    padding: '10px 14px', borderRadius: 8,
+                    background: 'transparent', border: '1px solid #2e3348',
+                    color: '#6b7280', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  戻る
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* 受領後の次導線：記録塔で止まらせない */}
+      {/* 受領後の次導線：1件だけ表示、複数ある時はセレクタ */}
       {received.length > 0 && (
         <div className="post-receive-lead">
           <p className="post-receive-lead-text">
@@ -2308,20 +2580,40 @@ function GardenView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onUpda
         </div>
       )}
 
-      {/* 受領済みの火：未受領領域への再探索入口（主導線は箱庭に寄せる） */}
-      {received.length > 0 && onReexplore && received.map(function(rf) {
-        return (
-          <UnreceivedPanel
-            key={rf.id}
-            fire={rf}
-            onReexplore={onReexplore}
-            onRest={onRestUnreceived}
-            onReturnToHeart={onReturnToHeart}
-            actionResult={actionResult}
-            onCloseActionResult={onCloseActionResult}
-          />
-        );
-      })}
+      {received.length > 1 && (
+        <div style={{ margin: '8px 0 4px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {received.map(function(rf) {
+            var active = rf.id === shownReceivedId;
+            return (
+              <button
+                key={rf.id}
+                onClick={function() { setLocalSelectedReceivedId(rf.id); }}
+                style={{
+                  padding: '5px 10px', borderRadius: 16, fontSize: 11,
+                  background: active ? '#4c1d9522' : 'transparent',
+                  border: '1px solid ' + (active ? '#7c3aed' : '#2e3348'),
+                  color: active ? '#a78bfa' : '#4b5563',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                {rf.kindle ? rf.kindle.slice(0, 10) : '火'}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {shownReceivedFire && onReexplore && (
+        <UnreceivedPanel
+          key={shownReceivedFire.id}
+          fire={shownReceivedFire}
+          onReexplore={onReexplore}
+          onRest={onRestUnreceived}
+          onReturnToHeart={onReturnToHeart}
+          actionResult={actionResult}
+          onCloseActionResult={onCloseActionResult}
+        />
+      )}
 
       {/* 5. 問いの深度・火の安定バー */}
       {sf && (
@@ -2707,10 +2999,15 @@ function App() {
   var handleReceive = _useCallback(function(fireId, answer) {
     var result = receiveFire(gameRef.current, fireId, answer);
     if (result.ok) {
-      setGame(result.game);
+      var ng = triggerEncounter(result.game, 'kotae_first_receive', { fireId: fireId });
+      setGame(ng);
       setActionResult(result.actionResult || null);
-      // 受領のたびに必ずコタエ会話を出す（記録塔で止まらせない）
-      setKotaeDialog({ fireId: fireId, kind: 'receive' });
+      if (ng.activeEncounter) {
+        // EncounterDialog が閉じた後に garden_unreceived ナビを行う（onConfirm 内）
+      } else {
+        // 2回目以降はコタエ会話（旧フロー）
+        setKotaeDialog({ fireId: fireId, kind: 'receive' });
+      }
     }
   }, []);
 
@@ -2762,7 +3059,12 @@ function App() {
   var handleRestToday = _useCallback(function(fireId) {
     var result = restToday(gameRef.current, fireId);
     if (result.ok) {
-      setGame(result.game);
+      // tearsSpring が今回の休息で初解放されたらかなエンカウント
+      var ng = result.game;
+      if (ng.unlocks.tearsSpring && !gameRef.current.unlocks.tearsSpring) {
+        ng = triggerEncounter(ng, 'kana_first_rest', { fireId: fireId });
+      }
+      setGame(ng);
       setActionResult(result.actionResult || null);
     }
   }, []);
@@ -2839,9 +3141,11 @@ function App() {
         <GardenView
           game={game}
           onBack={function() { setScreen('home'); }}
+          onGoShelf={function() { setScreen('shelf'); }}
           onDoBattle={handleDoBattle}
           onWatchFire={handleWatchFire}
           onRestToday={handleRestToday}
+          onReceive={handleReceive}
           onUpdateLastSeen={handleUpdateLastSeen}
           onBuyMarket={handleBuyMarket}
           onReexplore={handleReexplore}
@@ -2861,6 +3165,23 @@ function App() {
             if (d.kind === 'receive') {
               setActiveUnreceivedFireId(d.fireId);
               setScreen('garden');
+            }
+          }}
+        />
+      )}
+      {game.activeEncounter && (
+        <EncounterDialog
+          encounterId={game.activeEncounter.encounterId}
+          onConfirm={function() {
+            var enc = gameRef.current.activeEncounter;
+            var ng = dismissEncounter(gameRef.current);
+            setGame(ng);
+            if (enc && enc.fireId) {
+              var def = ENCOUNTER_DEFS[enc.encounterId];
+              if (def && def.nav === 'garden_unreceived') {
+                setActiveUnreceivedFireId(enc.fireId);
+                setScreen('garden');
+              }
             }
           }}
         />
