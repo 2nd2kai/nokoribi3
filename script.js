@@ -925,7 +925,7 @@ function reexploreFire(game, fireId, type) {
   });
   // 審査官エンカウント: 価値の黒札が初めて「静かな痕跡」に達した時
   if (type === 'value' && afterStage === '静かな痕跡') {
-    if (!shouldSuppressOldEncounter(ns, fireId, 'black_tags')) {
+    if (hasSeenPlaceEncounter(ns, 'black_tags')) {
       ns = triggerEncounter(ns, 'auditor_first_value', { fireId: fireId });
     }
   }
@@ -1007,7 +1007,7 @@ function returnFireToHeart(game, fireId) {
     context: 'unreceived', fireId: fireId,
     traces: ['心へ還った火が、箱庭に置かれた。'],
   });
-  if (!shouldSuppressOldEncounter(ns, fireId, 'back_shelf')) {
+  if (hasSeenPlaceEncounter(ns, 'back_shelf')) {
     ns = triggerEncounter(ns, 'utsuro_first_return', { fireId: fireId });
   }
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
@@ -1533,13 +1533,12 @@ var PLACE_ENCOUNTERS = {
   },
 };
 
-// placeEncounterをまだ見ていない火にはキャラの旧エンカウントを出さない。
-// placeId: 'tears' | 'black_tags' | 'back_shelf'
-function shouldSuppressOldEncounter(game, fireId, placeId) {
-  var fire = (game.fires || []).find(function(f) { return f.id === fireId; });
-  if (!fire || !fire.openedPlace) return false;
-  // この火がその場所を開いており、かつ場所での出会いがまだなら抑制する
-  return fire.openedPlace.id === placeId && !fire.openedPlace.firstEncounterSeen;
+// いずれかの火でその場所のplaceEncounterを完了済みか確認する。
+// 完了前はキャラの旧エンカウントで初登場させない。
+function hasSeenPlaceEncounter(game, placeId) {
+  return (game.fires || []).some(function(fire) {
+    return fire.openedPlace && fire.openedPlace.id === placeId && fire.openedPlace.firstEncounterSeen;
+  });
 }
 
 // 場所での出会いを完了する。余熱を一つ分けた痕跡を残す。灯貨も素材も増やさない。
@@ -4678,7 +4677,7 @@ function App() {
       // tearsSpring が今回の休息で初解放されたらかなエンカウント
       var ng = result.game;
       if (ng.unlocks.tearsSpring && !gameRef.current.unlocks.tearsSpring) {
-        if (!shouldSuppressOldEncounter(ng, fireId, 'tears')) {
+        if (hasSeenPlaceEncounter(ng, 'tears')) {
           ng = triggerEncounter(ng, 'kana_first_rest', { fireId: fireId });
         }
       }
