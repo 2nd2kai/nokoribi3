@@ -412,6 +412,7 @@ function createFire(kindle, pain, writeState, feeling, metrics) {
     receipt: null,
     receiptDraft: null,
     openedPlace: null,
+    placeTrace: null,
   };
 }
 
@@ -446,6 +447,7 @@ function normalizeFire(f) {
   if (f.receipt === undefined) f.receipt = null;
   if (f.receiptDraft === undefined) f.receiptDraft = null;
   if (f.openedPlace === undefined) f.openedPlace = null;
+  if (f.placeTrace === undefined) f.placeTrace = null;
   // receiving → found 回復（旅途中にアプリが終了した場合）
   if (f.status === 'receiving') { f.status = 'found'; f.receiptDraft = null; }
   // 既存の received fire に receipt を補完
@@ -1462,6 +1464,96 @@ function chooseOpenedPlace(heat) {
     id: def.id, name: def.name, reason: def.reason, map: def.map,
     heatKey: best[0], openedAt: Date.now(), firstEncounterSeen: false,
   };
+}
+
+// ── 場所での初回出会い（Turn 15）─────────────────────────────────────────────
+// 開いた場所へ行き、担当キャラと出会い、火に残った余熱を一つだけ分ける。
+// 解決ではない。痛みは水面に置き、判定は本文から離し、虚しさは棚に置き直す。
+var PLACE_ENCOUNTERS = {
+  tears: {
+    character: 'かな', charColor: '#7EB8D4',
+    oldEncounter: 'kana_first_rest',
+    lines: [
+      { narrative: ['泉の水面に、火が映っていた。', '', '火は燃えているのに、', '水の中では、泣いているように見えた。'] },
+      { who: 'かな', text: 'ここでは、進まなくていいよ。' },
+      { who: 'トイマン', text: '進まないなら、何をする。' },
+      { who: 'かな', text: '痛かったところを、急がせない。' },
+    ],
+    question: 'この火のどこが、一番痛かったですか？',
+    choices: ['届かなかったこと', '分かってもらえなかったこと', '反応がなかったこと', '自分で価値を疑ったこと', 'まだ触れたくない'],
+    result: function() {
+      return [
+        { who: 'かな', text: 'そこが痛かったんだね。\nじゃあ今日は、答えにしなくていい。' },
+        { narrative: ['水面に置いておこう。'] },
+      ];
+    },
+    traceLabel: '水面に置いた痛み',
+  },
+  black_tags: {
+    character: '審査官', charColor: '#94a3b8',
+    oldEncounter: 'auditor_first_value',
+    lines: [
+      { narrative: ['壁一面に、黒い札が貼られていた。', '', '価値なし。', '反応なし。', '意味なし。', '未達。', '不合格。', '', 'その奥に、審査官が立っていた。'] },
+      { who: '審査官', text: '判決を確認する。' },
+      { who: 'トイマン', text: '判決は不要。' },
+      { who: '審査官', text: 'では、札として分ける。\n本文には戻さない。' },
+    ],
+    question: 'この火には、どんな黒札が貼られていましたか？',
+    choices: ['数字', '反応', '収益', '評価', '過去の自分', '役に立つかどうか'],
+    result: function(sel) {
+      return [
+        { who: '審査官', text: '「' + sel + '」。' },
+        { who: '審査官', text: '確認した。\nこれは本文ではない。\n黒札として分ける。' },
+      ];
+    },
+    traceLabel: '本文から離した黒札',
+  },
+  back_shelf: {
+    character: 'うつろ', charColor: '#b0a8cc',
+    oldEncounter: 'utsuro_first_return',
+    lines: [
+      { narrative: ['棚の奥に、何も置かれていない場所があった。', '', 'そこだけ、ほこりが積もっていない。', '何もないのに、空いている。'] },
+      { who: 'うつろ', text: '終わったね。' },
+      { who: 'トイマン', text: '消えたのか。' },
+      { who: 'うつろ', text: '違う。\n置き場所がなかっただけ。' },
+    ],
+    question: 'この火は、本当は何になってほしかったと思いますか？',
+    choices: ['誰かに届くもの', '自分を残すもの', '意味のあるもの', '価値の証明', 'ただ、消えないもの', 'まだ分からない'],
+    result: function() {
+      return [
+        { who: 'うつろ', text: 'なら、何にもならなかったんじゃない。' },
+        { who: 'うつろ', text: 'まだ、置き場所がなかっただけ。\nここに置く。' },
+      ];
+    },
+    traceLabel: '棚に置いた余白',
+  },
+};
+
+// 場所での出会いを完了する。余熱を一つ分けた痕跡を残す。灯貨も素材も増やさない。
+function completePlaceEncounter(game, fireId, selected) {
+  var ns = cloneS(game);
+  var fire = ns.fires.find(function(f) { return f.id === fireId; });
+  if (!fire || !fire.openedPlace) return { ok: false, game: game };
+  var def = PLACE_ENCOUNTERS[fire.openedPlace.id];
+  if (!def || !selected) return { ok: false, game: game };
+
+  var traceText = def.traceLabel + '：' + selected;
+  fire.openedPlace.firstEncounterSeen = true;
+  fire.placeTrace = {
+    placeId: fire.openedPlace.id,
+    character: def.character,
+    selected: selected,
+    traceText: traceText,
+    createdAt: nowISO(),
+  };
+  fire.logs = capLog((fire.logs || []).concat([{ text: traceText, at: nowISO() }]), LOG_CAP_FIRE);
+  fire.updatedAt = nowISO();
+
+  // このキャラとは出会った。旧・機械トリガの同キャラ出会いは二重に出さない。
+  if (def.oldEncounter && ns.seenEncounters && ns.seenEncounters.indexOf(def.oldEncounter) === -1) {
+    ns.seenEncounters = ns.seenEncounters.concat([def.oldEncounter]);
+  }
+  return { ok: true, game: ns, traceText: traceText };
 }
 
 function beginReceiptJourney(game, fireId) {
@@ -3576,13 +3668,15 @@ function fireCompanionLine(fire) {
   }
 }
 
-// 最近の痕跡（最大3）。守られた痕跡＋会い直した痕跡＋返却灯。報酬ではなく証拠。
+// 最近の痕跡（最大3）。守られた痕跡＋会い直した痕跡＋場所で分けた痕跡＋返却灯。
 function homeRecentTraces(fire) {
   var traces = getStabilityTraces(fire.gardenProgress || 0).slice();
   var rc = fire.reexploreCounts || {};
   if ((rc.value || 0) > 0)        traces.unshift('本文から離した黒札');
   if ((rc.meaning || 0) > 0)      traces.unshift('塔へ流れた意味の光');
   if ((rc.satisfaction || 0) > 0) traces.unshift('灰から拾った種');
+  // 場所でキャラと分けた痕跡を前に出す（最も新しく、意味の濃い一行）。
+  if (fire.placeTrace && fire.placeTrace.traceText) traces.unshift(fire.placeTrace.traceText);
   if (fire.status === 'returned') traces.unshift('心へ返した灯');
   return traces.slice(0, 3);
 }
@@ -3595,6 +3689,10 @@ function homeNextActions(fire) {
     case 'found':     return [{ label: '記録塔へ届ける', go: 'deliver' }];
     case 'receiving': return [];
     case 'received':
+      // 受領証の裏に開いた場所へまだ会いに行っていないなら、まずそこへ。
+      if (fire.openedPlace && !fire.openedPlace.firstEncounterSeen) {
+        return [{ label: fire.openedPlace.name + 'へ行く', go: 'encounter' }];
+      }
       // settled なら、その火に会いに行ける場所へ（そこに「心へ返す」がある）。
       // コタエの「返せます」と導線を一致させ、約束を裏切らない。
       return isAllSettled(fire)
@@ -3684,8 +3782,8 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
             <p className="today-voice-text">{companion.text}</p>
           </div>
 
-          {/* 受領証の裏に開いた道（会いに行く導線は次段。今は気配だけ） */}
-          {currentFire.status === 'received' && currentFire.openedPlace && (
+          {/* 受領証の裏に開いた道。まだ会いに行っていない間だけ気配を出す。 */}
+          {currentFire.status === 'received' && currentFire.openedPlace && !currentFire.openedPlace.firstEncounterSeen && (
             <p className="today-opened-place">
               受領証の裏に、{currentFire.openedPlace.name}への道が開いている。
             </p>
@@ -4266,6 +4364,130 @@ function DiscoveryScene({ fire, onDeliver }) {
   );
 }
 
+// ── PlaceEncounterScene ──────────────────────────────────────────────────────
+// 開いた場所での初回出会い。導入→キャラの言葉→問い→選択を一つ→結果→痕跡。
+// 余熱を「解決」せず、置き場所に分ける儀式。openedPlace.id で内容が切り替わる。
+function lineToFragments(text) {
+  return text.split('\n').map(function(seg, si) {
+    return React.createElement(React.Fragment, { key: si },
+      si > 0 && React.createElement('br', null), seg);
+  });
+}
+
+function PlaceEncounterScene({ fire, onComplete }) {
+  var def = PLACE_ENCOUNTERS[fire.openedPlace && fire.openedPlace.id];
+  var [step, setStep] = _useState(0);
+  var [phase, setPhase] = _useState('dialogue'); // dialogue | choose | result
+  var [selected, setSelected] = _useState(null);
+  var [visible, setVisible] = _useState(false);
+  var [leaving, setLeaving] = _useState(false);
+
+  _useEffect(function() {
+    var t = setTimeout(function() { setVisible(true); }, 80);
+    return function() { clearTimeout(t); };
+  }, []);
+
+  var beats = def ? def.lines : [];
+  var atLastBeat = step >= beats.length - 1;
+
+  function advance() {
+    if (!atLastBeat) setStep(function(s) { return s + 1; });
+    else setPhase('choose');
+  }
+  function choose(c) { setSelected(c); setPhase('result'); }
+  function finish() {
+    setLeaving(true);
+    setTimeout(function() { onComplete(selected); }, 620);
+  }
+
+  useOverlayKeys({
+    onEnter: leaving ? null
+      : phase === 'dialogue' ? advance
+      : phase === 'result' ? finish
+      : null,
+  });
+
+  if (!def) { return null; }
+
+  var beat = beats[step] || {};
+  var resultLines = (phase === 'result' && selected) ? def.result(selected) : [];
+  var traceText = (phase === 'result' && selected) ? (def.traceLabel + '：' + selected) : '';
+  var charColor = def.charColor;
+
+  function renderBeat(b, key) {
+    if (b.narrative) {
+      return (
+        <div key={key} className="intro-narrative">
+          {b.narrative.map(function(line, i) {
+            if (!line) return React.createElement('div', { key: i, style: { height: 10 } });
+            return <p key={i} className="intro-narrative-line">{line}</p>;
+          })}
+        </div>
+      );
+    }
+    var color = b.who === def.character ? charColor : '#fb923c'; // キャラ or トイマン
+    return (
+      <div key={key} className="intro-toyman-block">
+        <span className="intro-toyman-label" style={{ color: color }}>{b.who}</span>
+        <p className="intro-toyman-line">{lineToFragments(b.text)}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={'intro-scene place-scene place-' + fire.openedPlace.id + (leaving ? ' entrust-leaving' : '')}
+      onClick={(phase === 'dialogue' && !atLastBeat && !leaving) ? advance : undefined}
+    >
+      <p className="place-scene-name">{fire.openedPlace.name}</p>
+
+      {phase === 'dialogue' && (
+        <React.Fragment>
+          <div key={step} className={'intro-content' + (visible ? ' intro-content-in' : '')}>
+            {renderBeat(beat, 'b')}
+          </div>
+          <div className="intro-btn-row" onClick={function(e) { e.stopPropagation(); }}>
+            {atLastBeat ? (
+              <button className="intro-btn-fire place-btn" onClick={function() { setPhase('choose'); }}>
+                問いに向き合う
+              </button>
+            ) : (
+              <button className="intro-btn-next" onClick={advance}>つづき</button>
+            )}
+          </div>
+        </React.Fragment>
+      )}
+
+      {phase === 'choose' && (
+        <div className="place-choose intro-content-in">
+          <p className="place-question">{def.question}</p>
+          <div className="place-choices">
+            {def.choices.map(function(c) {
+              return (
+                <button key={c} className="journey-option-btn place-choice-btn" onClick={function() { choose(c); }}>
+                  {c}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {phase === 'result' && (
+        <div className="place-result intro-content-in">
+          {resultLines.map(function(rl, i) { return renderBeat(rl, i); })}
+          <p className="place-trace">痕跡　{traceText}</p>
+          <div className="intro-btn-row" onClick={function(e) { e.stopPropagation(); }}>
+            <button className="intro-btn-fire place-btn" onClick={finish} disabled={leaving}>
+              ここに置いていく
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -4297,6 +4519,8 @@ function App() {
   // 留守のあいだ（戻ってきた時に一度だけ）
   var [awayReport, setAwayReport] = _useState(null);
   var awayCheckedRef = _useRef(false);
+  // 場所での初回出会い { fireId }
+  var [placeEncounter, setPlaceEncounter] = _useState(null);
   var tickRef = _useRef(null);
 
   // 各ハンドラが常に最新の committed game から実処理できるよう、
@@ -4382,6 +4606,12 @@ function App() {
     } else {
       setGame(g); // 旅に入れなくても、発見済みフラグだけは残す
     }
+  }, []);
+
+  var handlePlaceEncounterDone = _useCallback(function(fireId, selected) {
+    var result = completePlaceEncounter(gameRef.current, fireId, selected);
+    if (result.ok) setGame(result.game);
+    setPlaceEncounter(null);
   }, []);
 
   var handleUpdateLastSeen = _useCallback(function() {
@@ -4556,6 +4786,17 @@ function App() {
       {!introActive && !entrustFireId && awayReport && (
         <AwayReport report={awayReport} onClose={function() { setAwayReport(null); }} />
       )}
+      {/* 場所での初回出会い — 開いた場所へ会いに行く。余熱を一つ分ける。 */}
+      {!introActive && !entrustFireId && placeEncounter && (function() {
+        var fire = game.fires.find(function(f) { return f.id === placeEncounter.fireId; });
+        if (!fire || !fire.openedPlace) return null;
+        return (
+          <PlaceEncounterScene
+            fire={fire}
+            onComplete={function(selected) { handlePlaceEncounterDone(fire.id, selected); }}
+          />
+        );
+      })()}
       {!introActive && screen === 'home' && (
         <HomeView
           game={game}
@@ -4567,6 +4808,7 @@ function App() {
             else if (go === 'shelf') { setScreen('shelf'); }
             else if (go === 'unreceived') { setActiveUnreceivedFireId(fireId); setScreen('garden'); }
             else if (go === 'deliver') { handleDeliverToTower(fireId); }
+            else if (go === 'encounter') { setPlaceEncounter({ fireId: fireId }); }
           }}
         />
       )}

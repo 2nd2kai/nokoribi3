@@ -5177,3 +5177,31 @@ html,body{
 
 /* ホーム：開いた道の気配（会いに行く導線は次段） */
 .today-opened-place{color:#9a86c0;font-size:12px;line-height:1.8;margin:0 0 14px;font-style:italic}
+
+/* ── 場所での初回出会い（PlaceEncounterScene）── */
+.place-scene{justify-content:center}
+.place-scene-name{
+  position:absolute;top:34px;left:0;right:0;text-align:center;
+  color:#5b6678;font-size:11px;letter-spacing:.2em;margin:0;
+}
+.place-choose,.place-result{width:100%;max-width:340px}
+.place-question{
+  color:#cbd2e0;font-size:15px;line-height:1.9;text-align:center;
+  margin:0 0 18px;
+}
+.place-choices{display:flex;flex-direction:column;gap:8px}
+.place-choice-btn{text-align:center}
+.place-result .intro-narrative,.place-result .intro-toyman-block{margin-bottom:10px}
+.place-trace{
+  margin:18px 0 8px;padding:10px 14px;border-radius:10px;text-align:center;
+  background:#0a0c12;border:1px solid #1e2230;
+  color:#9aa3b5;font-size:12px;letter-spacing:.04em;
+}
+.place-btn{border-color:#3a4a5c;background:rgba(58,74,92,.12);color:#cbd6e4}
+.place-btn:hover{background:rgba(58,74,92,.22);box-shadow:0 0 24px 4px rgba(110,167,201,.12)}
+/* 場所ごとの微かな色味 */
+.place-tears .intro-fire-glow{filter:none}
+.place-tears .place-btn{border-color:#2a4a5c;background:rgba(42,74,92,.14);color:#a9d4e4}
+.place-tears .place-btn:hover{box-shadow:0 0 24px 4px rgba(126,184,212,.16)}
+.place-black_tags .place-btn{border-color:#3a3a44;background:rgba(58,58,68,.16);color:#c2c8d2}
+.place-back_shelf .place-btn{border-color:#3e3a4c;background:rgba(62,58,76,.16);color:#c8c2d8}
