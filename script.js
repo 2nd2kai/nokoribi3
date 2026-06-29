@@ -2873,90 +2873,109 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
   );
 }
 
+// 記録塔。記録レイヤーを「記録／余熱／返却灯」の最小タブで整理する。
+// 記録: 受領証・問いの足跡 ／ 余熱: placeTrace・heatTraces・受け取られた言葉 ／ 返却灯: returnLamp・finalReturn
 function RecordTower({ game, onGoUnreceived, onViewReceipt, onViewReturnLamp }) {
   var records = game.fires.filter(function(f) {
     return f.status === 'received' || f.status === 'held' || f.status === 'returned';
   });
   var statusText = { received: '余熱あり', held: '保持中', returned: '心へ返した' };
+  var TABS = ['記録', '余熱', '返却灯'];
+  var [tab, setTab] = _useState('記録');
+
+  var shown = records.filter(function(f) {
+    if (tab === '返却灯') return f.status === 'returned' && f.returnLamp;
+    if (tab === '余熱') {
+      return (f.placeTrace) || (f.heatTraces && f.heatTraces.length) || (f.characterResponses && f.characterResponses.length);
+    }
+    return true; // 記録
+  });
+
+  function heatList(fire) {
+    return (fire.heatTraces || []).map(function(h) { return h.traceText; });
+  }
 
   return (
     <div style={{ padding: '0 0 40px' }}>
-      <h3 style={{ color: '#a78bfa', fontSize: 15, margin: '0 0 14px' }}>記録塔</h3>
-      {records.length === 0 && (
-        <p style={{ color: '#8f9bb3', fontSize: 13 }}>まだ記録がありません。</p>
+      <h3 style={{ color: '#a78bfa', fontSize: 15, margin: '0 0 12px' }}>記録塔</h3>
+      <div className="tower-tabs" role="tablist">
+        {TABS.map(function(t) {
+          return (
+            <button key={t} role="tab" aria-selected={tab === t}
+              className={'tower-tab' + (tab === t ? ' tower-tab-on' : '')}
+              onClick={function() { setTab(t); }}>{t}</button>
+          );
+        })}
+      </div>
+      {shown.length === 0 && (
+        <p style={{ color: '#8f9bb3', fontSize: 13, marginTop: 12 }}>
+          {tab === '返却灯' ? 'まだ心へ返した火はありません。' : tab === '余熱' ? 'まだ余熱の記録はありません。' : 'まだ記録がありません。'}
+        </p>
       )}
-      {records.map(function(fire) {
+      {shown.map(function(fire) {
         return (
-          <div key={fire.id} style={{
-            background: '#151820', border: '1px solid #2e3348',
-            borderRadius: 8, padding: '12px 14px', marginBottom: 8,
-          }}>
+          <div key={fire.id} className="tower-rec">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-              <p style={{ color: '#e2e4ee', fontSize: 13, margin: 0 }}>{fire.kindle}</p>
+              <p style={{ color: '#e2e4ee', fontSize: 13, margin: 0, overflowWrap: 'anywhere' }}>{fire.kindle}</p>
               <span style={{ color: fire.status === 'returned' ? '#9ca3af' : '#a78bfa', fontSize: 10, whiteSpace: 'nowrap' }}>
                 {statusText[fire.status] || fire.status}
               </span>
             </div>
-            {fire.question && (
-              <p style={{ color: '#7c3aed', fontSize: 12, margin: '0 0 4px', lineHeight: 1.6 }}>
-                ✦ {fire.question}
-              </p>
-            )}
-            {fire.answer && (
-              <p style={{ color: '#9ca3af', fontSize: 12, margin: '0 0 6px', lineHeight: 1.5 }}>
-                → {fire.answer}
-              </p>
-            )}
-            {/* 心へ返した火は、返却灯としてここに残る。なかったことにしない。 */}
-            {fire.status === 'returned' && fire.returnLamp && (
-              <div className="tower-lamp">
-                <p className="tower-lamp-lead">この火は、心へ返されました。<br />消失ではなく、返却です。</p>
-                {fire.returnLamp.label && (
-                  <p className="tower-lamp-line"><span className="tower-lamp-k">返却灯</span>「{fire.returnLamp.label}」</p>
+
+            {/* 記録タブ: 問い + 問いの足跡 + 受領証 */}
+            {tab === '記録' && (
+              <React.Fragment>
+                {fire.question && (
+                  <p style={{ color: '#7c3aed', fontSize: 12, margin: '0 0 6px', lineHeight: 1.6 }}>✦ {fire.question}</p>
                 )}
-                {fire.returnLamp.memo && (
-                  <p className="tower-lamp-line"><span className="tower-lamp-k">最後の一言</span>{fire.returnLamp.memo}</p>
+                <QuestionFootprints fire={fire} limit={3} variant="receipt" />
+                {onViewReceipt && fire.receipt && (
+                  <button className="tower-rec-btn" onClick={function() { onViewReceipt(fire.id); }}>受領証を見る</button>
                 )}
-              </div>
+              </React.Fragment>
             )}
-            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-              {onViewReceipt && fire.receipt && (
-                <button
-                  onClick={function() { onViewReceipt(fire.id); }}
-                  style={{
-                    padding: '5px 11px', borderRadius: 7,
-                    background: 'transparent', border: '1px solid #2a2340',
-                    color: '#6b7280', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  受領証を見る
-                </button>
-              )}
-              {fire.status === 'returned' && onViewReturnLamp && (
-                <button
-                  onClick={function() { onViewReturnLamp(fire.id); }}
-                  style={{
-                    padding: '5px 11px', borderRadius: 7,
-                    background: 'transparent', border: '1px solid #3a3550',
-                    color: '#b0a8cc', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  返却灯を見る
-                </button>
-              )}
-              {fire.status === 'received' && onGoUnreceived && (
-                <button
-                  onClick={function() { onGoUnreceived(fire.id); }}
-                  style={{
-                    padding: '5px 11px', borderRadius: 7,
-                    background: 'transparent', border: '1px solid #4c1d95',
-                    color: '#a78bfa', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  余熱に会い直す →
-                </button>
-              )}
-            </div>
+
+            {/* 余熱タブ: placeTrace / heatTraces / 受け取られた言葉 */}
+            {tab === '余熱' && (
+              <React.Fragment>
+                {fire.placeTrace && fire.placeTrace.traceText && (
+                  <p className="tower-line"><span className="tower-line-k">場所の痕跡</span>{fire.placeTrace.traceText}</p>
+                )}
+                {heatList(fire).slice(-4).map(function(t, i) {
+                  return <p key={i} className="tower-line"><span className="tower-line-k">余熱</span>{t}</p>;
+                })}
+                {(fire.characterResponses || []).slice(-3).map(function(r, i) {
+                  return (
+                    <p key={'r' + i} className="tower-line">
+                      <span className="tower-line-k" style={{ color: RESPONSE_COLORS[r.character] || '#5a6478' }}>
+                        {RESPONSE_NAMES[r.character] || r.character}
+                      </span>{r.text.split('\n')[0]}
+                    </p>
+                  );
+                })}
+                {fire.status === 'received' && onGoUnreceived && (
+                  <button className="tower-rec-btn tower-rec-btn-heat" onClick={function() { onGoUnreceived(fire.id); }}>余熱に会い直す →</button>
+                )}
+              </React.Fragment>
+            )}
+
+            {/* 返却灯タブ: returnLamp / finalReturn */}
+            {tab === '返却灯' && fire.returnLamp && (
+              <React.Fragment>
+                <div className="tower-lamp">
+                  <p className="tower-lamp-lead">この火は、心へ返されました。<br />消失ではなく、返却です。</p>
+                  {fire.returnLamp.label && (
+                    <p className="tower-lamp-line"><span className="tower-lamp-k">返し方</span>「{fire.returnLamp.label}」</p>
+                  )}
+                  {fire.returnLamp.memo && (
+                    <p className="tower-lamp-line"><span className="tower-lamp-k">最後の一言</span>{fire.returnLamp.memo}</p>
+                  )}
+                </div>
+                {onViewReturnLamp && (
+                  <button className="tower-rec-btn tower-rec-btn-lamp" onClick={function() { onViewReturnLamp(fire.id); }}>返却灯を見る</button>
+                )}
+              </React.Fragment>
+            )}
           </div>
         );
       })}
@@ -5235,8 +5254,8 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, m
   var heatTrapRef = useFocusTrap();
 
   return (
-    <div className={wrapCls} ref={heatTrapRef} role="dialog" aria-modal="true" aria-label={'余熱に会い直す：' + def.label} onClick={function(e) { e.stopPropagation(); }}>
-      <div className="intro-content" aria-live="polite">
+    <div className={'ritual-layer heat-revisit-wrap' + (leaving ? ' intro-leaving' : '')} ref={heatTrapRef} role="dialog" aria-modal="true" aria-label={'余熱に会い直す：' + def.label} onClick={function(e) { e.stopPropagation(); }}>
+     <div className="ritual-card"><div className="ritual-body" aria-live="polite">
 
         {phase === 'intro' && (
           <div className="heat-revisit-intro intro-content-in">
@@ -5328,7 +5347,7 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, m
           </div>
         )}
 
-      </div>
+      </div></div>
     </div>
   );
 }
@@ -5408,8 +5427,8 @@ function FinalReturnScene({ fire, onReturn, onHold }) {
   }
 
   return (
-    <div className={wrapCls} ref={finalTrapRef} role="dialog" aria-modal="true" aria-label="心へ返す" onClick={function(e) { e.stopPropagation(); }}>
-      <div className="intro-content" aria-live="polite">
+    <div className={'ritual-layer final-return-wrap' + (leaving ? ' intro-leaving' : '')} ref={finalTrapRef} role="dialog" aria-modal="true" aria-label="心へ返す" onClick={function(e) { e.stopPropagation(); }}>
+     <div className="ritual-card"><div className="ritual-body" aria-live="polite">
 
         {phase === 'record' && (
           <div className="final-return-record intro-content-in">
@@ -5597,7 +5616,7 @@ function FinalReturnScene({ fire, onReturn, onHold }) {
           </div>
         )}
 
-      </div>
+      </div></div>
     </div>
   );
 }
@@ -5884,6 +5903,12 @@ function App() {
     });
   }, []);
 
+  // 儀式レイヤーが前面にある間は、背後の箱庭レイヤー（Home/Garden/Shelf）を描画しない。
+  // fixed で覆ってはいるが、背景のスクロール漏れ・誤タップを防ぎ、構成の崩れを断つ。
+  var ritualActive = introActive || !!entrustFireId || !!placeEncounter ||
+    !!heatRevisitState || !!finalReturnFireId || !!awayReport ||
+    (receiptJourney && receiptJourney.phase === 'journey');
+
   return (
     <div style={{
       maxWidth: 480, margin: '0 auto', minHeight: '100vh',
@@ -5968,7 +5993,7 @@ function App() {
           />
         );
       })()}
-      {!introActive && screen === 'home' && (
+      {!ritualActive && screen === 'home' && (
         <HomeView
           game={game}
           onLightFire={handleLightFire}
@@ -5983,7 +6008,7 @@ function App() {
           }}
         />
       )}
-      {screen === 'shelf' && (
+      {!ritualActive && screen === 'shelf' && (
         <ShelfView
           game={game}
           onBack={function() { setScreen('home'); }}
@@ -5998,7 +6023,7 @@ function App() {
           onCloseActionResult={closeActionResult}
         />
       )}
-      {screen === 'garden' && (
+      {!ritualActive && screen === 'garden' && (
         <GardenView
           game={game}
           onBack={function() { setScreen('home'); }}

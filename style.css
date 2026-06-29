@@ -5402,3 +5402,48 @@ html,body{
 .intro-btn-fire,.intro-btn-next,.place-btn,.heat-btn,.receipt-btn,.return-lamp-btn,
 .final-return-axis-btn,.final-return-choice-btn,.heat-revisit-touch-btn,.heat-revisit-choice-btn,
 .place-choice-btn,.today-action-btn{min-height:44px}
+
+/* ── Turn 24C: 儀式レイヤー共通構造 ──────────────────────────────────────────── */
+/* すべての儀式オーバーレイが必ず fixed 全画面で、内部だけスクロールし、下部ボタンが安全。 */
+.ritual-layer{
+  position:fixed; inset:0; z-index:2000;
+  display:flex; align-items:stretch; justify-content:center;
+  background:#070810;
+  padding:max(8px,env(safe-area-inset-top,0px)) 0 0;
+}
+.ritual-card{
+  width:100%; max-width:480px; margin:0 auto;
+  display:flex; flex-direction:column;
+  max-height:100dvh;
+  background:transparent;
+}
+.ritual-header{flex-shrink:0; padding:14px 24px 4px; text-align:center}
+.ritual-body{
+  flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  padding:8px 24px;
+  display:flex; flex-direction:column; align-items:center; text-align:center;
+}
+.ritual-footer{
+  flex-shrink:0; padding:12px 24px max(16px,calc(env(safe-area-inset-bottom,0px) + 12px));
+  display:flex; flex-direction:column; gap:8px;
+  background:linear-gradient(180deg,rgba(7,8,16,0),rgba(7,8,16,.92) 30%);
+}
+.ritual-footer button{min-height:44px}
+/* 儀式中の長文は折り返す */
+.ritual-body p, .ritual-body span{overflow-wrap:anywhere}
+/* HeatRevisit / FinalReturn は ritual-layer をルートにする（旧 intro-wrap の非fixed崩れを解消） */
+.ritual-layer .intro-content{width:100%;max-width:360px;margin:0 auto;flex:none}
+
+/* ── Turn 24C: 記録塔タブ ───────────────────────────────────────────────────── */
+.tower-tabs{display:flex;gap:6px;margin:0 0 12px}
+.tower-tab{flex:1;min-height:40px;padding:8px 4px;border-radius:8px;font-size:12px;cursor:pointer;
+  font-family:inherit;background:transparent;border:1px solid #2a2340;color:#6b7280;transition:all .15s}
+.tower-tab-on{background:#1e1a2e;border-color:#4c1d95;color:#c4b5fd}
+.tower-tab:hover:not(.tower-tab-on){border-color:#3a2f55;color:#8f9bb3}
+.tower-rec{background:#151820;border:1px solid #2e3348;border-radius:8px;padding:12px 14px;margin-bottom:8px}
+.tower-rec-btn{margin-top:8px;min-height:40px;padding:7px 12px;border-radius:7px;font-size:11px;cursor:pointer;
+  font-family:inherit;background:transparent;border:1px solid #2a2340;color:#6b7280}
+.tower-rec-btn-heat{border-color:#4c1d95;color:#a78bfa}
+.tower-rec-btn-lamp{border-color:#3a3550;color:#b0a8cc}
+.tower-line{font-size:12px;line-height:1.7;color:#aeb4c4;margin:3px 0;overflow-wrap:anywhere}
+.tower-line-k{display:inline-block;font-size:10px;letter-spacing:.06em;color:#5a6478;margin-right:8px}
