@@ -4876,6 +4876,11 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .return-lamp-date{font-size:10px;color:#3a4050;text-align:center;margin:0 0 14px;letter-spacing:.06em}
 .return-lamp-btn{margin-top:2px}
 
+/* 返却灯の足跡応答（最新1件） */
+.return-lamp-response{display:flex;gap:8px;align-items:baseline;margin:0 0 8px;padding:9px 12px;border-radius:8px;background:rgba(18,16,26,.6);border:1px solid #262234}
+.return-lamp-response-who{flex-shrink:0;font-size:10px;letter-spacing:.08em}
+.return-lamp-response-text{font-size:12px;line-height:1.7;color:#aeb4c4;overflow-wrap:anywhere}
+
 /* 記録塔の返却灯サマリ */
 .tower-lamp{margin:8px 0 4px;padding:10px 12px;border-radius:8px;background:#0c0d15;border:1px solid #2a2640}
 .tower-lamp-lead{font-size:12px;line-height:1.8;color:#9a93b5;margin:0 0 8px}

@@ -1167,8 +1167,13 @@ function doBattle(game, fireId, answer) {
   fire.shadowVoiceIdx = (fire.shadowVoiceIdx || 0) + 1;
   ns.battleCount = (ns.battleCount || 0) + 1;
   // 影へ進むのは報酬行為ではない。素材は増やさない。残るのは焦げた紙片という痕跡だけ。
+  var footprintResp = null;
   if (answer && answer.trim()) {
     fire.answers = (fire.answers || []).concat([{ text: answer.trim(), at: nowISO() }]);
+    // 危機語を含む足跡には定型応答を返さない（保留室は ShadowPanel 側が担う）。
+    if (!hasDanger(answer)) {
+      footprintResp = recordFootprintResponse(ns, fire, answer.trim());
+    }
   }
   addLog(fire, pick(BATTLE_LOGS));
   addGardenItem(ns, 'burnt_paper');
@@ -1197,6 +1202,10 @@ function doBattle(game, fireId, answer) {
       ? ['問いの足跡を置きました。', '火が、少しだけ奥を見せました。']
       : ['焦げた紙片が、森に残った。'],
   });
+  // 足跡への住人の応答を結果に添える（ShadowPanel 完了表示で見せる）。
+  if (footprintResp) {
+    actionResult.response = { who: footprintResp.who, color: footprintResp.color, lines: footprintResp.lines };
+  }
   appendLightkeeperResult(actionResult, lkResult);
   if (fire.status === 'found') {
     actionResult.traces.push('トイマンが、問いの欠片を見つけた。');
@@ -1367,6 +1376,7 @@ function makeActionResult(opts) {
     completions: opts.completions || [],
     progress: opts.progress || null, // 未受領領域の変化量 {label, before, after, delta, ...}
     traces: opts.traces || [],
+    response: opts.response || null, // 住人の一言 {who, color, lines}
     at: nowISO(),
   };
 }
@@ -1769,8 +1779,8 @@ function characterReunionLine(charKey, memory) {
 
 // キャラ応答。AI会話でも評価でもなく、選んだ言葉をそのキャラの役割で「受け取る」一言。
 // 固定ルールで生成する。好感度・数値は出さない。
-var RESPONSE_NAMES = { kana: 'かな', auditor: '審査官', utsuro: 'うつろ', kotae: 'コタエ' };
-var RESPONSE_COLORS = { kana: '#7EB8D4', auditor: '#94a3b8', utsuro: '#b0a8cc', kotae: '#b0a8cc' };
+var RESPONSE_NAMES = { kana: 'かな', auditor: '審査官', utsuro: 'うつろ', kotae: 'コタエ', toyman: 'トイマン' };
+var RESPONSE_COLORS = { kana: '#7EB8D4', auditor: '#94a3b8', utsuro: '#b0a8cc', kotae: '#b0a8cc', toyman: '#fb923c' };
 var CHAR_RESPONSE_CAP = 10;
 
 function buildCharacterResponse(charKey, selected, memory) {
@@ -1804,6 +1814,76 @@ function recordCharacterResponse(ns, fire, charKey, source, selected) {
   if (!Array.isArray(fire.characterResponses)) fire.characterResponses = [];
   fire.characterResponses = fire.characterResponses.concat([{
     character: charKey, source: source, selected: selected,
+    text: resp.lines.join('\n'), createdAt: Date.now(),
+  }]).slice(-CHAR_RESPONSE_CAP);
+  return resp;
+}
+
+// 問いの足跡（自由記述）を軽く分類して、受け取る住人を決める。AI判定ではない。
+var FOOTPRINT_KEYWORDS = {
+  pain:      ['痛い', 'つらい', '辛い', '悲しい', '届かなかった', '届かない', '分かってほしかった', '分かってほしい', '反応がなかった', '寂しい', 'さびしい', '苦しい'],
+  judgment:  ['価値がない', '価値', '意味がない', '無駄', 'むだ', '評価', '数字', '反応', '役に立たない', '役立たない', '失敗', 'ダメ', 'だめ'],
+  emptiness: ['空っぽ', 'からっぽ', '虚しい', 'むなしい', '何にもならない', 'なんにもならない', '終わった', '消えた', '残らない', '意味にならなかった'],
+  question:  ['なぜ', 'どうして', '分からない', 'わからない', '何だった', '何になってほしかった', 'なんだった'],
+};
+var FOOTPRINT_CHARACTER = { pain: 'kana', judgment: 'auditor', emptiness: 'utsuro', question: 'kotae', unknown: 'toyman' };
+
+function classifyFootprint(text) {
+  var t = (text || '').toLowerCase();
+  // 痛み→判定→虚しさ→問い の順で最初に当たった分類を返す（痛みを最優先で受け止める）。
+  var order = ['pain', 'judgment', 'emptiness', 'question'];
+  for (var i = 0; i < order.length; i++) {
+    var cat = order[i];
+    var kws = FOOTPRINT_KEYWORDS[cat];
+    for (var j = 0; j < kws.length; j++) {
+      if (t.indexOf(kws[j].toLowerCase()) !== -1) return cat;
+    }
+  }
+  return 'unknown';
+}
+
+function clipFootprint(text, max) {
+  max = max || 30;
+  var t = (text || '').trim().replace(/\s+/g, ' ');
+  return t.length > max ? t.slice(0, max) + '…' : t;
+}
+
+// 足跡への住人の一言。固定ルール。評価ではなく「受け取る」。
+function buildFootprintResponse(text, memory) {
+  var cat = classifyFootprint(text);
+  var charKey = FOOTPRINT_CHARACTER[cat];
+  var q = '「' + clipFootprint(text) + '」。';
+  var lines;
+  if (charKey === 'kana') {
+    lines = [q, 'そこが痛かったんだね。', '今日は、答えにしなくていいよ。'];
+  } else if (charKey === 'auditor') {
+    lines = [q, '確認した。', 'これは本文ではない。', '黒札として分ける。'];
+  } else if (charKey === 'utsuro') {
+    lines = [q, '違う。', '置き場所がなかっただけ。'];
+  } else if (charKey === 'kotae') {
+    lines = [q, '記録しました。', 'これは答えではありません。問い札です。'];
+  } else { // toyman
+    lines = ['置いていかない。', 'まだ形は分からない。', 'でも、火のそばに置く。'];
+  }
+  // 場所で出会った住人なら、2回目以降だけ静かに前回へ触れる（数値は出さない）。
+  if (memory && (memory.traceCount || 0) >= 2) {
+    if (charKey === 'kana') lines.push('前にも、水面へ置いた痛みがあります。');
+    else if (charKey === 'auditor') lines.push('前にも、黒札を分けています。');
+    else if (charKey === 'utsuro') lines.push('前にも、棚へ置いた余白があります。');
+  }
+  return { category: cat, character: charKey, who: RESPONSE_NAMES[charKey] || 'トイマン',
+           color: RESPONSE_COLORS[charKey] || '#fb923c', lines: lines };
+}
+
+// 足跡応答を生成して fire.characterResponses に保存する。危機語は呼び出し側で除外済み。
+function recordFootprintResponse(ns, fire, text) {
+  if (!text || !text.trim()) return null;
+  var charKey = FOOTPRINT_CHARACTER[classifyFootprint(text)];
+  var memory = (ns.characterMemory || {})[charKey];
+  var resp = buildFootprintResponse(text, memory);
+  if (!Array.isArray(fire.characterResponses)) fire.characterResponses = [];
+  fire.characterResponses = fire.characterResponses.concat([{
+    character: resp.character, source: 'footprint', selected: clipFootprint(text),
     text: resp.lines.join('\n'), createdAt: Date.now(),
   }]).slice(-CHAR_RESPONSE_CAP);
   return resp;
@@ -3110,6 +3190,21 @@ function ReturnLampCard({ fire, onClose }) {
       {/* 問いの足跡 — 返した後も、向き合った言葉は消えなかった。最新3件。 */}
       <QuestionFootprints fire={fire} limit={3} variant="lamp" />
 
+      {/* 足跡を受け取った住人の一言（最新1件だけ、重くしない）。 */}
+      {(function() {
+        var fr = (fire.characterResponses || []).filter(function(r) { return r.source === 'footprint'; });
+        if (!fr.length) return null;
+        var last = fr[fr.length - 1];
+        return (
+          <div className="return-lamp-response">
+            <span className="return-lamp-response-who" style={{ color: RESPONSE_COLORS[last.character] || '#9aa3b5' }}>
+              {RESPONSE_NAMES[last.character] || last.character}
+            </span>
+            <span className="return-lamp-response-text">{last.text.split('\n')[0]}</span>
+          </div>
+        );
+      })()}
+
       {/* 返し方 */}
       {lamp.label && (
         <div className="return-lamp-choice">
@@ -3821,6 +3916,16 @@ function ActionResultPanel({ result, onClose }) {
           <p className="action-result-section-label">箱庭に残った痕跡</p>
           {result.traces.map(function(t, i) {
             return <p key={i} className="action-result-trace">{t}</p>;
+          })}
+        </div>
+      )}
+
+      {/* 5. 住人の一言（問いの足跡への応答） */}
+      {result.response && (
+        <div className="action-result-section char-response">
+          <span className="char-response-who" style={{ color: result.response.color }}>{result.response.who}</span>
+          {result.response.lines.map(function(l, i) {
+            return <p key={i} className="char-response-line">{l}</p>;
           })}
         </div>
       )}
