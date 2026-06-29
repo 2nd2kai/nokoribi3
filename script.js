@@ -2406,6 +2406,7 @@ function ShadowPanel({ fire, onAnswer, onWatch, onSkip }) {
       {mode === 'confront' ? (
         <div>
           <textarea
+            data-testid="shadow-input"
             value={input}
             onChange={function(e) { setInput(e.target.value); }}
             placeholder="向き合う言葉を書いてみる（書かなくてもいい）"
@@ -2420,7 +2421,7 @@ function ShadowPanel({ fire, onAnswer, onWatch, onSkip }) {
             }}
           />
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <button onClick={handleSubmit} style={{
+            <button data-testid="shadow-submit" onClick={handleSubmit} style={{
               flex: 1, padding: '10px 0', borderRadius: 8,
               background: '#4c1d95', border: 'none', color: '#e9d5ff',
               fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
@@ -2438,7 +2439,7 @@ function ShadowPanel({ fire, onAnswer, onWatch, onSkip }) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button onClick={function() { setMode('confront'); }} style={{
+          <button data-testid="shadow-confront" onClick={function() { setMode('confront'); }} style={{
             padding: '11px 14px', borderRadius: 8, textAlign: 'left',
             background: '#1e1a2e', border: '1px solid #4c1d95',
             color: '#c4b5fd', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
@@ -2547,6 +2548,7 @@ function FireInputForm({ onSubmit, onCancel }) {
             どんな言葉を作った（作ろうとした）？
           </label>
           <textarea
+            data-testid="fire-input"
             value={kindle}
             onChange={function(e) { setKindle(e.target.value); }}
             placeholder="詩、歌詞、日記、手紙、SNS投稿…なんでも"
@@ -2577,7 +2579,7 @@ function FireInputForm({ onSubmit, onCancel }) {
             }}
           />
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <button onClick={handleNext} disabled={!kindle.trim()} style={{
+            <button data-testid="fire-next" onClick={handleNext} disabled={!kindle.trim()} style={{
               flex: 1, padding: '11px 0', borderRadius: 8,
               background: kindle.trim() ? '#c2410c' : '#1e2230',
               border: 'none', color: kindle.trim() ? '#fff' : '#444',
@@ -2628,7 +2630,7 @@ function FireInputForm({ onSubmit, onCancel }) {
             })}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button onClick={handleNext} style={{
+            <button data-testid="fire-next" onClick={handleNext} style={{
               flex: 1, padding: '11px 0', borderRadius: 8,
               background: '#c2410c', border: 'none', color: '#fff',
               fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
@@ -2675,7 +2677,7 @@ function FireInputForm({ onSubmit, onCancel }) {
               style={{ width: '100%', accentColor: '#f97316' }} />
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <button onClick={handleSubmit} style={{
+            <button data-testid="place-fire-submit" onClick={handleSubmit} style={{
               flex: 1, padding: '12px 0', borderRadius: 8,
               background: '#c2410c', border: 'none', color: '#fff',
               fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
@@ -2797,6 +2799,7 @@ function UnreceivedPanel({ fire, onReexplore, onRest, onReturnToHeart, actionRes
             ) : (
               <button
                 className="unreceived-card-btn"
+                data-testid={'heat-revisit-open-' + t.key}
                 onClick={function() { onReexplore(fire.id, t.key); }}
               >
                 {t.btnLabel}
@@ -2826,7 +2829,7 @@ function UnreceivedPanel({ fire, onReexplore, onRest, onReturnToHeart, actionRes
               3つの影は、もう火を覆っていない。<br />この火を、心へ返せます。
             </p>
             {canReturn ? (
-              <button className="return-heart-btn" onClick={function() { onReturnToHeart(fire.id); }}>
+              <button data-testid="final-return-open" className="return-heart-btn" onClick={function() { onReturnToHeart(fire.id); }}>
                 火を心へ返す
               </button>
             ) : (
@@ -2888,7 +2891,7 @@ function ShelfView({ game, onBack, onDoBattle, onWatchFire, onRestToday, onRecei
   return (
     <div style={{ padding: '0 16px 80px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0 12px' }}>
-        <button onClick={onBack} style={{
+        <button data-testid="view-back" onClick={onBack} style={{
           background: 'transparent', border: 'none', color: '#9ca3af',
           fontSize: 22, cursor: 'pointer', padding: 0, lineHeight: 1,
         }}>←</button>
@@ -3010,6 +3013,7 @@ function RecordTower({ game, onGoUnreceived, onViewReceipt, onViewReturnLamp }) 
         {TABS.map(function(t) {
           return (
             <button key={t} role="tab" aria-selected={tab === t}
+              data-testid={'tower-tab-' + (t === '記録' ? 'records' : t === '余熱' ? 'heat' : 'lamp')}
               className={'tower-tab' + (tab === t ? ' tower-tab-on' : '')}
               onClick={function() { setTab(t); }}>{t}</button>
           );
@@ -3047,7 +3051,7 @@ function RecordTower({ game, onGoUnreceived, onViewReceipt, onViewReturnLamp }) 
                 )}
                 <QuestionFootprints fire={fire} limit={3} variant="receipt" />
                 {onViewReceipt && fire.receipt && (
-                  <button className="tower-rec-btn" onClick={function() { onViewReceipt(fire.id); }}>受領証を見る</button>
+                  <button data-testid="receipt-open" className="tower-rec-btn" onClick={function() { onViewReceipt(fire.id); }}>受領証を見る</button>
                 )}
               </React.Fragment>
             )}
@@ -3089,7 +3093,7 @@ function RecordTower({ game, onGoUnreceived, onViewReceipt, onViewReturnLamp }) 
                   )}
                 </div>
                 {onViewReturnLamp && (
-                  <button className="tower-rec-btn tower-rec-btn-lamp" onClick={function() { onViewReturnLamp(fire.id); }}>返却灯を見る</button>
+                  <button data-testid="return-lamp-open" className="tower-rec-btn tower-rec-btn-lamp" onClick={function() { onViewReturnLamp(fire.id); }}>返却灯を見る</button>
                 )}
               </React.Fragment>
             )}
@@ -3280,7 +3284,7 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
         </div>
       )}
 
-      <button className="receipt-btn" onClick={onAction}>
+      <button data-testid="receipt-action" className="receipt-btn" onClick={onAction}>
         {buttonLabel || '余熱に会い直す'}
       </button>
     </div>
@@ -3300,7 +3304,7 @@ function ReturnLampCard({ fire, onClose }) {
 
   var trapRef = useFocusTrap();
   return (
-    <div className="return-lamp-card" ref={trapRef} role="dialog" aria-modal="true" aria-labelledby="lamp-title">
+    <div data-testid="return-lamp-card" className="return-lamp-card" ref={trapRef} role="dialog" aria-modal="true" aria-labelledby="lamp-title">
       <div className="return-lamp-flame" aria-hidden="true">🏮</div>
       <p className="return-lamp-title" id="lamp-title">返却灯</p>
       {/* どの火かが分かる最小の手がかりだけ（一行）。詳細は受領証/記録塔へ。 */}
@@ -3503,7 +3507,7 @@ function ReceiptJourney({ fire, onJourneyDone }) {
         {(isIntro || isKindle || isStability) && hasDialogue && (
           <div>
             {renderDialogue(activeDialogue, dialogueStep)}
-            <button className="kotae-btn" onClick={advance}>
+            <button data-testid="receipt-journey-next" className="kotae-btn" onClick={advance}>
               {isLastDialogue ? '次へ ▽' : '▽ つづき'}
             </button>
           </div>
@@ -3548,7 +3552,7 @@ function ReceiptJourney({ fire, onJourneyDone }) {
                 </div>
               );
             })}
-            <button className="kotae-btn" onClick={goNextLayer}>
+            <button data-testid="receipt-journey-next" className="kotae-btn" onClick={goNextLayer}>
               次へ ▽
             </button>
           </div>
@@ -3559,11 +3563,11 @@ function ReceiptJourney({ fire, onJourneyDone }) {
           <div>
             {renderDialogue(silenceLines, dialogueStep)}
             {isLastDialogue ? (
-              <button className="kotae-btn" onClick={function() { onJourneyDone({ currentMetrics: metrics }); }}>
+              <button data-testid="receipt-journey-next" className="kotae-btn" onClick={function() { onJourneyDone({ currentMetrics: metrics }); }}>
                 受領する
               </button>
             ) : (
-              <button className="kotae-btn" onClick={function() { setDialogueStep(function(s) { return s + 1; }); }}>
+              <button data-testid="receipt-journey-next" className="kotae-btn" onClick={function() { setDialogueStep(function(s) { return s + 1; }); }}>
                 ▽ つづき
               </button>
             )}
@@ -4093,7 +4097,7 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
   return (
     <div style={{ padding: '0 16px 120px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0 12px' }}>
-        <button onClick={onBack} style={{
+        <button data-testid="view-back" onClick={onBack} style={{
           background: 'transparent', border: 'none', color: '#9ca3af',
           fontSize: 22, cursor: 'pointer', padding: 0, lineHeight: 1,
         }}>←</button>
@@ -4112,7 +4116,7 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
         var wellGuarded = (sf.gardenProgress || 0) >= STABILITY_ENOUGH;
         return (
           <div className="action-btns">
-            <button className="btn-shadow" onClick={function() { setShadowOpen(true); }}>
+            <button data-testid="shadow-open" className="btn-shadow" onClick={function() { setShadowOpen(true); }}>
               <span className="btn-shadow-icon">🌑</span>影と向き合う
             </button>
             {wellGuarded ? (
@@ -4259,7 +4263,7 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
           <div className="record-tower-banner">
             <p className="record-tower-banner-title">遠くに、記録塔の灯りが見える。</p>
             <p className="record-tower-banner-desc">コタエが、問いの欠片を記録している。</p>
-            <button className="record-tower-open-btn" onClick={function() { setRecordOpen(true); }}>
+            <button data-testid="record-tower-toggle" className="record-tower-open-btn" onClick={function() { setRecordOpen(true); }}>
               記録塔を見る
             </button>
           </div>
@@ -4522,7 +4526,7 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction, onSe
               <p className="today-actions-label">次にできること</p>
               {nextActions.map(function(a, i) {
                 return (
-                  <button key={i} className="today-action-btn"
+                  <button key={i} className="today-action-btn" data-testid={'home-action-' + a.go}
                     onClick={function() { onNextAction(a.go, currentFire.id); }}>
                     {a.label}
                   </button>
@@ -4552,7 +4556,7 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction, onSe
                 </div>
                 <p className="gf-recent">最近：{recent || 'まだ、火のそばは静かです。'}</p>
                 {act && (
-                  <button className="gf-action" onClick={function(e) { e.stopPropagation(); onNextAction(act.go, f.id); }}>
+                  <button className="gf-action" data-testid={'gf-action-' + act.go} onClick={function(e) { e.stopPropagation(); onNextAction(act.go, f.id); }}>
                     {act.label}
                   </button>
                 )}
@@ -4626,6 +4630,7 @@ function DevBar({ game, onReset, onForceFound, onAddBattle, onReplayIntro }) {
       maxWidth: 480, margin: '0 auto',
     }}>
       <button
+        data-testid="dev-toggle"
         onClick={function() { setOpen(function(o) { return !o; }); }}
         style={{
           width: '100%', padding: '8px', background: 'transparent', border: 'none',
@@ -4639,7 +4644,7 @@ function DevBar({ game, onReset, onForceFound, onAddBattle, onReplayIntro }) {
       {open && (
         <div style={{ padding: '0 16px 12px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {searching && (
-            <button onClick={function() { onForceFound(searching.id); }} style={{
+            <button data-testid="dev-force-found" onClick={function() { onForceFound(searching.id); }} style={{
               padding: '6px 12px', borderRadius: 6, border: '1px solid #c2410c',
               background: 'transparent', color: '#f97316', fontSize: 12,
               cursor: 'pointer', fontFamily: 'inherit',
@@ -5007,7 +5012,7 @@ function EntrustScene({ fire, short, onDone }) {
 
       <div className="intro-btn-row" onClick={function(e) { e.stopPropagation(); }}>
         {isFinal ? (
-          <button className="intro-btn-fire entrust-btn" onClick={handleDone} disabled={leaving}>
+          <button data-testid="entrust-next" className="intro-btn-fire entrust-btn" onClick={handleDone} disabled={leaving}>
             未受領の森へ
           </button>
         ) : (
@@ -5110,7 +5115,7 @@ function DiscoveryScene({ fire, onDeliver }) {
 
       <div className="intro-btn-row" onClick={function(e) { e.stopPropagation(); }}>
         {isFinal ? (
-          <button className="intro-btn-fire discovery-btn" onClick={handleDeliver} disabled={leaving}>
+          <button data-testid="discovery-deliver" className="intro-btn-fire discovery-btn" onClick={handleDeliver} disabled={leaving}>
             記録塔へ届ける
           </button>
         ) : (
@@ -5226,11 +5231,11 @@ function PlaceEncounterScene({ fire, onComplete, memory }) {
           </div>
           <div className="intro-btn-row" onClick={function(e) { e.stopPropagation(); }}>
             {atLastBeat ? (
-              <button className="intro-btn-fire place-btn" onClick={function() { setPhase('choose'); }}>
+              <button data-testid="place-encounter-next" className="intro-btn-fire place-btn" onClick={function() { setPhase('choose'); }}>
                 問いに向き合う
               </button>
             ) : (
-              <button className="intro-btn-next" onClick={advance}>つづき</button>
+              <button data-testid="place-encounter-next" className="intro-btn-next" onClick={advance}>つづき</button>
             )}
           </div>
         </React.Fragment>
@@ -5242,7 +5247,7 @@ function PlaceEncounterScene({ fire, onComplete, memory }) {
           <div className="place-choices">
             {def.choices.map(function(c) {
               return (
-                <button key={c} className="journey-option-btn place-choice-btn" onClick={function() { choose(c); }}>
+                <button key={c} data-testid="place-encounter-choice" className="journey-option-btn place-choice-btn" onClick={function() { choose(c); }}>
                   {c}
                 </button>
               );
@@ -5263,7 +5268,7 @@ function PlaceEncounterScene({ fire, onComplete, memory }) {
           )}
           <p className="place-trace">痕跡　{traceText}</p>
           <div className="intro-btn-row" onClick={function(e) { e.stopPropagation(); }}>
-            <button className="intro-btn-fire place-btn" onClick={finish} disabled={leaving}>
+            <button data-testid="place-encounter-finish" className="intro-btn-fire place-btn" onClick={finish} disabled={leaving}>
               ここに置いていく
             </button>
           </div>
@@ -5320,9 +5325,9 @@ var HEAT_REVISIT_DEFS = {
 };
 
 var TOUCH_MODES = [
-  { id: '少しだけ触れる', desc: '余熱を少しほどく' },
-  { id: '正面から見る', desc: '余熱を大きくほどく' },
-  { id: '今日はそばに置く', desc: '急がなかった痕跡を残す' },
+  { id: '少しだけ触れる', key: 'light', desc: '余熱を少しほどく' },
+  { id: '正面から見る', key: 'direct', desc: '余熱を大きくほどく' },
+  { id: '今日はそばに置く', key: 'keep', desc: '急がなかった痕跡を残す' },
 ];
 
 function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, memory }) {
@@ -5411,7 +5416,7 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, m
             )}
             {renderBeatContent(beat)}
             <div className="intro-btn-row">
-              <button className="intro-btn-fire place-btn heat-btn" onClick={advanceIntro} disabled={leaving}>
+              <button data-testid="heat-intro-next" className="intro-btn-fire place-btn heat-btn" onClick={advanceIntro} disabled={leaving}>
                 {atLastBeat ? '触れ方を選ぶ' : '次へ'}
               </button>
             </div>
@@ -5425,7 +5430,7 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, m
             <div className="heat-revisit-touch-opts">
               {TOUCH_MODES.map(function(tm) {
                 return (
-                  <button key={tm.id} className="heat-revisit-touch-btn" onClick={function() {
+                  <button key={tm.id} data-testid={'heat-touch-' + tm.key} className="heat-revisit-touch-btn" onClick={function() {
                     setTouchMode(tm.id);
                     // 「今日はそばに置く」は何になるかを決めない。痕跡だけ残して終える。
                     setPhase(tm.id === '今日はそばに置く' ? 'trace' : 'choose');
@@ -5446,7 +5451,7 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, m
             <div className="heat-revisit-choices">
               {def.choices.map(function(c) {
                 return (
-                  <button key={c} className="heat-revisit-choice-btn" onClick={function() {
+                  <button key={c} data-testid="heat-choice" className="heat-revisit-choice-btn" onClick={function() {
                     setSelected(c);
                     setPhase('trace');
                   }}>
@@ -5478,6 +5483,7 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, m
             </p>
             <div className="intro-btn-row">
               <button
+                data-testid="heat-finish"
                 className="intro-btn-fire place-btn heat-btn"
                 onClick={function() { doLeave(function() { onComplete(touchMode, selected); }); }}
                 disabled={leaving}
@@ -5678,17 +5684,17 @@ function FinalReturnScene({ fire, onReturn, onHold, onReviseQuestion }) {
               {reviseMode === 'idle' && (
                 <div className="revise-q-btns">
                   <button className="revise-q-btn-keep" onClick={function() { setReviseMode('done-keep'); }}>このままにする</button>
-                  <button className="revise-q-btn-edit" onClick={function() { setReviseText(''); setReviseMode('editing'); }}>今の言葉で置き直す</button>
+                  <button data-testid="question-revise-open" className="revise-q-btn-edit" onClick={function() { setReviseText(''); setReviseMode('editing'); }}>今の言葉で置き直す</button>
                 </div>
               )}
               {reviseMode === 'editing' && (
                 <div className="revise-q-edit">
                   <p className="revise-q-edit-lead">この問いを、今の言葉で書いてください。</p>
-                  <textarea className="revise-q-input" rows={3} value={reviseText}
+                  <textarea data-testid="question-revise-input" className="revise-q-input" rows={3} value={reviseText}
                     onChange={function(e) { setReviseText(e.target.value); }} placeholder="……" />
                   <div className="revise-q-btns">
                     <button className="revise-q-btn-keep" onClick={function() { setReviseMode('idle'); }}>やめる</button>
-                    <button className="revise-q-btn-edit" onClick={submitRevision} disabled={!reviseText.trim()}>置き直す</button>
+                    <button data-testid="question-revise-save" className="revise-q-btn-edit" onClick={submitRevision} disabled={!reviseText.trim()}>置き直す</button>
                   </div>
                 </div>
               )}
@@ -5701,7 +5707,7 @@ function FinalReturnScene({ fire, onReturn, onHold, onReviseQuestion }) {
             </div>
 
             <div className="intro-btn-row">
-              <button className="intro-btn-fire place-btn" onClick={function() { setPhase('sign'); }} disabled={leaving}>
+              <button data-testid="final-return-sign" className="intro-btn-fire place-btn" onClick={function() { setPhase('sign'); }} disabled={leaving}>
                 署名へ進む
               </button>
             </div>
@@ -5722,6 +5728,7 @@ function FinalReturnScene({ fire, onReturn, onHold, onReviseQuestion }) {
                         return (
                           <button
                             key={opt}
+                            data-testid={'final-axis-' + ax.key}
                             className={'final-return-axis-btn' + (sel ? ' selected' : '')}
                             onClick={function() {
                               setMetrics(function(prev) {
@@ -5747,7 +5754,7 @@ function FinalReturnScene({ fire, onReturn, onHold, onReviseQuestion }) {
               />
             </div>
             <div className="intro-btn-row">
-              <button className="intro-btn-fire place-btn" onClick={proceedToChoice} disabled={leaving}>
+              <button data-testid="final-return-sign-next" className="intro-btn-fire place-btn" onClick={proceedToChoice} disabled={leaving}>
                 次へ
               </button>
             </div>
@@ -5760,7 +5767,7 @@ function FinalReturnScene({ fire, onReturn, onHold, onReviseQuestion }) {
             <div className="final-return-choices">
               {RETURN_CHOICES.map(function(rc) {
                 return (
-                  <button key={rc.id} className="final-return-choice-btn" onClick={function() { selectReturn(rc.label); }}>
+                  <button key={rc.id} data-testid="final-return-submit" className="final-return-choice-btn" onClick={function() { selectReturn(rc.label); }}>
                     {rc.label}
                   </button>
                 );
@@ -5786,6 +5793,7 @@ function FinalReturnScene({ fire, onReturn, onHold, onReviseQuestion }) {
             <p className="intro-narrative-line">消失ではありません。<br />返却です。</p>
             <div className="intro-btn-row">
               <button
+                data-testid="final-return-close"
                 className="intro-btn-fire place-btn"
                 onClick={function() { doLeave(function() { onReturn({ metrics: metrics, memo: memo, choice: choiceMade }); }); }}
                 disabled={leaving}
