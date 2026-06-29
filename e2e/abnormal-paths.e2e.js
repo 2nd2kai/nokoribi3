@@ -6,9 +6,9 @@
 //   3. 返さない → returnHoldLog（received のまま／returned にならない／returnLamp 生成しない）
 //
 // 各テストは「その儀式を開ける状態」を seed して検証する（全工程の再走は normal E2E が担う）。
-// 実行: NODE_PATH=/opt/node22/lib/node_modules node e2e/abnormal-paths.e2e.js
+// 実行: npm run test:e2e（サーバ起動込み）/ 単体は node e2e/abnormal-paths.e2e.js（要 :3001 起動）
 
-const { chromium } = require('playwright');
+const { BASE_URL, launchBrowser, routeCdn } = require('./_harness');
 
 const NOW = new Date().toISOString();
 function seed(over) {
@@ -39,18 +39,16 @@ const RESULTS = [];
 function ck(name, ok, extra) { RESULTS.push((ok ? '✅' : '❌') + ' ' + name + (extra ? ' — ' + extra : '')); return ok; }
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
+  const browser = await launchBrowser();
   let allOk = true;
   const errors = [];
 
   async function newPage(state) {
     const page = await browser.newPage({ viewport: { width: 390, height: 680 } });
-    await page.route('**unpkg.com/react@18/**', r => r.fulfill({ path: '/tmp/node_modules/react/umd/react.production.min.js' }));
-    await page.route('**unpkg.com/react-dom@18/**', r => r.fulfill({ path: '/tmp/node_modules/react-dom/umd/react-dom.production.min.js' }));
-    await page.route('**unpkg.com/@babel/**', r => r.fulfill({ path: '/tmp/node_modules/@babel/standalone/babel.min.js' }));
+    await routeCdn(page);
     page.on('pageerror', e => errors.push(e.message));
     await page.addInitScript((s) => localStorage.setItem('nokoribi_v2', s), JSON.stringify(state));
-    await page.goto('http://localhost:3001/'); await page.waitForTimeout(2500);
+    await page.goto(BASE_URL + '/'); await page.waitForTimeout(2500);
     return page;
   }
   const G = (p) => p.evaluate(() => JSON.parse(localStorage.getItem('nokoribi_v2')));

@@ -1,0 +1,29 @@
+name: E2E
+
+# 正常系（fresh→返却灯）と異常系（危機語/そばに置く/返さない）を push・PR ごとに自動検証する。
+# 「一周が壊れていないか」「思想の裏口が壊れていないか」を毎回見張る門番。
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # devDependencies（playwright, react, react-dom, @babel/standalone）を入れる。
+      - run: npm install --no-audit --no-fund
+
+      # Playwright のブラウザ（chromium）と OS 依存ライブラリを取得する。
+      # これが無いと「Executable doesn't exist」でCIが倒れるため必須。
+      - run: npx playwright install --with-deps chromium
+
+      # 静的サーバ起動 → 正常系E2E → 異常系E2E（e2e/run.js が一括で実行・後始末する）。
+      - run: npm run test:e2e

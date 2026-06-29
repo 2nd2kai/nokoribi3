@@ -2,14 +2,14 @@
 //
 // 目的: 1本の火が「灯す→預ける→向き合う→足跡→受領→場所→出会い→余熱→応答→
 //       問いの置き直し→返却→返却灯」と一周することを、UIの class名・文言に依存せず検証する。
-// 実行: ローカルHTTPサーバ(:3001)で index.html を配信し、CDN を /tmp/node_modules へ差し替え。
-//   NODE_PATH=/opt/node22/lib/node_modules node e2e/fresh-to-lamp.e2e.js
+// 実行: npm run test:e2e（サーバ起動込み）/ 単体は node e2e/fresh-to-lamp.e2e.js（要 :3001 起動）
+//   依存パスは e2e/_harness.js が env で吸収（CI/ローカル両対応）。
 //
 // 注記: battle→found の grind だけ DevBar「強制発見」で短縮する（dev-force-found）。
 //   これは通常プレイの grind 検証が目的ではなく、fresh→返却灯の一周フロー検証が目的のため。
 //   それ以外の儀式（受領の旅・場所出会い・余熱・問い置き直し・署名・返却）は実UIで駆動する。
 
-const { chromium } = require('playwright');
+const { BASE_URL, launchBrowser, routeCdn } = require('./_harness');
 
 const CHECKPOINTS = [
   'fresh', 'fire_created', 'entrusted', 'footprint_saved', 'found',
@@ -20,11 +20,9 @@ const CHECKPOINTS = [
 (async () => {
   const reached = {};
   let stoppedAt = null, stopReason = null;
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
+  const browser = await launchBrowser();
   const page = await browser.newPage({ viewport: { width: 390, height: 680 } });
-  await page.route('**unpkg.com/react@18/**', r => r.fulfill({ path: '/tmp/node_modules/react/umd/react.production.min.js' }));
-  await page.route('**unpkg.com/react-dom@18/**', r => r.fulfill({ path: '/tmp/node_modules/react-dom/umd/react-dom.production.min.js' }));
-  await page.route('**unpkg.com/@babel/**', r => r.fulfill({ path: '/tmp/node_modules/@babel/standalone/babel.min.js' }));
+  await routeCdn(page);
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
 
@@ -44,7 +42,7 @@ const CHECKPOINTS = [
 
   try {
     await page.addInitScript(() => localStorage.removeItem('nokoribi_v2'));
-    await page.goto('http://localhost:3001/'); await page.waitForTimeout(2200);
+    await page.goto(BASE_URL + '/'); await page.waitForTimeout(2200);
 
     // 1. fresh
     if (!(await page.locator('.intro-scene').count())) throw new Error('intro not shown');

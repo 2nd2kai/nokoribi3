@@ -1,0 +1,18 @@
+{
+  "name": "nokoribi-no-hakoniwa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "残り火の箱庭 — 未消化の感情を、世界の中で扱う箱庭放置ゲーム",
+  "scripts": {
+    "serve": "node e2e/serve.js",
+    "test:e2e": "node e2e/run.js",
+    "test:e2e:normal": "node e2e/fresh-to-lamp.e2e.js",
+    "test:e2e:abnormal": "node e2e/abnormal-paths.e2e.js"
+  },
+  "devDependencies": {
+    "@babel/standalone": "^7.26.4",
+    "playwright": "^1.48.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
