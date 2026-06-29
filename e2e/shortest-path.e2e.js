@@ -1,0 +1,149 @@
+// 残り火の箱庭 — 最短帰還 E2E（wishUnknown + placePending → 受領証 → 心へ返す → 返却灯）
+//
+// 目的: wishUnknown（願いを選ばない）かつ受領の旅スライダー未操作（placePending）のまま
+//       受領証を受け取り、そのまま「心へ返す」主導線で返却灯まで到達できることを検証する。
+//       場所出会い・余熱会い直し・問いの置き直しは一切行わない。
+//
+// 実行: npm run test:e2e / node e2e/shortest-path.e2e.js（要 :3001 起動）
+
+const { BASE_URL, launchBrowser, routeCdn } = require('./_harness');
+
+const CHECKPOINTS = [
+  'fresh', 'fire_created', 'entrusted', 'found',
+  'receipt_created', 'returned', 'lamp_visible',
+];
+
+(async () => {
+  const reached = {};
+  let stoppedAt = null, stopReason = null;
+  const browser = await launchBrowser();
+  const page = await browser.newPage({ viewport: { width: 390, height: 680 } });
+  await routeCdn(page);
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+
+  const G = () => page.evaluate(() => JSON.parse(localStorage.getItem('nokoribi_v2')));
+  const tid = (id) => page.locator('[data-testid="' + id + '"]');
+  async function tap(id, t) {
+    const l = tid(id);
+    if (await l.count()) { try { await l.first().click({ timeout: 4000 }); await page.waitForTimeout(t || 400); return true; } catch (e) { return false; } }
+    return false;
+  }
+  async function tapText(re, t) {
+    const l = page.locator('button', { hasText: re });
+    if (await l.count()) { try { await l.first().click({ timeout: 4000 }); await page.waitForTimeout(t || 400); return true; } catch (e) { return false; } }
+    return false;
+  }
+  function mark(cp) { reached[cp] = true; }
+
+  try {
+    await page.addInitScript(() => localStorage.removeItem('nokoribi_v2'));
+    await page.goto(BASE_URL + '/'); await page.waitForTimeout(2200);
+
+    if (!(await page.locator('.intro-scene').count())) throw new Error('intro not shown');
+    mark('fresh');
+
+    // intro
+    for (let i = 0; i < 14; i++) { if (await tapText(/火を見る/, 400)) break; await tapText(/つづき/, 250); }
+
+    // 火を置く — 願いを選ばずに提出（wishUnknown=true）
+    await tid('fire-input').first().fill('届かなかった気持ち。');
+    await tap('fire-next', 400);
+    // wish ボタンを選ばずそのまま提出
+    await tap('place-fire-submit', 700);
+    await page.waitForTimeout(700);
+    let g = await G();
+    if (!(g && g.fires.length > 0)) throw new Error('fire not created');
+    if (!g.fires[0].wishUnknown) throw new Error('wishUnknown not set');
+    mark('fire_created');
+
+    // 預ける
+    for (let i = 0; i < 12; i++) {
+      if (!(await page.locator('.entrust-scene').count())) break;
+      if (!(await tap('entrust-next', 500))) await page.locator('.intro-btn-next').first().click().catch(() => {});
+      await page.waitForTimeout(150);
+    }
+    g = await G();
+    if (g.fires[0].status !== 'searching') throw new Error('not entrusted');
+    mark('entrusted');
+
+    // grind 短縮: DevBar 強制発見
+    await tap('dev-toggle', 350);
+    await tap('dev-force-found', 700);
+    await tap('dev-toggle', 300);
+    g = await G();
+    if (g.fires[0].status !== 'found') throw new Error('not found');
+    mark('found');
+
+    // 発見シーン → deliver
+    await page.waitForTimeout(400);
+    for (let i = 0; i < 12; i++) {
+      if (!(await page.locator('.intro-scene').count())) break;
+      if (await tap('discovery-deliver', 700)) break;
+      await page.locator('.intro-btn-next').first().click().catch(() => {});
+      await page.waitForTimeout(300);
+    }
+
+    // 受領の旅: スライダーを一切動かさずに完了（placePending になる）
+    for (let i = 0; i < 60; i++) {
+      if (await tap('receipt-journey-next', 320)) continue;
+      await page.waitForTimeout(200);
+      if (!(await page.locator('[data-testid="receipt-journey-next"]').count())) break;
+    }
+    await page.waitForTimeout(500);
+    g = await G();
+    if (!(g.fires[0].status === 'received' && g.fires[0].receipt)) throw new Error('receipt not created');
+    if (!g.fires[0].placePending) throw new Error('placePending not set (sliders may have moved)');
+    mark('receipt_created');
+
+    // 受領証カードに「心へ返す」ボタンが出ることを確認して押す
+    if (!(await tap('receipt-action', 700))) {
+      // receipt-action が心へ返すボタン
+      throw new Error('receipt-action button not found');
+    }
+    await page.waitForTimeout(500);
+
+    // FinalReturnScene が開いたはず → 署名 → 返却
+    if (!(await page.locator('.final-return-wrap').count())) throw new Error('FinalReturn not opened');
+    await tap('final-return-sign', 600);
+    await tap('final-axis-meaning', 250);
+    await tap('final-axis-value', 250);
+    await tap('final-axis-satisfaction', 250);
+    await tap('final-return-sign-next', 600);
+    await tap('final-return-submit', 800);
+    await tap('final-return-close', 900);
+    g = await G();
+    if (g.fires[0].status !== 'returned') throw new Error('not returned (status=' + g.fires[0].status + ')');
+    mark('returned');
+
+    // 返却灯を見る
+    await tapText(/箱庭/, 600);
+    await tap('record-tower-toggle', 600);
+    await tap('tower-tab-lamp', 400);
+    await tap('return-lamp-open', 700);
+    if (await tid('return-lamp-card').count()) mark('lamp_visible');
+    else throw new Error('return lamp card not visible');
+
+  } catch (e) {
+    stopReason = e.message;
+  }
+
+  for (const cp of CHECKPOINTS) { if (!reached[cp]) { stoppedAt = cp; break; } }
+
+  const g = await G().catch(() => null);
+  const inv = {};
+  if (g) {
+    inv.materials_zero = Object.values(g.materials || {}).reduce((a, b) => a + b, 0) === 0;
+    inv.selectedFireId_sane = g.selectedFireId === null || (g.fires || []).some(f => f.id === g.selectedFireId);
+  }
+  const hoverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth).catch(() => -1);
+
+  console.log('=== 最短帰還 E2E（wishUnknown + placePending → 返却灯）===');
+  CHECKPOINTS.forEach(cp => console.log((reached[cp] ? '✅' : '⬜') + ' ' + cp));
+  if (stoppedAt) console.log('STOPPED AT: ' + stoppedAt + (stopReason ? ' — ' + stopReason : ''));
+  else console.log('ALL CHECKPOINTS PASSED');
+  console.log('invariants:', JSON.stringify(inv), '| hoverflow:', hoverflow);
+  console.log('jsErrors:', JSON.stringify(errors.slice(0, 5)));
+  await browser.close();
+  process.exit(stoppedAt ? 1 : 0);
+})();

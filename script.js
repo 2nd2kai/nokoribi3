@@ -1101,7 +1101,7 @@ function returnFireToHeart(game, fireId, finalReturn) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'received') return { ok: false, game: game };
-  if (!isAllSettled(fire)) return { ok: false, reason: 'not_settled', game: game };
+  if (!fire.receipt) return { ok: false, reason: 'no_receipt', game: game };
   fire.status = 'returned';
   fire.returnedAt = nowISO();
   fire.updatedAt = nowISO();
@@ -2197,7 +2197,7 @@ function completeReceiptJourney(game, fireId, journeyData) {
     traces: [
       '遠くの記録塔に、灯りがともった。',
       'この火から、灯りがひとつこぼれた。灯守りが、それを拾った。',
-      '受領証の裏に、' + place.name + 'への小さな地図が現れた。',
+      place ? '受領証の裏に、' + place.name + 'への小さな地図が現れた。' : '場所は、まだ静かに待っています。',
     ],
   });
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult, fireId: fireId, openedPlace: place };
@@ -2825,29 +2825,17 @@ function UnreceivedPanel({ fire, onReexplore, onRest, onReturnToHeart, actionRes
         </div>
       )}
 
-      {/* 3領域すべて静かな痕跡になったら、火を心へ返す（このサイクルの終点） */}
-      {allSettled ? (function() {
-        var canReturn = !!(fire.receipt && fire.openedPlace && fire.openedPlace.firstEncounterSeen && fire.placeTrace);
-        return (
-          <div className="return-heart-box">
-            <p className="return-heart-msg">
-              3つの影は、もう火を覆っていない。<br />この火を、心へ返せます。
-            </p>
-            {canReturn ? (
-              <button data-testid="final-return-open" className="return-heart-btn" onClick={function() { onReturnToHeart(fire.id); }}>
-                火を心へ返す
-              </button>
-            ) : (
-              <p className="return-heart-wait">
-                {!fire.openedPlace ? '場所がまだ開いていません。' :
-                 !fire.openedPlace.firstEncounterSeen ? 'まず、開いた場所でキャラクターと会ってください。' :
-                 !fire.placeTrace ? '場所での記録がまだありません。' :
-                 '受領証がまだありません。'}
-              </p>
-            )}
-          </div>
-        );
-      })() : (function() {
+      {/* 受領証があれば、いつでも心へ返せる（余熱・場所・出会いは任意） */}
+      {fire.receipt && (
+        <div className="return-heart-box">
+          <button data-testid="final-return-open" className="return-heart-btn" onClick={function() { onReturnToHeart(fire.id); }}>
+            心へ返す
+          </button>
+        </div>
+      )}
+
+      {/* 余熱がまだ残っているなら「今日は置いておく」 */}
+      {!allSettled && (function() {
         var cd = cooldownRemaining(fire.lastUnreceivedRestAt, 30);
         return (
           <button
@@ -3160,7 +3148,7 @@ function QuestionFootprints({ fire, limit, variant }) {
   );
 }
 
-function ReceiptCard({ fire, buttonLabel, onAction }) {
+function ReceiptCard({ fire, buttonLabel, onAction, onReturnToHeart, onViewUnreceived }) {
   var receipt = fire.receipt;
   var issuedDate = receipt ? new Date(receipt.issuedAt) : new Date(fire.receivedAt || fire.updatedAt);
   var dateStr = issuedDate.getFullYear() + '/' +
@@ -3260,7 +3248,7 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
       <QuestionFootprints fire={fire} limit={3} variant="receipt" />
 
       <div className="receipt-meta">
-        <span className="receipt-meta-item">持ち帰った者：トイマン</span>
+        <span className="receipt-meta-item">届けた者：トイマン</span>
         <span className="receipt-meta-item">記録した者：コタエ</span>
         <span className="receipt-meta-item">発行日：{dateStr}</span>
       </div>
@@ -3305,9 +3293,24 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
         </div>
       )}
 
-      <button data-testid="receipt-action" className="receipt-btn" onClick={onAction}>
-        {buttonLabel || '余熱に会い直す'}
-      </button>
+      {onReturnToHeart ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+          <button data-testid="receipt-action" className="receipt-btn" onClick={onReturnToHeart}>
+            心へ返す
+          </button>
+          <button
+            className="receipt-btn"
+            style={{ background: 'transparent', border: '1px solid #374151', color: '#9ca3af', fontSize: 13 }}
+            onClick={onViewUnreceived}
+          >
+            火の中を見る
+          </button>
+        </div>
+      ) : (
+        <button data-testid="receipt-action" className="receipt-btn" onClick={onAction}>
+          {buttonLabel || '余熱に会い直す'}
+        </button>
+      )}
     </div>
   );
 }
@@ -3379,10 +3382,10 @@ function ReturnLampCard({ fire, onClose }) {
       {/* トイマン・コタエ */}
       <div className="return-lamp-voices">
         <p className="return-lamp-voice">
-          <span className="return-lamp-who toyman">トイマン</span>帰った。
+          <span className="return-lamp-who kotae">コタエ</span>消えたのではありません。心へ返りました。<br />今日は、ここまでで大丈夫です。
         </p>
         <p className="return-lamp-voice">
-          <span className="return-lamp-who kotae">コタエ</span>消失ではありません。<br />返却です。
+          <span className="return-lamp-who toyman">トイマン</span>急がない。
         </p>
       </div>
 
@@ -4223,7 +4226,7 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
         <div className="post-receive-lead">
           <p className="post-receive-lead-text">
             記録塔に問いの欠片が保存されました。<br />
-            でも、この火にはまだ受け取れていないものがあります。
+            この火は、いつでも心へ返せます。余熱に会い直すかは、自由です。
           </p>
         </div>
       )}
@@ -4487,16 +4490,18 @@ function homeNextActions(fire) {
     case 'lit':       return [{ label: '未受領の森へ', go: 'garden' }];
     case 'found':     return [{ label: '記録塔へ届ける', go: 'deliver' }];
     case 'receiving': return [];
-    case 'received':
-      // 受領証の裏に開いた場所へまだ会いに行っていないなら、まずそこへ。
+    case 'received': {
+      // 受領証が届いたら、心へ返すが主導線。余熱・場所は任意。
+      var acts = [
+        { label: '心へ返す', go: 'return' },
+        { label: '火の中を見る', go: 'unreceived' },
+      ];
+      // 開いた場所にまだ会いに行っていなければ、3番目の選択肢として残す（任意）。
       if (fire.openedPlace && !fire.openedPlace.firstEncounterSeen) {
-        return [{ label: fire.openedPlace.name + 'へ行く', go: 'encounter' }];
+        acts.push({ label: fire.openedPlace.name + 'へ行く', go: 'encounter' });
       }
-      // settled なら、その火に会いに行ける場所へ（そこに「心へ返す」がある）。
-      // コタエの「返せます」と導線を一致させ、約束を裏切らない。
-      return isAllSettled(fire)
-        ? [{ label: '記録塔の奥へ', go: 'unreceived' }]
-        : [{ label: '余熱に会い直す', go: 'unreceived' }];
+      return acts;
+    }
     case 'returned':  return [{ label: '箱庭を見る', go: 'garden' }];
     default:          return [{ label: '箱庭を見る', go: 'garden' }];
   }
@@ -6270,6 +6275,7 @@ function App() {
             else if (go === 'unreceived') { setActiveUnreceivedFireId(fireId); setScreen('garden'); }
             else if (go === 'deliver') { handleDeliverToTower(fireId); }
             else if (go === 'encounter') { setPlaceEncounter({ fireId: fireId }); }
+            else if (go === 'return') { setFinalReturnFireId(fireId); }
             else if (go === 'returnlamp') { setActiveReturnLamp(fireId); }
           }}
         />
@@ -6378,8 +6384,12 @@ function App() {
               <div className="kotae-grip" />
               <ReceiptCard
                 fire={fire}
-                buttonLabel="余熱に会い直す"
-                onAction={function() {
+                onReturnToHeart={function() {
+                  var fid = receiptJourney.fireId;
+                  setReceiptJourney(null);
+                  setFinalReturnFireId(fid);
+                }}
+                onViewUnreceived={function() {
                   var fid = receiptJourney.fireId;
                   setReceiptJourney(null);
                   setActiveUnreceivedFireId(fid);

@@ -113,8 +113,8 @@ const CHECKPOINTS = [
     if (!g.fires[0].openedPlace) throw new Error('place not unlocked');
     mark('place_unlocked');
 
-    // 受領証カードを閉じる（→ garden に遷移する）。Home に戻ってから場所へ向かう。
-    await tap('receipt-action', 700);
+    // 受領証カードで「火の中を見る」→ garden（未受領パネル）へ。Home に戻ってから場所へ向かう。
+    await tapText(/火の中を見る/, 700);
     await page.waitForTimeout(300);
     await tap('view-back', 500); // garden → home
 

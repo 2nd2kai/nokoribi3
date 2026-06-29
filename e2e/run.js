@@ -39,9 +39,11 @@ function runNode(file) {
     const a = await runNode('fresh-to-lamp.e2e.js');
     console.log('\n--- 異常系E2E: 危機語 / そばに置く / 返さない ---');
     const b = await runNode('abnormal-paths.e2e.js');
-    exitCode = (a || b) ? 1 : 0;
+    console.log('\n--- 最短帰還E2E: wishUnknown + placePending → 返却灯 ---');
+    const c = await runNode('shortest-path.e2e.js');
+    exitCode = (a || b || c) ? 1 : 0;
     console.log('\n=== E2E 総合: ' + (exitCode === 0 ? 'PASS' : 'FAIL') +
-      ' (normal=' + a + ', abnormal=' + b + ') ===');
+      ' (normal=' + a + ', abnormal=' + b + ', shortest=' + c + ') ===');
   } catch (e) {
     console.error('E2E runner error:', e.message);
     exitCode = 1;
