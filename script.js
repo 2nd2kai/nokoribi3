@@ -2327,7 +2327,7 @@ function CrisisHold({ onHold, onProceed, proceedLabel }) {
   useOverlayKeys({ onEscape: onHold });
   var trapRef = useFocusTrap();
   return (
-    <div className="crisis-hold-ov" role="alertdialog" aria-modal="true" aria-labelledby="crisis-title" aria-describedby="crisis-desc">
+    <div data-testid="crisis-hold" className="crisis-hold-ov" role="alertdialog" aria-modal="true" aria-labelledby="crisis-title" aria-describedby="crisis-desc">
       <div className="crisis-hold-card" ref={trapRef} onClick={function(e) { e.stopPropagation(); }}>
         <div className="crisis-dialogue">
           <span className="crisis-name crisis-kotae">コタエ</span>
@@ -2344,7 +2344,7 @@ function CrisisHold({ onHold, onProceed, proceedLabel }) {
           <p className="crisis-support-num">{SUPPORT_INFO.number}</p>
           <p className="crisis-support-sub">{SUPPORT_INFO.sub}</p>
         </div>
-        <button className="crisis-hold-btn" onClick={onHold}>今は、ここに置いておく</button>
+        <button data-testid="crisis-hold-keep" className="crisis-hold-btn" onClick={onHold}>今は、ここに置いておく</button>
         {onProceed && (
           <button className="crisis-proceed-btn" onClick={onProceed}>
             {proceedLabel || '内容を確認して、進む'}
@@ -5746,6 +5746,7 @@ function FinalReturnScene({ fire, onReturn, onHold, onReviseQuestion }) {
             <div className="final-return-memo-wrap">
               <p className="final-return-memo-label">この火を返す前に、最後に一言だけ残してください。<br /><span className="final-return-memo-sub">空欄でも構いません。</span></p>
               <textarea
+                data-testid="final-return-memo"
                 className="final-return-memo"
                 rows={3}
                 value={memo}
@@ -5772,7 +5773,7 @@ function FinalReturnScene({ fire, onReturn, onHold, onReviseQuestion }) {
                   </button>
                 );
               })}
-              <button className="final-return-choice-btn final-return-hold-btn" onClick={selectHold}>
+              <button data-testid="final-return-hold" className="final-return-choice-btn final-return-hold-btn" onClick={selectHold}>
                 今日はまだ返さない
               </button>
             </div>
@@ -5813,6 +5814,7 @@ function FinalReturnScene({ fire, onReturn, onHold, onReviseQuestion }) {
             <p className="intro-narrative-line">まだ置く。それでいい。</p>
             <div className="intro-btn-row">
               <button
+                data-testid="final-return-hold-close"
                 className="intro-btn-fire place-btn"
                 onClick={function() { doLeave(function() { onHold({ memo: memo }); }); }}
                 disabled={leaving}
