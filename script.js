@@ -1820,26 +1820,50 @@ function recordCharacterResponse(ns, fire, charKey, source, selected) {
 }
 
 // 問いの足跡（自由記述）を軽く分類して、受け取る住人を決める。AI判定ではない。
-var FOOTPRINT_KEYWORDS = {
-  pain:      ['痛い', 'つらい', '辛い', '悲しい', '届かなかった', '届かない', '分かってほしかった', '分かってほしい', '反応がなかった', '寂しい', 'さびしい', '苦しい'],
-  judgment:  ['価値がない', '価値', '意味がない', '無駄', 'むだ', '評価', '数字', '反応', '役に立たない', '役立たない', '失敗', 'ダメ', 'だめ'],
-  emptiness: ['空っぽ', 'からっぽ', '虚しい', 'むなしい', '何にもならない', 'なんにもならない', '終わった', '消えた', '残らない', '意味にならなかった'],
-  question:  ['なぜ', 'どうして', '分からない', 'わからない', '何だった', '何になってほしかった', 'なんだった'],
+// 二段構え：まず「具体フレーズ」を見て、当たらなければ「短い単語」を見る。
+// これで「反応がなかった」(痛み)が、単語「反応」(判定)に誤爆して審査官へ飛ぶのを防ぐ。
+// 段階内・段階間とも 痛み→虚しさ→判定→問い の順（痛みを最優先で受け止める）。
+var FOOTPRINT_PHRASES = {
+  // 痛みの具体フレーズ（「反応がなかった」「分かってほしかった」はここで先取り）
+  pain:      ['反応がなかった', '反応がない', '反応がなくて', '反応がほしかった', '反応がほしい', '反応がほしくて',
+              '分かってほしかった', '分かってほしい', 'わかってほしかった', 'わかってほしい',
+              '届かなかった', '届かない', '届いてほしかった',
+              '悲しかった', 'つらかった', '辛かった', '苦しかった', '寂しかった', 'さびしかった'],
+  // 虚しさの具体フレーズ（「何にもならなかった」はここ）
+  emptiness: ['何にもならなかった', '何にもならない', 'なんにもならなかった', 'なんにもならない',
+              '意味にならなかった', '何も残らなかった', '何も残らない', 'なにも残らない', '残らなかった'],
+  // 判定の具体フレーズ（「意味がない」「価値がない気がした」はここ）
+  judgment:  ['意味がなかった', '意味がない', '価値がなかった', '価値がない', '価値がない気がした',
+              '役に立たなかった', '役に立たない', '役立たなかった', '役立たない'],
+  // 問い系
+  question:  ['何になってほしかった', '何だったんだろう', '何だったのか', 'なんだったんだろう',
+              'どうしてこうなった', 'どうして'],
 };
+var FOOTPRINT_WORDS = {
+  pain:      ['痛い', '痛かった', 'つらい', '辛い', '悲しい', 'かなしい', '寂しい', 'さびしい', '苦しい', 'くるしい'],
+  emptiness: ['空っぽ', 'からっぽ', '虚しい', 'むなしい', '終わった', '消えた'],
+  judgment:  ['評価', '数字', '反応', '無駄', 'むだ', '失敗', 'だめ'],
+  question:  ['なぜ', 'どうして', '分からない', 'わからない', '何だった', 'なんだった'],
+};
+var FOOTPRINT_ORDER = ['pain', 'emptiness', 'judgment', 'question'];
 var FOOTPRINT_CHARACTER = { pain: 'kana', judgment: 'auditor', emptiness: 'utsuro', question: 'kotae', unknown: 'toyman' };
 
 function classifyFootprint(text) {
-  var t = (text || '').toLowerCase();
-  // 痛み→判定→虚しさ→問い の順で最初に当たった分類を返す（痛みを最優先で受け止める）。
-  var order = ['pain', 'judgment', 'emptiness', 'question'];
-  for (var i = 0; i < order.length; i++) {
-    var cat = order[i];
-    var kws = FOOTPRINT_KEYWORDS[cat];
-    for (var j = 0; j < kws.length; j++) {
-      if (t.indexOf(kws[j].toLowerCase()) !== -1) return cat;
+  // 危機検知と同じ正規化（NFKC・小文字・カタカナ→ひらがな・区切り除去）で表記ゆれに当てる。
+  var t = normalizeForCrisis(text);
+  if (!t) return 'unknown';
+  function hit(table) {
+    for (var i = 0; i < FOOTPRINT_ORDER.length; i++) {
+      var cat = FOOTPRINT_ORDER[i];
+      var kws = table[cat];
+      for (var j = 0; j < kws.length; j++) {
+        if (t.indexOf(normalizeForCrisis(kws[j])) !== -1) return cat;
+      }
     }
+    return null;
   }
-  return 'unknown';
+  // 1) 具体フレーズを先に見る → 2) 短い単語 → 3) unknown
+  return hit(FOOTPRINT_PHRASES) || hit(FOOTPRINT_WORDS) || 'unknown';
 }
 
 function clipFootprint(text, max) {
@@ -3128,69 +3152,29 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
 }
 
 // ── 返却灯 ───────────────────────────────────────────────────────────────────
-// 心へ返した火の、最後の記録。完了の証ではなく、返した証としてともる灯り。
-// 原文・問い・受け取り文・場所の痕跡・会い直した余熱・返し方・最後の一言を見返せる。
-// アプリは何も評価しない。残っているのは、すべてプレイヤー自身の言葉。
+// 心へ返した火の「灯り」。記録の全部ではない。ぱっと見て「この火は消えていない」と分かるもの。
+// 見せるのは 最後の一言／返し方／問いの足跡1件／受け取られた言葉1件 だけ。
+// 原文・問い・受け取り文・場所の痕跡・会い直した余熱の詳細は、受領証や記録塔で見る。
 function ReturnLampCard({ fire, onClose }) {
   var lamp = fire.returnLamp || {};
-  var fr = fire.finalReturn || {};
   var litDate = lamp.litAt ? new Date(lamp.litAt) : (fire.returnedAt ? new Date(fire.returnedAt) : null);
   var dateStr = litDate
     ? (litDate.getFullYear() + '/' + String(litDate.getMonth() + 1).padStart(2, '0') + '/' + String(litDate.getDate()).padStart(2, '0'))
     : '';
-  var heatTraces = (lamp.heatTraces && lamp.heatTraces.length) ? lamp.heatTraces
-    : (fire.heatTraces || []).map(function(h) { return h.traceText; });
-  var placeTrace = lamp.placeTrace || (fire.placeTrace && fire.placeTrace.traceText) || null;
 
   var trapRef = useFocusTrap();
   return (
     <div className="return-lamp-card" ref={trapRef} role="dialog" aria-modal="true" aria-labelledby="lamp-title">
       <div className="return-lamp-flame" aria-hidden="true">🏮</div>
       <p className="return-lamp-title" id="lamp-title">返却灯</p>
+      {/* どの火かが分かる最小の手がかりだけ（一行）。詳細は受領証/記録塔へ。 */}
+      {fire.kindle && <p className="return-lamp-kindle">「{fire.kindle}」</p>}
       <p className="return-lamp-lead">この火は、心へ返されました。<br />消失ではなく、返却です。</p>
 
-      {/* 原文・問い */}
-      {fire.kindle && (
-        <div className="return-lamp-row">
-          <span className="return-lamp-k">残り火</span>
-          <span className="return-lamp-v">「{fire.kindle}」</span>
-        </div>
-      )}
-      {fire.question && (
-        <div className="return-lamp-row">
-          <span className="return-lamp-k">問い</span>
-          <span className="return-lamp-v">「{fire.question}」</span>
-        </div>
-      )}
-      {fire.receipt && fire.receipt.acceptanceText && (
-        <div className="return-lamp-row">
-          <span className="return-lamp-k">受け取り</span>
-          <span className="return-lamp-v">{fire.receipt.acceptanceText}</span>
-        </div>
-      )}
+      {/* 問いの足跡 — 最新1件だけ（灯りは軽く）。 */}
+      <QuestionFootprints fire={fire} limit={1} variant="lamp" />
 
-      {/* 場所の痕跡 */}
-      {placeTrace && (
-        <div className="return-lamp-row">
-          <span className="return-lamp-k">場所の痕跡</span>
-          <span className="return-lamp-v">{placeTrace}</span>
-        </div>
-      )}
-
-      {/* 会い直した余熱 */}
-      {heatTraces.length > 0 && (
-        <div className="return-lamp-traces">
-          <p className="return-lamp-traces-label">会い直した余熱</p>
-          {heatTraces.map(function(t, i) {
-            return <p key={i} className="return-lamp-trace-line">・{t}</p>;
-          })}
-        </div>
-      )}
-
-      {/* 問いの足跡 — 返した後も、向き合った言葉は消えなかった。最新3件。 */}
-      <QuestionFootprints fire={fire} limit={3} variant="lamp" />
-
-      {/* 足跡を受け取った住人の一言（最新1件だけ、重くしない）。 */}
+      {/* 足跡を受け取った住人の一言（最新1件だけ）。 */}
       {(function() {
         var fr = (fire.characterResponses || []).filter(function(r) { return r.source === 'footprint'; });
         if (!fr.length) return null;

@@ -4854,6 +4854,7 @@ svg .cd-toyman{fill:var(--ct)}svg .cd-kana{fill:var(--ck)}svg .cd-utsuro{fill:va
 .return-lamp-card{padding:4px 2px 8px}
 .return-lamp-flame{font-size:30px;text-align:center;margin:0 0 6px;opacity:.85;filter:drop-shadow(0 0 12px rgba(176,168,204,.4))}
 .return-lamp-title{text-align:center;color:#b0a8cc;font-size:13px;letter-spacing:.16em;margin:0 0 10px}
+.return-lamp-kindle{text-align:center;color:#cbd2e0;font-size:14px;line-height:1.7;margin:0 0 10px;overflow-wrap:anywhere}
 .return-lamp-lead{text-align:center;color:#9aa3b5;font-size:13px;line-height:1.9;margin:0 0 18px}
 .return-lamp-row{display:flex;flex-direction:column;gap:3px;padding:9px 12px;border-radius:8px;background:#0d0f1a;border:1px solid #1e2030;margin-bottom:8px}
 .return-lamp-k{font-size:10px;letter-spacing:.1em;color:#4a5470}
