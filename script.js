@@ -382,13 +382,17 @@ function initUnreceived(metrics) {
 
 function createFire(kindle, pain, writeState, feeling, metrics) {
   var met = metrics || { meaning: 50, value: 50, satisfaction: 50 };
+  // _wishUnknown は FireInputForm から渡される内部フラグ。metrics には含めない。
+  var wishUnknown = !!(met._wishUnknown);
+  var cleanMet = { meaning: met.meaning, value: met.value, satisfaction: met.satisfaction };
   return {
     id: 'f' + Date.now() + Math.floor(rnd() * 1000),
     kindle: kindle.trim(),
     pain: (pain || '').trim(),
     writeState: writeState || '',
     feeling: feeling || '',
-    metrics: met,
+    wishUnknown: wishUnknown,
+    metrics: cleanMet,
     status: 'lit',
     questionProgress: 0,
     gardenProgress: 0,
@@ -456,6 +460,7 @@ function normalizeFire(f) {
   if (f.returnHoldLog === undefined) f.returnHoldLog = [];
   if (f.heatTraces === undefined) f.heatTraces = [];
   if (!Array.isArray(f.characterResponses)) f.characterResponses = [];
+  if (f.wishUnknown === undefined) f.wishUnknown = false;
   if (!Array.isArray(f.questionRevisions)) f.questionRevisions = [];
   if (!Array.isArray(f.careLogs)) f.careLogs = [];
   if (f.returnLamp === undefined) f.returnLamp = null;
@@ -2115,6 +2120,17 @@ function completeReceiptJourney(game, fireId, journeyData) {
   };
 
   // 受領証の裏に地図が現れる。火に残った余熱を測り、対応する場所を一つだけ開く。
+  // wishUnknown の火は、初回入力で感触を選ばなかった。
+  // 受領の旅でプレイヤーが調整したメトリクス（currentMetrics）を余熱の基準として使う。
+  // 「分からない」のまま旅を終えても tie-break で一箇所に決まるが、
+  // コタエは「まだ一つに分けません」と伝え、進み方を急がせない。
+  if (fire.wishUnknown) {
+    fire.unreceived = {
+      meaning: Math.max(0, 100 - currentMetrics.meaning),
+      value: Math.max(0, 100 - currentMetrics.value),
+      satisfaction: Math.max(0, 100 - currentMetrics.satisfaction),
+    };
+  }
   var heat = computeRemainingHeat(fire);
   var place = chooseOpenedPlace(heat);
   fire.receipt.remainingHeat = heat;
@@ -2522,8 +2538,12 @@ function FireInputForm({ onSubmit, onCancel }) {
     // 選んだ素朴な言葉から、受領後に現れる余熱の分布（metrics）を静かに導く。
     // ここでは「意味・価値・納得」という分析ラベルは一切表に出さない。
     var choice = FIRE_WISH_CHOICES.filter(function(c) { return c.key === wish; })[0];
-    var met = (choice && choice.metrics) || { meaning: 45, value: 45, satisfaction: 45 };
+    var baseMet = (choice && choice.metrics) || { meaning: 45, value: 45, satisfaction: 45 };
     var wishLabel = choice ? choice.label : '';
+    // 未選択 / まだ分からない → wishUnknown フラグを立てる。
+    // 場所の選定は受領の旅のスライダー結果まで保留する。
+    var isUnknown = !wish || wish === 'unknown';
+    var met = Object.assign({}, baseMet, { _wishUnknown: isUnknown });
     onSubmit(kindle, pain, '', wishLabel, met);
   }
 
@@ -3339,13 +3359,22 @@ function buildIntroDialogue() {
 
 function buildKindleDialogue(fire) {
   var kindleQuoted = fire.kindle ? '「' + fire.kindle + '」' : '（本文なし）';
-  return [
+  var lines = [
     { name: 'コタエ', color: '#a78bfa', text: '本文を、そのまま読み上げます。' },
     { name: 'コタエ', color: '#a78bfa', text: kindleQuoted },
     { name: 'コタエ', color: '#a78bfa', text: '分類は、まだしません。\n先に、欠けないように置きます。' },
     { name: 'トイマン', color: '#fb923c', text: '……消すな。' },
     { name: 'コタエ',   color: '#a78bfa', text: '消しません。' },
   ];
+  if (fire.wishUnknown) {
+    // 初回入力で「まだ分からない」を選んだ、または選ばなかった火。
+    // 場所を急いで決めない——プレイヤーが感触を確かめてから自然に開かせる。
+    lines.push({
+      name: 'コタエ', color: '#a78bfa',
+      text: 'この火は、まだ一つの場所に分けません。\n\n意味の影。\n価値の黒札。\n納得の灰。\n\nどれも、まだ薄く残っています。\n分類は、あとです。',
+    });
+  }
+  return lines;
 }
 
 function buildStabilityDialogue(fire) {
