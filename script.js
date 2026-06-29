@@ -1957,6 +1957,43 @@ function useOverlayKeys(opts) {
   });
 }
 
+// オーバーレイのフォーカス閉じ込め。開いたら最初の操作要素へ、閉じたら元の要素へ戻す。
+// Tab / Shift+Tab がオーバーレイ外へ逃げないようにする。返り値の ref を root に付ける。
+function useFocusTrap() {
+  var ref = _useRef(null);
+  _useEffect(function() {
+    var node = ref.current;
+    if (!node) return;
+    var prevActive = document.activeElement;
+    function focusables() {
+      return Array.prototype.slice.call(node.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )).filter(function(el) { return !el.disabled && el.offsetParent !== null; });
+    }
+    var f = focusables();
+    if (f.length) { try { f[0].focus(); } catch (e) {} }
+    else { node.setAttribute('tabindex', '-1'); try { node.focus(); } catch (e2) {} }
+    function onKey(e) {
+      if (e.key !== 'Tab') return;
+      var els = focusables();
+      if (!els.length) { e.preventDefault(); return; }
+      var first = els[0], last = els[els.length - 1];
+      var active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || !node.contains(active)) { e.preventDefault(); last.focus(); }
+      } else {
+        if (active === last || !node.contains(active)) { e.preventDefault(); first.focus(); }
+      }
+    }
+    node.addEventListener('keydown', onKey);
+    return function() {
+      node.removeEventListener('keydown', onKey);
+      if (prevActive && prevActive.focus) { try { prevActive.focus(); } catch (e3) {} }
+    };
+  }, []);
+  return ref;
+}
+
 function ProgressBar({ value, color }) {
   var bg = color || 'linear-gradient(90deg, #f97316, #fb923c)';
   return (
@@ -2064,16 +2101,17 @@ function ToymanVoice({ text, sub }) {
 function CrisisHold({ onHold, onProceed, proceedLabel }) {
   // Esc は安全側（今は置いておく）。続行は明示クリックのみ。
   useOverlayKeys({ onEscape: onHold });
+  var trapRef = useFocusTrap();
   return (
-    <div className="crisis-hold-ov" role="alert">
-      <div className="crisis-hold-card" onClick={function(e) { e.stopPropagation(); }}>
+    <div className="crisis-hold-ov" role="alertdialog" aria-modal="true" aria-labelledby="crisis-title" aria-describedby="crisis-desc">
+      <div className="crisis-hold-card" ref={trapRef} onClick={function(e) { e.stopPropagation(); }}>
         <div className="crisis-dialogue">
           <span className="crisis-name crisis-kotae">コタエ</span>
-          <p className="crisis-line">この言葉は、通常の記録として扱いません。</p>
+          <p className="crisis-line" id="crisis-title">この言葉は、通常の記録として扱いません。</p>
           <span className="crisis-name crisis-toyman">トイマン</span>
           <p className="crisis-line">置いていくのか。</p>
           <span className="crisis-name crisis-kotae">コタエ</span>
-          <p className="crisis-line">いいえ。<br />先に、安全な場所へ置きます。</p>
+          <p className="crisis-line" id="crisis-desc">いいえ。<br />先に、安全な場所へ置きます。</p>
           <p className="crisis-soft">今は、答えを出さなくていい。<br />今は、決めなくていい。</p>
         </div>
         <div className="crisis-support">
@@ -3024,10 +3062,11 @@ function ReturnLampCard({ fire, onClose }) {
     : (fire.heatTraces || []).map(function(h) { return h.traceText; });
   var placeTrace = lamp.placeTrace || (fire.placeTrace && fire.placeTrace.traceText) || null;
 
+  var trapRef = useFocusTrap();
   return (
-    <div className="return-lamp-card">
+    <div className="return-lamp-card" ref={trapRef} role="dialog" aria-modal="true" aria-labelledby="lamp-title">
       <div className="return-lamp-flame" aria-hidden="true">🏮</div>
-      <p className="return-lamp-title">返却灯</p>
+      <p className="return-lamp-title" id="lamp-title">返却灯</p>
       <p className="return-lamp-lead">この火は、心へ返されました。<br />消失ではなく、返却です。</p>
 
       {/* 原文・問い */}
@@ -4417,10 +4456,11 @@ function AwayReport({ report, onClose }) {
   // 旧形式（report.lines）にも後方互換で対応する。
   var legacyLines = report.lines || null;
   var note = report.note || ['問いは、まだ見つかっていません。', 'でも、火は消えていません。'];
+  var trapRef = useFocusTrap();
   return (
-    <div className="away-ov" role="dialog" onClick={onClose}>
-      <div className="away-card" onClick={function(e) { e.stopPropagation(); }}>
-        <p className="away-label">留守のあいだ</p>
+    <div className="away-ov" role="dialog" aria-modal="true" aria-labelledby="away-title" onClick={onClose}>
+      <div className="away-card" ref={trapRef} onClick={function(e) { e.stopPropagation(); }}>
+        <p className="away-label" id="away-title">留守のあいだ</p>
         {report.place && <p className="away-place">{report.place}</p>}
         {legacyLines
           ? legacyLines.map(function(l, i) { return <p key={i} className="away-line">{l}</p>; })
@@ -4453,11 +4493,12 @@ function SaveErrorNotice({ onDismiss }) {
 function ResetConfirm({ onCancel, onConfirm }) {
   // Esc は安全側（消さない）。Enter で誤って全消去しないよう、確定は明示クリックのみ。
   useOverlayKeys({ onEscape: onCancel });
+  var trapRef = useFocusTrap();
   return (
-    <div className="reset-ov" role="alertdialog" onClick={onCancel}>
-      <div className="reset-card" onClick={function(e) { e.stopPropagation(); }}>
+    <div className="reset-ov" role="alertdialog" aria-modal="true" aria-labelledby="reset-title" onClick={onCancel}>
+      <div className="reset-card" ref={trapRef} onClick={function(e) { e.stopPropagation(); }}>
         <span className="reset-name reset-kotae">コタエ</span>
-        <p className="reset-line">この箱庭の記録を、すべて初期化します。</p>
+        <p className="reset-line" id="reset-title">この箱庭の記録を、すべて初期化します。</p>
         <span className="reset-name reset-toyman">トイマン</span>
         <p className="reset-line">火も、消えるのか。</p>
         <span className="reset-name reset-kotae">コタエ</span>
@@ -4909,12 +4950,15 @@ function PlaceEncounterScene({ fire, onComplete, memory }) {
     );
   }
 
+  var trapRef = useFocusTrap();
   return (
     <div
+      ref={trapRef}
+      role="dialog" aria-modal="true" aria-label={'開いた場所：' + fire.openedPlace.name}
       className={'intro-scene place-scene place-' + fire.openedPlace.id + (leaving ? ' entrust-leaving' : '')}
       onClick={(phase === 'dialogue' && !atLastBeat && !leaving) ? advance : undefined}
     >
-      <p className="place-scene-name">{fire.openedPlace.name}</p>
+      <p className="place-scene-name" aria-live="polite">{fire.openedPlace.name}</p>
 
       {/* 再会の一言。前にこの場所で痕跡を分けていたら、キャラがそれを覚えている。 */}
       {phase === 'dialogue' && step === 0 && reunion && (
@@ -5099,9 +5143,11 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, m
     );
   }
 
+  var heatTrapRef = useFocusTrap();
+
   return (
-    <div className={wrapCls} onClick={function(e) { e.stopPropagation(); }}>
-      <div className="intro-content">
+    <div className={wrapCls} ref={heatTrapRef} role="dialog" aria-modal="true" aria-label={'余熱に会い直す：' + def.label} onClick={function(e) { e.stopPropagation(); }}>
+      <div className="intro-content" aria-live="polite">
 
         {phase === 'intro' && (
           <div className="heat-revisit-intro intro-content-in">
@@ -5260,6 +5306,7 @@ function FinalReturnScene({ fire, onReturn, onHold }) {
   ];
 
   var wrapCls = 'intro-wrap final-return-wrap' + (visible ? ' intro-visible' : '') + (leaving ? ' intro-leaving' : '');
+  var finalTrapRef = useFocusTrap();
 
   if (crisisHold) {
     return (
@@ -5272,8 +5319,8 @@ function FinalReturnScene({ fire, onReturn, onHold }) {
   }
 
   return (
-    <div className={wrapCls} onClick={function(e) { e.stopPropagation(); }}>
-      <div className="intro-content">
+    <div className={wrapCls} ref={finalTrapRef} role="dialog" aria-modal="true" aria-label="心へ返す" onClick={function(e) { e.stopPropagation(); }}>
+      <div className="intro-content" aria-live="polite">
 
         {phase === 'record' && (
           <div className="final-return-record intro-content-in">

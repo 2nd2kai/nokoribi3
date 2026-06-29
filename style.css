@@ -5381,3 +5381,18 @@ html,body{
 .place-tears .place-btn:hover{box-shadow:0 0 24px 4px rgba(126,184,212,.16)}
 .place-black_tags .place-btn{border-color:#3a3a44;background:rgba(58,58,68,.16);color:#c2c8d2}
 .place-back_shelf .place-btn{border-color:#3e3a4c;background:rgba(62,58,76,.16);color:#c8c2d8}
+
+/* ── Turn 23A: モバイル＆a11y 足場 ───────────────────────────────────────────── */
+/* オーバーレイ系シーンが小さい画面でも内部スクロールでき、下部ボタンが安全に押せる */
+.intro-wrap{overflow-y:auto;min-height:0;-webkit-overflow-scrolling:touch;padding-bottom:max(40px,env(safe-area-inset-bottom,0px))}
+.intro-scene{overflow-y:auto;-webkit-overflow-scrolling:touch;justify-content:flex-start;padding-top:max(40px,env(safe-area-inset-top,0px));padding-bottom:max(80px,calc(env(safe-area-inset-bottom,0px) + 40px))}
+.away-card,.reset-card,.crisis-hold-card,.return-lamp-card{max-height:calc(100dvh - 48px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+/* 長文が横にはみ出さない */
+.footprints-line,.received-words-text,.char-response-line,.return-lamp-v,.final-return-value,.reunion-text,.away-line{overflow-wrap:anywhere;word-break:break-word}
+/* textarea 入力時に下部ボタンが隠れないよう、儀式は縦に積んでスクロール可能に */
+.final-return-memo{max-width:100%;box-sizing:border-box}
+/* タップ領域 44px 以上（主要オーバーレイのボタン） */
+.away-btn,.reset-btn-keep,.reset-btn-erase,.crisis-hold-btn,.crisis-proceed-btn,
+.intro-btn-fire,.intro-btn-next,.place-btn,.heat-btn,.receipt-btn,.return-lamp-btn,
+.final-return-axis-btn,.final-return-choice-btn,.heat-revisit-touch-btn,.heat-revisit-choice-btn,
+.place-choice-btn,.today-action-btn{min-height:44px}
