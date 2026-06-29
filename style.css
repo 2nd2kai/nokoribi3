@@ -5326,6 +5326,12 @@ html,body{
 
 /* ホーム：開いた道の気配（会いに行く導線は次段） */
 .today-opened-place{color:#9a86c0;font-size:12px;line-height:1.8;margin:0 0 14px;font-style:italic}
+.today-memory{color:#7d8aa5;font-size:12px;line-height:1.8;margin:0 0 14px}
+
+/* 再会の一言 — キャラが前回の痕跡を覚えている */
+.reunion-line{margin:0 auto 18px;max-width:340px;padding:12px 14px;border-radius:10px;background:rgba(20,18,30,.6);border:1px solid #262234;text-align:left}
+.reunion-who{display:block;font-size:11px;letter-spacing:.12em;margin:0 0 6px}
+.reunion-text{color:#aeb4c4;font-size:13px;line-height:1.85;margin:0}
 
 /* ── 場所での初回出会い（PlaceEncounterScene）── */
 .place-scene{justify-content:center}

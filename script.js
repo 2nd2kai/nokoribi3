@@ -362,6 +362,7 @@ function initGame() {
     worldNotes: [],
     relationshipNotes: [],
     careLogs: [],
+    characterMemory: {},
     activeEncounter: null,
     workerTasks: {
       lightkeeper: { id: 'lightkeeper', label: '灯守り', work: '守る', progress: 0, duration: 100, trace: 'small_stone', isUnlocked: true },
@@ -548,6 +549,7 @@ function normalizeGame(g) {
   if (!Array.isArray(g.worldNotes)) g.worldNotes = [];
   if (!Array.isArray(g.relationshipNotes)) g.relationshipNotes = [];
   if (!Array.isArray(g.careLogs)) g.careLogs = [];
+  if (!g.characterMemory || typeof g.characterMemory !== 'object') g.characterMemory = {};
   if (!('activeEncounter' in g)) g.activeEncounter = null;
   if (!g.toka) g.toka = 0;
   g.fires = (Array.isArray(g.fires) ? g.fires : []).map(normalizeFire);
@@ -995,6 +997,9 @@ function revisitHeat(game, fireId, heatType, touchMode, selected) {
 
   fire.logs = [{ text: traceText, at: nowISO() }].concat(fire.logs || []).slice(0, LOG_CAP_FIRE);
   fire.updatedAt = nowISO();
+
+  // 余熱の種類に対応するキャラに、会い直した痕跡を覚えさせる（meaning は誰にも紐づけない）。
+  rememberCharacter(ns, HEAT_CHARACTER[heatType], traceText, fireId);
 
   // 審査官エンカウント: 価値が静かな痕跡に達した時
   var beforeStage = unreceivedStage(before);
@@ -1706,6 +1711,53 @@ function hasSeenPlaceEncounter(game, placeId) {
 }
 
 // 場所での出会いを完了する。余熱を一つ分けた痕跡を残す。灯貨も素材も増やさない。
+// 場所・余熱とキャラの対応。キャラは「一回出るイベント」ではなく、
+// 過去に分けた痕跡を覚えている住人。met / traceCount / lastTrace を蓄える。
+var PLACE_CHARACTER = { tears: 'kana', black_tags: 'auditor', back_shelf: 'utsuro' };
+// 余熱の種類→キャラ。meaning はコタエ/トイマン領域なので誰にも紐づけない。
+var HEAT_CHARACTER = { value: 'auditor', satisfaction: 'utsuro', pain: 'kana', meaning: null };
+
+// 痕跡の本文（「水面に置いた痛み：反応」→「反応」）。再会の一言で要点だけ拾う。
+function traceEssence(t) {
+  if (!t) return '';
+  var i = t.indexOf('：');
+  return i >= 0 ? t.slice(i + 1) : t;
+}
+
+// キャラに痕跡を覚えさせる。数値的な好感度ではなく「何を分けたか」の記憶。
+function rememberCharacter(ns, charKey, trace, fireId) {
+  if (!charKey) return;
+  if (!ns.characterMemory || typeof ns.characterMemory !== 'object') ns.characterMemory = {};
+  var prev = ns.characterMemory[charKey] || { traceCount: 0 };
+  ns.characterMemory[charKey] = {
+    met: true,
+    traceCount: (prev.traceCount || 0) + 1,
+    lastTrace: trace || prev.lastTrace || '',
+    lastFireId: fireId || prev.lastFireId || null,
+    updatedAt: Date.now(),
+  };
+}
+
+// 再会の一言。memory（前回までの記憶）があるキャラだけ、前回の痕跡に触れる。
+// 初回出会いでは memory が無いので出ない（＝奪わない）。
+var REUNION_TITLES = { kana: 'かな', auditor: '審査官', utsuro: 'うつろ' };
+var REUNION_COLORS = { kana: '#7EB8D4', auditor: '#94a3b8', utsuro: '#b0a8cc' };
+function characterReunionLine(charKey, memory) {
+  if (!charKey || !memory || !memory.met) return null;
+  var ess = traceEssence(memory.lastTrace);
+  var lines;
+  if (charKey === 'kana') {
+    lines = ['前に、水面へ置いた痛みがあるよ。', '「' + ess + '」。', '今日は、そこへ近づく？'];
+  } else if (charKey === 'auditor') {
+    lines = ['前にも、黒札を一枚分けた。', '「' + ess + '」。', '今回の札も、本文ではない可能性がある。', '確認する。'];
+  } else if (charKey === 'utsuro') {
+    lines = ['前に、棚へ置いた余白がある。', '「' + ess + '」。', 'まだ、場所は空いている。'];
+  } else {
+    return null;
+  }
+  return { who: REUNION_TITLES[charKey], color: REUNION_COLORS[charKey], lines: lines };
+}
+
 function completePlaceEncounter(game, fireId, selected) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
@@ -1729,6 +1781,8 @@ function completePlaceEncounter(game, fireId, selected) {
   if (def.oldEncounter && ns.seenEncounters && ns.seenEncounters.indexOf(def.oldEncounter) === -1) {
     ns.seenEncounters = ns.seenEncounters.concat([def.oldEncounter]);
   }
+  // キャラに、この場所で分けた痕跡を覚えさせる。
+  rememberCharacter(ns, PLACE_CHARACTER[fire.openedPlace.id], traceText, fireId);
   return { ok: true, game: ns, traceText: traceText };
 }
 
@@ -3932,6 +3986,24 @@ function fireCompanionLine(fire) {
 }
 
 // 最近の痕跡（最大3）。守られた痕跡＋会い直した痕跡＋場所で分けた痕跡＋返却灯。
+// ホームに出す「キャラが覚えている」一言を1件だけ選ぶ（最も新しく更新された記憶）。
+var MEMORY_NAMES = { kana: 'かな', auditor: '審査官', utsuro: 'うつろ' };
+function latestCharacterMemoryLine(game) {
+  var mem = game && game.characterMemory;
+  if (!mem) return null;
+  var best = null;
+  Object.keys(mem).forEach(function(k) {
+    var m = mem[k];
+    if (m && m.met && (!best || (m.updatedAt || 0) > (best.updatedAt || 0))) {
+      best = { key: k, mem: m };
+    }
+  });
+  if (!best) return null;
+  var ess = traceEssence(best.mem.lastTrace);
+  if (!ess) return null;
+  return (MEMORY_NAMES[best.key] || best.key) + 'は、前に分けた「' + ess + '」を覚えている。';
+}
+
 function homeRecentTraces(fire, game) {
   var traces = getStabilityTraces(fire.gardenProgress || 0).slice();
   // 余熱に会い直した痕跡（heatTraces）を前に出す。新しい本筋。
@@ -3988,6 +4060,7 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
   var place = currentFire ? fireCurrentPlace(currentFire) : '';
   var companion = currentFire ? fireCompanionLine(currentFire) : null;
   var traces = currentFire ? homeRecentTraces(currentFire, game) : [];
+  var memoryLine = latestCharacterMemoryLine(game);
   var nextActions = currentFire ? homeNextActions(currentFire) : [];
   var stage = currentFire ? stabilityStage(currentFire.gardenProgress || 0) : '';
 
@@ -4086,6 +4159,11 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
             <p className="today-opened-place">
               受領証の裏に、{currentFire.openedPlace.name}への道が開いている。
             </p>
+          )}
+
+          {/* キャラが覚えている一言（1件だけ。出しすぎない）。 */}
+          {memoryLine && (
+            <p className="today-memory">{memoryLine}</p>
           )}
 
           {nextActions.length > 0 && (
@@ -4679,8 +4757,9 @@ function lineToFragments(text) {
   });
 }
 
-function PlaceEncounterScene({ fire, onComplete }) {
+function PlaceEncounterScene({ fire, onComplete, memory }) {
   var def = PLACE_ENCOUNTERS[fire.openedPlace && fire.openedPlace.id];
+  var reunion = characterReunionLine(PLACE_CHARACTER[fire.openedPlace && fire.openedPlace.id], memory);
   var [step, setStep] = _useState(0);
   var [phase, setPhase] = _useState('dialogue'); // dialogue | choose | result
   var [selected, setSelected] = _useState(null);
@@ -4745,6 +4824,16 @@ function PlaceEncounterScene({ fire, onComplete }) {
       onClick={(phase === 'dialogue' && !atLastBeat && !leaving) ? advance : undefined}
     >
       <p className="place-scene-name">{fire.openedPlace.name}</p>
+
+      {/* 再会の一言。前にこの場所で痕跡を分けていたら、キャラがそれを覚えている。 */}
+      {phase === 'dialogue' && step === 0 && reunion && (
+        <div className="reunion-line intro-content-in">
+          <span className="reunion-who" style={{ color: reunion.color }}>{reunion.who}</span>
+          {reunion.lines.map(function(l, i) {
+            return <p key={i} className="reunion-text">{l}</p>;
+          })}
+        </div>
+      )}
 
       {phase === 'dialogue' && (
         <React.Fragment>
@@ -4845,8 +4934,9 @@ var TOUCH_MODES = [
   { id: '今日はそばに置く', desc: '急がなかった痕跡を残す' },
 ];
 
-function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete }) {
+function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, memory }) {
   var def = HEAT_REVISIT_DEFS[heatType];
+  var reunion = characterReunionLine(HEAT_CHARACTER[heatType], memory);
   var [phase, setPhase] = _useState('intro'); // intro | touch | choose | trace
   var [step, setStep] = _useState(0);
   var [touchMode, setTouchMode] = _useState(null);
@@ -4914,6 +5004,13 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete })
           <div className="heat-revisit-intro intro-content-in">
             <p className="heat-revisit-label">{def.label}</p>
             <p className="heat-revisit-narrative">{def.introNarrative}</p>
+            {/* 再会の一言。前にこの余熱を分けたキャラが、それを覚えている。 */}
+            {step === 0 && reunion && (
+              <div className="reunion-line">
+                <span className="reunion-who" style={{ color: reunion.color }}>{reunion.who}</span>
+                {reunion.lines.map(function(l, i) { return <p key={i} className="reunion-text">{l}</p>; })}
+              </div>
+            )}
             {renderBeatContent(beat)}
             <div className="intro-btn-row">
               <button className="intro-btn-fire place-btn heat-btn" onClick={advanceIntro} disabled={leaving}>
@@ -5573,6 +5670,7 @@ function App() {
         return (
           <PlaceEncounterScene
             fire={fire}
+            memory={(game.characterMemory || {})[PLACE_CHARACTER[fire.openedPlace.id]]}
             onComplete={function(selected) { handlePlaceEncounterDone(fire.id, selected); }}
           />
         );
@@ -5587,6 +5685,7 @@ function App() {
             heatType={heatRevisitState.heatType}
             metAuditor={hasSeenPlaceEncounter(game, 'black_tags')}
             metUtsuro={hasSeenPlaceEncounter(game, 'back_shelf')}
+            memory={(game.characterMemory || {})[HEAT_CHARACTER[heatRevisitState.heatType]]}
             onComplete={function(touchMode, selected) {
               handleRevisitHeatDone(heatRevisitState.fireId, heatRevisitState.heatType, touchMode, selected);
             }}
