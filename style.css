@@ -5328,6 +5328,18 @@ html,body{
 .today-opened-place{color:#9a86c0;font-size:12px;line-height:1.8;margin:0 0 14px;font-style:italic}
 .today-memory{color:#7d8aa5;font-size:12px;line-height:1.8;margin:0 0 14px}
 
+/* キャラ応答 — 選んだ言葉を、そのキャラの役割で受け取る一言 */
+.char-response{margin:0 auto 16px;max-width:340px;padding:12px 14px;border-radius:10px;background:rgba(18,16,26,.7);border:1px solid #2a2638;text-align:left}
+.char-response-who{display:block;font-size:11px;letter-spacing:.12em;margin:0 0 6px}
+.char-response-line{color:#c2c8d6;font-size:13px;line-height:1.85;margin:0}
+
+/* 受け取られた言葉 — FinalReturn でのキャラ応答まとめ */
+.received-words{margin:0 0 18px;padding:10px 12px;border-radius:8px;background:#0d0f1a;border:1px solid #2a2340}
+.received-words-label{font-size:10px;letter-spacing:.1em;color:#5a6478;margin:0 0 8px}
+.received-words-item{display:flex;gap:8px;align-items:baseline;margin:4px 0}
+.received-words-who{flex-shrink:0;font-size:10px;letter-spacing:.08em}
+.received-words-text{font-size:12px;line-height:1.7;color:#aeb4c4}
+
 /* 問いの足跡 — 影と向き合って置いた言葉（答えではない） */
 .footprints{margin:10px 0;padding:10px 12px;border-radius:8px;background:#0b0d16;border:1px solid #1c2030}
 .footprints-label{font-size:10px;letter-spacing:.1em;color:#5a6478;margin:0 0 6px}

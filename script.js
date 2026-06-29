@@ -454,6 +454,7 @@ function normalizeFire(f) {
   if (f.finalReturnAttemptedAt === undefined) f.finalReturnAttemptedAt = null;
   if (f.returnHoldLog === undefined) f.returnHoldLog = [];
   if (f.heatTraces === undefined) f.heatTraces = [];
+  if (!Array.isArray(f.characterResponses)) f.characterResponses = [];
   if (f.returnLamp === undefined) f.returnLamp = null;
   // 旧セーブで既に returned だが返却灯が無い火に、最小限の灯りを補完する。
   if (f.status === 'returned' && !f.returnLamp) {
@@ -1000,6 +1001,11 @@ function revisitHeat(game, fireId, heatType, touchMode, selected) {
 
   // 余熱の種類に対応するキャラに、会い直した痕跡を覚えさせる（meaning は誰にも紐づけない）。
   rememberCharacter(ns, HEAT_CHARACTER[heatType], traceText, fireId);
+  // 選んだ言葉を受け取る一言を残す。meaning はコタエが受け取る。急がなかった日（selected無し）は出さない。
+  if (!sparedToday && selected) {
+    var respChar = HEAT_CHARACTER[heatType] || (heatType === 'meaning' ? 'kotae' : null);
+    recordCharacterResponse(ns, fire, respChar, 'heatRevisit', selected);
+  }
 
   // 審査官エンカウント: 価値が静かな痕跡に達した時
   var beforeStage = unreceivedStage(before);
@@ -1761,6 +1767,48 @@ function characterReunionLine(charKey, memory) {
   return { who: REUNION_TITLES[charKey], color: REUNION_COLORS[charKey], lines: lines };
 }
 
+// キャラ応答。AI会話でも評価でもなく、選んだ言葉をそのキャラの役割で「受け取る」一言。
+// 固定ルールで生成する。好感度・数値は出さない。
+var RESPONSE_NAMES = { kana: 'かな', auditor: '審査官', utsuro: 'うつろ', kotae: 'コタエ' };
+var RESPONSE_COLORS = { kana: '#7EB8D4', auditor: '#94a3b8', utsuro: '#b0a8cc', kotae: '#b0a8cc' };
+var CHAR_RESPONSE_CAP = 10;
+
+function buildCharacterResponse(charKey, selected, memory) {
+  var lines;
+  if (charKey === 'kana') {
+    lines = ['「' + selected + '」。', 'そこが痛かったんだね。', '今日は、答えにしなくていいよ。'];
+  } else if (charKey === 'auditor') {
+    lines = ['「' + selected + '」。', '確認した。', 'これは本文ではない。', '黒札として分ける。'];
+  } else if (charKey === 'utsuro') {
+    lines = ['「' + selected + '」。', '何にもならなかったんじゃない。', 'まだ、置き場所がなかっただけ。'];
+  } else if (charKey === 'kotae') {
+    lines = ['「' + selected + '」。', '記録しました。', 'これは答えではありません。問い札です。'];
+  } else {
+    return null;
+  }
+  // 2回目以降は、ほんの少し再会に触れる（数値は出さない）。
+  if (memory && (memory.traceCount || 0) >= 2) {
+    if (charKey === 'kana') lines.push('前にも、水面へ置いた痛みがあります。');
+    else if (charKey === 'auditor') lines.push('前にも、黒札を分けています。');
+    else if (charKey === 'utsuro') lines.push('前にも、棚へ置いた余白があります。');
+  }
+  return { who: RESPONSE_NAMES[charKey], color: RESPONSE_COLORS[charKey], lines: lines };
+}
+
+// 応答を生成して fire.characterResponses に積む（上限あり）。生成した応答も返す。
+function recordCharacterResponse(ns, fire, charKey, source, selected) {
+  if (!charKey || !selected) return null;
+  var memory = (ns.characterMemory || {})[charKey];
+  var resp = buildCharacterResponse(charKey, selected, memory);
+  if (!resp) return null;
+  if (!Array.isArray(fire.characterResponses)) fire.characterResponses = [];
+  fire.characterResponses = fire.characterResponses.concat([{
+    character: charKey, source: source, selected: selected,
+    text: resp.lines.join('\n'), createdAt: Date.now(),
+  }]).slice(-CHAR_RESPONSE_CAP);
+  return resp;
+}
+
 function completePlaceEncounter(game, fireId, selected) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
@@ -1784,8 +1832,10 @@ function completePlaceEncounter(game, fireId, selected) {
   if (def.oldEncounter && ns.seenEncounters && ns.seenEncounters.indexOf(def.oldEncounter) === -1) {
     ns.seenEncounters = ns.seenEncounters.concat([def.oldEncounter]);
   }
-  // キャラに、この場所で分けた痕跡を覚えさせる。
-  rememberCharacter(ns, PLACE_CHARACTER[fire.openedPlace.id], traceText, fireId);
+  // キャラに、この場所で分けた痕跡を覚えさせ、選んだ言葉を受け取る一言を残す。
+  var placeChar = PLACE_CHARACTER[fire.openedPlace.id];
+  rememberCharacter(ns, placeChar, traceText, fireId);
+  recordCharacterResponse(ns, fire, placeChar, 'placeEncounter', selected);
   return { ok: true, game: ns, traceText: traceText };
 }
 
@@ -4833,6 +4883,11 @@ function PlaceEncounterScene({ fire, onComplete, memory }) {
   var resultLines = (phase === 'result' && selected) ? def.result(selected) : [];
   var traceText = (phase === 'result' && selected) ? (def.traceLabel + '：' + selected) : '';
   var charColor = def.charColor;
+  // キャラ応答（この置きを含めた回数で再会文の有無を決める＝保存される応答と一致させる）。
+  var respCharKey = PLACE_CHARACTER[fire.openedPlace && fire.openedPlace.id];
+  var response = (phase === 'result' && selected)
+    ? buildCharacterResponse(respCharKey, selected, { traceCount: ((memory && memory.traceCount) || 0) + 1 })
+    : null;
 
   function renderBeat(b, key) {
     if (b.narrative) {
@@ -4906,6 +4961,13 @@ function PlaceEncounterScene({ fire, onComplete, memory }) {
       {phase === 'result' && (
         <div className="place-result intro-content-in">
           {resultLines.map(function(rl, i) { return renderBeat(rl, i); })}
+          {/* キャラ応答 — 選んだ言葉を、そのキャラの役割で受け取る一言。痕跡の前に。 */}
+          {response && (
+            <div className="char-response">
+              <span className="char-response-who" style={{ color: response.color }}>{response.who}</span>
+              {response.lines.map(function(l, i) { return <p key={i} className="char-response-line">{l}</p>; })}
+            </div>
+          )}
           <p className="place-trace">痕跡　{traceText}</p>
           <div className="intro-btn-row" onClick={function(e) { e.stopPropagation(); }}>
             <button className="intro-btn-fire place-btn" onClick={finish} disabled={leaving}>
@@ -5020,6 +5082,11 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, m
   var traceText = sparedToday
     ? ('急がなかった余熱：' + def.label)
     : (selected ? (def.traceLabel + '：' + selected) : '');
+  // キャラ応答（meaning はコタエが受け取る。急がなかった日は出さない）。
+  var respCharKey = HEAT_CHARACTER[heatType] || (heatType === 'meaning' ? 'kotae' : null);
+  var response = (!sparedToday && selected)
+    ? buildCharacterResponse(respCharKey, selected, { traceCount: ((memory && memory.traceCount) || 0) + 1 })
+    : null;
 
   function renderBeatContent(b) {
     return (
@@ -5099,6 +5166,13 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, m
         {phase === 'trace' && (
           <div className="heat-revisit-trace intro-content-in">
             <p className="heat-revisit-label">{def.label}</p>
+            {/* キャラ応答 — 選んだ言葉を受け取る一言。痕跡の前に。 */}
+            {response && (
+              <div className="char-response">
+                <span className="char-response-who" style={{ color: response.color }}>{response.who}</span>
+                {response.lines.map(function(l, i) { return <p key={i} className="char-response-line">{l}</p>; })}
+              </div>
+            )}
             <div className="heat-revisit-trace-box">
               <p className="heat-revisit-trace-text">{traceText}</p>
             </div>
@@ -5256,6 +5330,22 @@ function FinalReturnScene({ fire, onReturn, onHold }) {
             </div>
             {/* 問いの足跡 — 署名する前に、この火へ置いてきた言葉を見返す。 */}
             <QuestionFootprints fire={fire} limit={3} variant="final" />
+            {/* 受け取られた言葉 — キャラが受け取った応答の最新1〜3件。 */}
+            {(fire.characterResponses || []).length > 0 && (
+              <div className="received-words">
+                <p className="received-words-label">受け取られた言葉</p>
+                {fire.characterResponses.slice(-3).map(function(r, i) {
+                  return (
+                    <div key={i} className="received-words-item">
+                      <span className="received-words-who" style={{ color: RESPONSE_COLORS[r.character] || '#9aa3b5' }}>
+                        {RESPONSE_NAMES[r.character] || r.character}
+                      </span>
+                      <span className="received-words-text">{r.text.split('\n')[0]}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <div className="intro-btn-row">
               <button className="intro-btn-fire place-btn" onClick={function() { setPhase('sign'); }} disabled={leaving}>
                 署名へ進む
