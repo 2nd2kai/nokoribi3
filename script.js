@@ -1006,6 +1006,9 @@ function revisitHeat(game, fireId, heatType, touchMode, selected) {
   return { ok: true, game: ns };
 }
 
+// 【封印・通常UIから呼ばれない】旧・灯置き場の購入処理（素材＋灯貨で灯りを買う）。
+// 「火を灯貨で測らない／感情を素材化して消費しない」思想に反するため Turn 19A で封印。
+// 灯置き場の本実装（灯貨で静かに灯りを置く儀式）は別途作り直す。コードは残置。
 function buyMarketItem(game, key) {
   var item = LIGHT_MARKET_ITEMS.find(function(i) { return i.key === key; });
   if (!item) return { ok: false, reason: 'not_found', game: game };
@@ -1035,9 +1038,7 @@ function restUnreceived(game, fireId) {
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
   if (!fire || fire.status !== 'received') return { ok: false, game: game };
   if (cooldownRemaining(fire.lastUnreceivedRestAt, 30) > 0) return { ok: false, reason: 'cooldown', game: game };
-  // 「今日は置いておく」のは報酬行為ではない。残るのは灯貨ではなく、水滴の跡。
-  ns.materials = safeMat(ns.materials);
-  ns.materials.drop += 1;
+  // 「今日は置いておく」のは報酬行為ではない。素材は増やさない。残るのは水滴の痕跡だけ。
   addGardenItem(ns, 'water_drop');
   fire.logs = (fire.logs || []).concat([{ text: '今日は、ここに置いておく。', at: nowISO() }]);
   fire.lastUnreceivedRestAt = nowISO();
@@ -1051,7 +1052,6 @@ function restUnreceived(game, fireId) {
   var actionResult = makeActionResult({
     title: '今日は置いておいた',
     context: 'unreceived', fireId: fireId,
-    gains: [{ label: '水滴', amount: 1 }],
     traces: ['火は、今日もここに置かれた。', '水滴が、火の近くに置かれた。'],
   });
   return { ok: true, game: ns, visualEvent: ve, actionResult: actionResult };
@@ -1153,17 +1153,15 @@ function doBattle(game, fireId, answer) {
   fire.battleCount = (fire.battleCount || 0) + 1;
   fire.shadowVoiceIdx = (fire.shadowVoiceIdx || 0) + 1;
   ns.battleCount = (ns.battleCount || 0) + 1;
-  // 影へ進むのは報酬行為ではない。残るのは灯貨ではなく、焦げた紙片という痕跡。
-  ns.materials = safeMat(ns.materials);
-  ns.materials.paper = (ns.materials.paper || 0) + 1;
+  // 影へ進むのは報酬行為ではない。素材は増やさない。残るのは焦げた紙片という痕跡だけ。
   if (answer && answer.trim()) {
     fire.answers = (fire.answers || []).concat([{ text: answer.trim(), at: nowISO() }]);
   }
   addLog(fire, pick(BATTLE_LOGS));
   addGardenItem(ns, 'burnt_paper');
   var lkResult = advanceLightkeeper(ns, 5);
-  // 紙集めの小人解放条件
-  if (!ns.tinyfolk.paperCollector && ns.materials.paper >= 3) {
+  // 紙集めの小人解放条件（素材数ではなく、森に残った紙片の痕跡の積み重ねで判定）
+  if (!ns.tinyfolk.paperCollector && (ns.gardenItemCounts && ns.gardenItemCounts.burnt_paper >= 3)) {
     ns.tinyfolk.paperCollector = true;
   }
   if (fire.questionProgress >= 100) {
@@ -1181,7 +1179,6 @@ function doBattle(game, fireId, answer) {
   ns.lastVisualEvent = ve;
   var actionResult = makeActionResult({
     title: '影と向き合った',
-    gains: [{ label: '紙片', amount: 1 }],
     traces: ['焦げた紙片が、森に残った。'],
   });
   appendLightkeeperResult(actionResult, lkResult);
@@ -1252,12 +1249,8 @@ function computeAwayReturn(game, skip) {
       }
       // 安定だけ少し落ち着く（上限 STABILITY_ENOUGH。放置だけでは満たし切らない＝役割を残す）。
       fire.gardenProgress = Math.min(STABILITY_ENOUGH, (fire.gardenProgress || 0) + bump);
-      // 守られた痕跡を残す（報酬ではなく、世話されていた証拠）。
+      // 守られた痕跡を残す（報酬ではなく、世話されていた証拠）。素材は増やさない。
       addGardenItem(ns, 'small_stone');
-      if (tier !== 'short') {
-        ns.materials = safeMat(ns.materials);
-        ns.materials.ash = (ns.materials.ash || 0) + 1;
-      }
       fire.updatedAt = nowISO();
       ns.lastAwayShownAt = nowISO();
       report = { tier: tier, lines: lines };
@@ -1309,23 +1302,18 @@ function advanceLightkeeper(ns, amount) {
   if (after < duration) {
     return { advanced: true, completed: false, before: before, after: after, amount: amount, completion: null };
   }
-  // 完了。灯守りの仕事は守られた痕跡（石）を残すもの。灯貨は増やさない。
+  // 完了。灯守りの仕事は守られた痕跡（石）を残すもの。素材も灯貨も増やさない。
   lk.progress = 0;
   addGardenItem(ns, 'small_stone');
-  ns.materials = safeMat(ns.materials);
-  ns.materials.ash = (ns.materials.ash || 0) + 1;
   var sf = ns.fires.find(function(f) { return f.status === 'searching'; });
   if (sf) sf.gardenProgress = Math.min(100, (sf.gardenProgress || 0) + 3);
   return {
     advanced: true, completed: true, before: before, after: 0, amount: amount,
     completion: {
       label: '灯守りの仕事完了',
-      message: '灯守りが、小さな石を置いた。',
+      message: '灯守りが、小さな石を置いた。\n火の安定が、少し増した。',
       trace: 'small_stone',
-      gains: [
-        { label: '灰片', amount: 1 },
-        { label: '火の安定', amount: 3 },
-      ],
+      gains: [],
     },
   };
 }
@@ -1338,8 +1326,7 @@ function watchFire(game, fireId) {
   // 見守りは灯貨稼ぎではなく、守られた痕跡を残す行為。
   fire.gardenProgress = Math.min(100, (fire.gardenProgress || 0) + 8);
   fire.watchCount = (fire.watchCount || 0) + 1;
-  ns.materials = safeMat(ns.materials);
-  ns.materials.ash = (ns.materials.ash || 0) + 1;
+  // 見守りは素材集めではない。残るのは火のそばの時間だけ。
   addLog(fire, pick(WATCH_LOGS));
   // small_stone は灯守りの仕事完了時のみ置かれる（即時追加しない）
   var lkResult = advanceLightkeeper(ns, 30);
@@ -1355,7 +1342,6 @@ function watchFire(game, fireId) {
   ns.lastVisualEvent = ve;
   var actionResult = makeActionResult({
     title: 'ただ見守った',
-    gains: [{ label: '灰片', amount: 1 }],
     traces: ['急がなかった時間が、火のそばに残った。'],
   });
   appendLightkeeperResult(actionResult, lkResult);
@@ -1374,9 +1360,7 @@ function restToday(game, fireId) {
   var logText = pick(REST_LOGS);
   fire.restLogs = capLog((fire.restLogs || []).concat([{ text: logText, at: nowISO() }]), LOG_CAP_FIRE);
   addLog(fire, logText);
-  // 休ませることも灯貨稼ぎではない。火のそばに痕跡だけが残る。
-  ns.materials = safeMat(ns.materials);
-  ns.materials.drop = (ns.materials.drop || 0) + 1;
+  // 休ませることも灯貨稼ぎ・素材集めではない。火のそばに痕跡だけが残る。
   addGardenItem(ns, 'rest_chair');
   addGardenItem(ns, 'water_drop');
   var lkResult = advanceLightkeeper(ns, 15);
@@ -1397,7 +1381,6 @@ function restToday(game, fireId) {
   ns.lastVisualEvent = ve;
   var actionResult = makeActionResult({
     title: '今日は無理にしなかった',
-    gains: [{ label: '水滴', amount: 1 }],
     traces: ['火のそばに、小さな椅子が置かれた。', '水滴が、火の近くに置かれた。'],
   });
   appendLightkeeperResult(actionResult, lkResult);
@@ -1730,10 +1713,8 @@ function completeReceiptJourney(game, fireId, journeyData) {
   fire.updatedAt = nowISO();
 
   // 受領証が発行される——この火が丁寧に扱われたあと、世界に余光がひとつこぼれる。
-  // これが灯貨の増える、唯一の正規の場面。報酬ではなく、こぼれた灯り。
+  // これが灯貨の増える、唯一の正規の場面。報酬ではなく、こぼれた灯り。素材は増やさない。
   spillAfterglow(ns, 1);
-  ns.materials = safeMat(ns.materials);
-  ns.materials.stamp = (ns.materials.stamp || 0) + 1;
   addGardenItem(ns, 'record_light');
   if (!ns.unlocks.recordTower) {
     ns.unlocks.recordTower = true;
@@ -1755,7 +1736,6 @@ function completeReceiptJourney(game, fireId, journeyData) {
   ns.lastVisualEvent = ve;
   var actionResult = makeActionResult({
     title: '問いの欠片を受け取った',
-    gains: [{ label: '受領印', amount: 1 }],
     traces: [
       '遠くの記録塔に、灯りがともった。',
       'この火から、灯りがひとつこぼれた。灯守りが、それを拾った。',
@@ -1805,7 +1785,8 @@ function ProgressBar({ value, color }) {
   );
 }
 
-// 素材チップ表示
+// 【封印・通常UIで描画されない】旧・素材チップ表示（灰片/紙片/意味片…のインベントリ）。
+// 素材集めの名残。Turn 19A で通常導線から外した。コードは残置。
 function MatChips({ materials }) {
   var m = materials || {};
   var items = [
@@ -3417,6 +3398,8 @@ function EventCard({ event }) {
   );
 }
 
+// 【封印・通常UIで描画されない】旧・灯置き場（素材＋灯貨で灯りを買う市場）。
+// Turn 19A で GardenView から外した。本筋の灯置き場は別途作り直す。コードは残置。
 function LightMarket({ game, onBuyNewGame }) {
   var [result, setResult] = _useState(null);
   var items = game.gardenItems || [];
@@ -3815,10 +3798,9 @@ function GardenView({ game, onBack, onGoShelf, onDoBattle, onWatchFire, onRestTo
         </div>
       )}
 
-      {/* 8. 灯置き場（灯守りの仕事が一度完了して small_stone が置かれてから） */}
-      {((game.gardenItems && game.gardenItems.includes('small_stone')) || (game.unlocks && game.unlocks.lightMarket)) && (
-        <LightMarket game={game} onBuyNewGame={onBuyMarket} />
-      )}
+      {/* 8. 灯置き場 — 旧経済（素材で灯りを買う）の名残。Turn 19A で通常導線から封印。
+            灯置き場の本実装（灯貨で「灯りを置く」儀式）は Turn 19 以降で作り直す。
+            LightMarket / buyMarketItem / LIGHT_MARKET_ITEMS はコードとしては残置（封印）。 */}
     </div>
   );
 }
