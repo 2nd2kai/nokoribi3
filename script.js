@@ -455,6 +455,7 @@ function normalizeFire(f) {
   if (f.returnHoldLog === undefined) f.returnHoldLog = [];
   if (f.heatTraces === undefined) f.heatTraces = [];
   if (!Array.isArray(f.characterResponses)) f.characterResponses = [];
+  if (!Array.isArray(f.questionRevisions)) f.questionRevisions = [];
   if (f.returnLamp === undefined) f.returnLamp = null;
   // 旧セーブで既に returned だが返却灯が無い火に、最小限の灯りを補完する。
   if (f.status === 'returned' && !f.returnLamp) {
@@ -1913,6 +1914,35 @@ function recordFootprintResponse(ns, fire, text) {
   return resp;
 }
 
+// いま見えている問い。置き直しがあれば最新の to、無ければ最初の問い。
+// 最初の問い（fire.question / receipt.question）は決して上書きしない。
+function originalQuestion(fire) {
+  return fire.question || (fire.receipt && fire.receipt.question) || '';
+}
+function currentQuestion(fire) {
+  var revs = fire.questionRevisions || [];
+  var last = revs.length ? revs[revs.length - 1] : null;
+  return (last && last.to) || originalQuestion(fire);
+}
+
+// 問いを今の言葉で置き直す。解決でも正解でもなく、履歴として積むだけ。危機語は呼び出し側で除外。
+function reviseQuestion(game, fireId, toText) {
+  var ns = cloneS(game);
+  var fire = ns.fires.find(function(f) { return f.id === fireId; });
+  if (!fire) return { ok: false, game: game };
+  var to = (toText || '').trim();
+  if (!to) return { ok: false, game: game };
+  if (!Array.isArray(fire.questionRevisions)) fire.questionRevisions = [];
+  fire.questionRevisions = fire.questionRevisions.concat([{
+    from: currentQuestion(fire),  // 直前に見えていた問い（初回は最初の問い）
+    to: to,
+    reason: 'final_return',
+    createdAt: Date.now(),
+  }]);
+  fire.updatedAt = nowISO();
+  return { ok: true, game: ns };
+}
+
 function completePlaceEncounter(game, fireId, selected) {
   var ns = cloneS(game);
   var fire = ns.fires.find(function(f) { return f.id === fireId; });
@@ -2925,8 +2955,17 @@ function RecordTower({ game, onGoUnreceived, onViewReceipt, onViewReturnLamp }) 
             {/* 記録タブ: 問い + 問いの足跡 + 受領証 */}
             {tab === '記録' && (
               <React.Fragment>
-                {fire.question && (
-                  <p style={{ color: '#7c3aed', fontSize: 12, margin: '0 0 6px', lineHeight: 1.6 }}>✦ {fire.question}</p>
+                {/* 問いの変遷 — 置き直していれば最初と今を並べる。最初の問いは消さない。 */}
+                {(fire.questionRevisions && fire.questionRevisions.length > 0) ? (
+                  <div className="qhist">
+                    <p className="qhist-label">問いの変遷</p>
+                    <p className="qhist-line"><span className="qhist-k">最初の問い</span>{originalQuestion(fire)}</p>
+                    <p className="qhist-line"><span className="qhist-k">置き直した問い</span>{currentQuestion(fire)}</p>
+                  </div>
+                ) : (
+                  originalQuestion(fire) && (
+                    <p style={{ color: '#7c3aed', fontSize: 12, margin: '0 0 6px', lineHeight: 1.6 }}>✦ {originalQuestion(fire)}</p>
+                  )
                 )}
                 <QuestionFootprints fire={fire} limit={3} variant="receipt" />
                 {onViewReceipt && fire.receipt && (
@@ -3189,6 +3228,14 @@ function ReturnLampCard({ fire, onClose }) {
       {/* どの火かが分かる最小の手がかりだけ（一行）。詳細は受領証/記録塔へ。 */}
       {fire.kindle && <p className="return-lamp-kindle">「{fire.kindle}」</p>}
       <p className="return-lamp-lead">この火は、心へ返されました。<br />消失ではなく、返却です。</p>
+
+      {/* 今の問い（置き直していれば最新、していなければ最初の問い）を1行だけ。 */}
+      {currentQuestion(fire) && (
+        <div className="return-lamp-nowq">
+          <span className="return-lamp-nowq-k">今の問い</span>
+          <span className="return-lamp-nowq-v">{currentQuestion(fire)}</span>
+        </div>
+      )}
 
       {/* 問いの足跡 — 最新1件だけ（灯りは軽く）。 */}
       <QuestionFootprints fire={fire} limit={1} variant="lamp" />
@@ -5355,7 +5402,7 @@ function HeatRevisitScene({ fire, heatType, metAuditor, metUtsuro, onComplete, m
 // ── FinalReturnScene ─────────────────────────────────────────────────────────
 // 心へ返す署名儀式。記録確認 → 三軸署名 → 返し方の選択 → 完了 or 保留。
 // 灯貨は増やさない。プレイヤーが「言葉」で終点を選ぶ。
-function FinalReturnScene({ fire, onReturn, onHold }) {
+function FinalReturnScene({ fire, onReturn, onHold, onReviseQuestion }) {
   var [phase, setPhase] = _useState('record'); // record | sign | choice | done | hold_msg
   var [metrics, setMetrics] = _useState({ meaning: null, value: null, satisfaction: null });
   var [memo, setMemo] = _useState('');
@@ -5363,6 +5410,18 @@ function FinalReturnScene({ fire, onReturn, onHold }) {
   var [crisisHold, setCrisisHold] = _useState(false);
   var [visible, setVisible] = _useState(false);
   var [leaving, setLeaving] = _useState(false);
+  // 問いの置き直し: idle | editing | saved
+  var [reviseMode, setReviseMode] = _useState('idle');
+  var [reviseText, setReviseText] = _useState('');
+  var [reviseCrisis, setReviseCrisis] = _useState(false);
+
+  function submitRevision() {
+    var t = reviseText.trim();
+    if (!t) return;
+    if (hasDanger(t)) { setReviseCrisis(true); return; }
+    if (onReviseQuestion) onReviseQuestion(fire.id, t);
+    setReviseMode('saved');
+  }
 
   _useEffect(function() {
     var t = setTimeout(function() { setVisible(true); }, 80);
@@ -5423,6 +5482,12 @@ function FinalReturnScene({ fire, onReturn, onHold }) {
         onProceed={function() { setCrisisHold(false); setPhase('choice'); }}
         proceedLabel="内容を確認して、続ける"
       />
+    );
+  }
+  // 問いの置き直しに危機語が含まれた場合は保留室のみ（問いとして保存しない）。
+  if (reviseCrisis) {
+    return (
+      <CrisisHold onHold={function() { setReviseCrisis(false); setReviseText(''); setReviseMode('idle'); }} />
     );
   }
 
@@ -5501,6 +5566,46 @@ function FinalReturnScene({ fire, onReturn, onHold }) {
                 })}
               </div>
             )}
+            {/* 問いを置き直す — 解決でも正解でもなく、今の言葉で置き直す。最初の問いは消さない。 */}
+            <div className="revise-q">
+              <p className="revise-q-label">問いを置き直す</p>
+              <div className="revise-q-row">
+                <span className="revise-q-k">最初の問い</span>
+                <span className="revise-q-v">「{originalQuestion(fire)}」</span>
+              </div>
+              {currentQuestion(fire) !== originalQuestion(fire) && (
+                <div className="revise-q-row">
+                  <span className="revise-q-k">いま見えている問い</span>
+                  <span className="revise-q-v revise-q-now">「{currentQuestion(fire)}」</span>
+                </div>
+              )}
+              <p className="revise-q-note">問いは、答えではありません。<br />今の言葉で、置き直すことができます。</p>
+
+              {reviseMode === 'idle' && (
+                <div className="revise-q-btns">
+                  <button className="revise-q-btn-keep" onClick={function() { setReviseMode('done-keep'); }}>このままにする</button>
+                  <button className="revise-q-btn-edit" onClick={function() { setReviseText(''); setReviseMode('editing'); }}>今の言葉で置き直す</button>
+                </div>
+              )}
+              {reviseMode === 'editing' && (
+                <div className="revise-q-edit">
+                  <p className="revise-q-edit-lead">この問いを、今の言葉で書いてください。</p>
+                  <textarea className="revise-q-input" rows={3} value={reviseText}
+                    onChange={function(e) { setReviseText(e.target.value); }} placeholder="……" />
+                  <div className="revise-q-btns">
+                    <button className="revise-q-btn-keep" onClick={function() { setReviseMode('idle'); }}>やめる</button>
+                    <button className="revise-q-btn-edit" onClick={submitRevision} disabled={!reviseText.trim()}>置き直す</button>
+                  </div>
+                </div>
+              )}
+              {reviseMode === 'saved' && (
+                <div className="revise-q-saved">
+                  <p className="revise-q-voice"><span className="revise-q-who kotae">コタエ</span>問いを置き直しました。<br />答えではありません。<br />今の言葉で、もう一度置きました。</p>
+                  <p className="revise-q-voice"><span className="revise-q-who toyman">トイマン</span>形が変わった。<br />でも、火は同じ。</p>
+                </div>
+              )}
+            </div>
+
             <div className="intro-btn-row">
               <button className="intro-btn-fire place-btn" onClick={function() { setPhase('sign'); }} disabled={leaving}>
                 署名へ進む
@@ -5805,6 +5910,11 @@ function App() {
     if (result.ok) setGame(result.game);
   }, []);
 
+  var handleReviseQuestion = _useCallback(function(fireId, toText) {
+    var result = reviseQuestion(gameRef.current, fireId, toText);
+    if (result.ok) setGame(result.game);
+  }, []);
+
   var handleWatchFire = _useCallback(function(fireId) {
     var result = watchFire(gameRef.current, fireId);
     if (result.ok) {
@@ -5990,6 +6100,7 @@ function App() {
             fire={fire}
             onReturn={function(data) { handleFinalReturn(finalReturnFireId, data); }}
             onHold={function(data) { handleHoldReturn(finalReturnFireId, data); }}
+            onReviseQuestion={handleReviseQuestion}
           />
         );
       })()}

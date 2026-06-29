@@ -5447,3 +5447,33 @@ html,body{
 .tower-rec-btn-lamp{border-color:#3a3550;color:#b0a8cc}
 .tower-line{font-size:12px;line-height:1.7;color:#aeb4c4;margin:3px 0;overflow-wrap:anywhere}
 .tower-line-k{display:inline-block;font-size:10px;letter-spacing:.06em;color:#5a6478;margin-right:8px}
+
+/* ── Turn 25: 問いの再記述 ──────────────────────────────────────────────────── */
+.revise-q{margin:18px 0 8px;padding:14px;border-radius:10px;background:#0d0f1a;border:1px solid #2a2340;text-align:left}
+.revise-q-label{font-size:11px;letter-spacing:.1em;color:#8f9bb3;margin:0 0 10px;text-align:center}
+.revise-q-row{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.revise-q-k{font-size:10px;letter-spacing:.08em;color:#4a5470}
+.revise-q-v{font-size:13px;line-height:1.7;color:#9aa3b5;overflow-wrap:anywhere}
+.revise-q-now{color:#c4b5fd}
+.revise-q-note{font-size:11px;line-height:1.7;color:#4a5470;margin:10px 0 12px;text-align:center}
+.revise-q-btns{display:flex;gap:8px}
+.revise-q-btn-keep{flex:1;min-height:44px;padding:9px;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;background:transparent;border:1px solid #2a2340;color:#6b7280}
+.revise-q-btn-edit{flex:1;min-height:44px;padding:9px;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;background:rgba(62,42,92,.18);border:1px solid #4c2d7a;color:#c4b5fd}
+.revise-q-btn-edit:disabled{opacity:.4;cursor:default}
+.revise-q-edit-lead{font-size:12px;color:#8f9bb3;margin:4px 0 8px}
+.revise-q-input{width:100%;box-sizing:border-box;background:#0a0c14;border:1px solid #2a2340;border-radius:8px;color:#cbd2e0;font-family:inherit;font-size:13px;line-height:1.7;padding:10px 12px;resize:none;margin-bottom:8px}
+.revise-q-input:focus{outline:none;border-color:#4c2d7a}
+.revise-q-saved{margin-top:6px}
+.revise-q-voice{font-size:12px;line-height:1.8;color:#9aa3b5;margin:6px 0}
+.revise-q-who{display:inline-block;font-size:10px;letter-spacing:.1em;margin-right:8px;padding:1px 7px;border-radius:6px}
+.revise-q-who.kotae{color:#b0a8cc;background:rgba(176,168,204,.1)}
+.revise-q-who.toyman{color:#7EB8D4;background:rgba(126,184,212,.1)}
+/* 返却灯の今の問い */
+.return-lamp-nowq{display:flex;flex-direction:column;gap:3px;margin:0 0 12px;padding:9px 12px;border-radius:8px;background:rgba(62,42,92,.12);border:1px solid #3a2d5a}
+.return-lamp-nowq-k{font-size:10px;letter-spacing:.08em;color:#6a5d8a}
+.return-lamp-nowq-v{font-size:13px;line-height:1.7;color:#c4b5fd;overflow-wrap:anywhere}
+/* 記録塔 問いの変遷 */
+.qhist{margin:0 0 8px;padding:10px 12px;border-radius:8px;background:#0b0d16;border:1px solid #2a2340}
+.qhist-label{font-size:10px;letter-spacing:.1em;color:#5a6478;margin:0 0 6px}
+.qhist-line{font-size:12px;line-height:1.7;color:#aeb4c4;margin:3px 0;overflow-wrap:anywhere}
+.qhist-k{display:inline-block;font-size:10px;letter-spacing:.06em;color:#5a6478;margin-right:8px}
