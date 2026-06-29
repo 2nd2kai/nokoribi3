@@ -456,6 +456,7 @@ function normalizeFire(f) {
   if (f.heatTraces === undefined) f.heatTraces = [];
   if (!Array.isArray(f.characterResponses)) f.characterResponses = [];
   if (!Array.isArray(f.questionRevisions)) f.questionRevisions = [];
+  if (!Array.isArray(f.careLogs)) f.careLogs = [];
   if (f.returnLamp === undefined) f.returnLamp = null;
   // 旧セーブで既に returned だが返却灯が無い火に、最小限の灯りを補完する。
   if (f.status === 'returned' && !f.returnLamp) {
@@ -1283,45 +1284,75 @@ var CARE_DEFS = {
     note: ['火は消えていません。', '心へ返されたまま、灯っています。'],
     trace: null,
   },
+  received_unvisited: {
+    place: '記録塔', actor: 'コタエ',
+    care: 'コタエが、受領証の角を整えていました。',
+    note: ['地図は、まだ開かれるのを待っています。'],
+    trace: null,
+  },
 };
 
 // 火の居場所から、いま世話している小人と世話の文を選ぶ。
 function careDefForFire(fire) {
   if (!fire) return CARE_DEFS.forest;
   if (fire.status === 'returned') return CARE_DEFS.returned;
-  if (fire.status === 'received' && fire.openedPlace && CARE_DEFS[fire.openedPlace.id]) {
-    return CARE_DEFS[fire.openedPlace.id];
+  if (fire.status === 'received' && fire.openedPlace) {
+    // 場所をまだ訪れていない（初回出会い前）なら、受領証のそばでコタエが待つ。
+    if (!fire.openedPlace.firstEncounterSeen) return CARE_DEFS.received_unvisited;
+    if (CARE_DEFS[fire.openedPlace.id]) return CARE_DEFS[fire.openedPlace.id];
   }
   return CARE_DEFS.forest;
 }
 
 var CARE_LOG_CAP = 20;
+var RECENT_CARE_CAP = 30;
 
 // 世話の記録を残す。報酬ではなく「居なかった間も、誰かが火のそばに居た」証拠。
-function addCareLog(ns, entry) {
-  if (!Array.isArray(ns.careLogs)) ns.careLogs = [];
-  ns.careLogs = [{
-    fireId: entry.fireId || null,
+// 火ごと（fire.careLogs 上限20）と庭全体（ns.careLogs 上限30）の両方に積む。
+function addCareLog(ns, fire, entry) {
+  var rec = {
+    fireId: (fire && fire.id) || entry.fireId || null,
     actor: entry.actor || '',
     place: entry.place || '',
     text: entry.text || '',
     createdAt: Date.now(),
-  }].concat(ns.careLogs).slice(0, CARE_LOG_CAP);
+  };
+  if (fire) {
+    if (!Array.isArray(fire.careLogs)) fire.careLogs = [];
+    fire.careLogs = [rec].concat(fire.careLogs).slice(0, CARE_LOG_CAP);
+  }
+  if (!Array.isArray(ns.careLogs)) ns.careLogs = [];
+  ns.careLogs = [rec].concat(ns.careLogs).slice(0, RECENT_CARE_CAP);
 }
 
-// 留守中に世話する対象の火を一つ選ぶ（最も手当てが要る状態を優先、無ければ返却済みでも可）。
+// 留守中に世話する火を最大 limit 本選ぶ（手当てが要る順）。庭全体を見る。
+// 対象: searching/found/receiving/received/lit/held/returned。draft等の壊れた火は除く。
+function pickCareFires(game, limit) {
+  limit = limit || 3;
+  var fires = (game && game.fires) || [];
+  var CARE_STATUSES = ['searching', 'found', 'receiving', 'received', 'lit', 'held', 'returned'];
+  var valid = fires.filter(function(f) {
+    return f && f.id && CARE_STATUSES.indexOf(f.status) !== -1;
+  });
+  // 手当ての必要度で並べる（探索系→未settledの受領→受領→返却の順）。
+  function rank(f) {
+    if (f.status === 'searching' || f.status === 'found' || f.status === 'receiving') return 0;
+    if (f.status === 'received' && !isAllSettled(f)) return 1;
+    if (f.status === 'received' || f.status === 'lit' || f.status === 'held') return 2;
+    if (f.status === 'returned') return 3;
+    return 4;
+  }
+  valid.sort(function(a, b) { return rank(a) - rank(b); });
+  return valid.slice(0, limit);
+}
+
+// 後方互換: 1本だけ欲しい既存呼び出し向け。
 function pickCareFire(fires) {
-  if (!fires || !fires.length) return null;
-  var by = function(s) { return fires.find(function(f) { return f.status === s; }); };
-  return by('searching') || by('found') || by('receiving')
-    || fires.find(function(f) { return f.status === 'received' && !isAllSettled(f); })
-    || by('received') || by('lit')
-    || fires.find(function(f) { return f.status === 'returned'; })
-    || fires[0];
+  return pickCareFires({ fires: fires }, 1)[0] || null;
 }
 
 // 留守のあいだ。前回の滞在から十分に時間が空いて戻ってきた時、
-// 「問いは進んでいないが、火は世話されていた」を見せる。箱庭放置ゲームの核。
+// 「問いは進んでいないが、庭の火たちは世話されていた」を見せる。箱庭放置ゲームの核。
 // 放置で進めてよいのは安定と痕跡だけ。問い・灯貨・余熱・素材・受領・返却は決して進めない。
 function computeAwayReturn(game, skip) {
   var ns = cloneS(game);
@@ -1329,34 +1360,36 @@ function computeAwayReturn(game, skip) {
   if (!skip) {
     var lastSeen = ns.lastSeenAt ? new Date(ns.lastSeenAt).getTime() : 0;
     var elapsedMin = lastSeen ? (Date.now() - lastSeen) / 60000 : 0;
-    // 世話する対象（火）があれば、その居場所に応じた世話を見せる。
-    var fire = pickCareFire(ns.fires);
-    if (lastSeen && elapsedMin >= 30 && fire) {
+    var cared = pickCareFires(ns, 3);
+    if (lastSeen && elapsedMin >= 30 && cared.length) {
       var tier, bump;
       if (elapsedMin < 180) { tier = 'short'; bump = 3; }
       else if (elapsedMin < 1440) { tier = 'mid'; bump = 5; }
       else { tier = 'long'; bump = 8; }
 
-      var def = careDefForFire(fire);
-
-      // 安定だけ少し落ち着く（上限 STABILITY_ENOUGH）。返却済みの火はもう進めない。
-      if (fire.status !== 'returned') {
-        fire.gardenProgress = Math.min(STABILITY_ENOUGH, (fire.gardenProgress || 0) + bump);
-        fire.updatedAt = nowISO();
-      }
-      // 世話の痕跡を残す（素材は増やさない）。痕跡が定義された世話だけ箱庭に置く。
-      if (def.trace) addGardenItem(ns, def.trace);
-
-      // 世話ログを残す。
-      addCareLog(ns, { fireId: fire.id, actor: def.actor, place: def.place, text: def.care });
+      var cares = [];
+      cared.forEach(function(fire) {
+        var def = careDefForFire(fire);
+        // 安定だけ少し落ち着く（上限 STABILITY_ENOUGH）。返却済みの火はもう進めない。
+        if (fire.status !== 'returned') {
+          fire.gardenProgress = Math.min(STABILITY_ENOUGH, (fire.gardenProgress || 0) + bump);
+          fire.updatedAt = nowISO();
+        }
+        // 痕跡が定義された世話だけ箱庭に置く（素材は増やさない）。
+        if (def.trace) addGardenItem(ns, def.trace);
+        // 火ごと＋庭全体の世話ログ。
+        addCareLog(ns, fire, { actor: def.actor, place: def.place, text: def.care });
+        cares.push({ place: def.place, actor: def.actor, care: def.care });
+      });
 
       ns.lastAwayShownAt = nowISO();
       report = {
         tier: tier,
-        place: def.place,
-        actor: def.actor,
-        care: def.care,
-        note: def.note,
+        count: cares.length,
+        cares: cares,
+        // 後方互換フィールド（旧 AwayReport が参照しても落ちないように先頭の世話を残す）。
+        place: cares[0].place, actor: cares[0].actor, care: cares[0].care,
+        note: ['問いは進んでいません。', 'でも、火は消えていません。'],
       };
     }
   }
@@ -4295,11 +4328,12 @@ function homeRecentTraces(fire, game) {
   // 場所でキャラと分けた痕跡を前に出す（最も新しく、意味の濃い一行）。
   if (fire.placeTrace && fire.placeTrace.traceText) traces.unshift(fire.placeTrace.traceText);
   if (fire.status === 'returned') traces.unshift('心へ返した灯');
-  // 小人の世話ログを最新1〜3件、混ぜる。向き合えなかった間も誰かが火のそばに居た証拠。
+  // 庭全体の世話ログ（複数火）から最新3件まで混ぜる。向き合えなかった間も
+  // 誰かが火のそばに居た証拠。Home を過密にしないため最大3件に絞る。
   if (game && Array.isArray(game.careLogs)) {
-    var mine = game.careLogs.filter(function(c) { return c.fireId === fire.id; }).slice(0, 3);
-    // 世話文は痕跡の先頭に置く（戻ってきて最初に目に入る一行）。
-    mine.reverse().forEach(function(c) { traces.unshift(c.text); });
+    game.careLogs.slice(0, 3).reverse().forEach(function(c) {
+      if (c && c.text) traces.unshift(c.text);
+    });
   }
   return traces.slice(0, 3);
 }
@@ -4608,18 +4642,26 @@ function DevBar({ game, onReset, onForceFound, onAddBattle, onReplayIntro }) {
 // 留守のあいだ。戻ってきた時、最初に出る。報酬回収ではなく、世話されていた証拠。
 function AwayReport({ report, onClose }) {
   useOverlayKeys({ onEscape: onClose, onEnter: onClose });
-  // 旧形式（report.lines）にも後方互換で対応する。
-  var legacyLines = report.lines || null;
-  var note = report.note || ['問いは、まだ見つかっていません。', 'でも、火は消えていません。'];
+  var note = report.note || ['問いは進んでいません。', 'でも、火は消えていません。'];
+  // 庭全体の世話（複数火）。後方互換: 旧 report.lines / 単一 care にも対応。
+  var cares = report.cares ||
+    (report.lines ? report.lines.map(function(l) { return { care: l }; }) :
+     (report.care ? [{ care: report.care }] : []));
+  var count = report.count || cares.length;
+  var lead = count > 1
+    ? ('庭では、' + count + 'つの火のそばに小さな痕跡が残っていました。')
+    : '火のそばに、小さな痕跡が残っていました。';
   var trapRef = useFocusTrap();
   return (
     <div className="away-ov" role="dialog" aria-modal="true" aria-labelledby="away-title" onClick={onClose}>
       <div className="away-card" ref={trapRef} onClick={function(e) { e.stopPropagation(); }}>
         <p className="away-label" id="away-title">留守のあいだ</p>
-        {report.place && <p className="away-place">{report.place}</p>}
-        {legacyLines
-          ? legacyLines.map(function(l, i) { return <p key={i} className="away-line">{l}</p>; })
-          : <p className="away-line">{report.care}</p>}
+        <p className="away-lead">{lead}</p>
+        <div className="away-cares">
+          {cares.map(function(c, i) {
+            return <p key={i} className="away-line">・{c.care}</p>;
+          })}
+        </div>
         <div className="away-note">
           {note.map(function(n, i) { return <p key={i} className="away-note-line">{n}</p>; })}
         </div>

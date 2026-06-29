@@ -5305,6 +5305,9 @@ html,body{
 }
 .away-label{color:#5b8a72;font-size:11px;letter-spacing:.2em;margin:0 0 14px}
 .away-place{color:#8fb3a0;font-size:13px;letter-spacing:.1em;margin:0 0 10px}
+.away-lead{color:#8fb3a0;font-size:13px;line-height:1.8;margin:0 0 14px}
+.away-cares{display:flex;flex-direction:column;gap:8px;margin:0 0 4px;text-align:left}
+.away-cares .away-line{overflow-wrap:anywhere}
 .away-line{color:#aeb9c4;font-size:14px;line-height:2;margin:0}
 .away-note{margin:18px 0 22px}
 .away-note-line{color:#6b8a78;font-size:13px;line-height:1.9;margin:0;font-style:italic}
