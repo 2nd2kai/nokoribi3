@@ -41,9 +41,11 @@ function runNode(file) {
     const b = await runNode('abnormal-paths.e2e.js');
     console.log('\n--- 最短帰還E2E: wishUnknown + placePending → 返却灯 ---');
     const c = await runNode('shortest-path.e2e.js');
-    exitCode = (a || b || c) ? 1 : 0;
+    console.log('\n--- 記録塔受領証E2E: RecordTower受領証→心へ返す ---');
+    const d = await runNode('receipt-to-return.e2e.js');
+    exitCode = (a || b || c || d) ? 1 : 0;
     console.log('\n=== E2E 総合: ' + (exitCode === 0 ? 'PASS' : 'FAIL') +
-      ' (normal=' + a + ', abnormal=' + b + ', shortest=' + c + ') ===');
+      ' (normal=' + a + ', abnormal=' + b + ', shortest=' + c + ', receipt-return=' + d + ') ===');
   } catch (e) {
     console.error('E2E runner error:', e.message);
     exitCode = 1;

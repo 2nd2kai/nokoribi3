@@ -6405,12 +6405,22 @@ function App() {
       {activeReceiptView && (function() {
         var fire = gameRef.current.fires.find(function(f) { return f.id === activeReceiptView; });
         if (!fire) return null;
+        var canReturn = fire.status === 'received' && !!fire.receipt;
         return (
           <div className="kotae-ov" onClick={function() { setActiveReceiptView(null); }}>
             <div className="kotae-sheet" onClick={function(e) { e.stopPropagation(); }}>
               <div className="kotae-grip" />
               <ReceiptCard
                 fire={fire}
+                onReturnToHeart={canReturn ? function() {
+                  setActiveReceiptView(null);
+                  setFinalReturnFireId(fire.id);
+                } : null}
+                onViewUnreceived={canReturn ? function() {
+                  setActiveReceiptView(null);
+                  setActiveUnreceivedFireId(fire.id);
+                  setScreen('garden');
+                } : null}
                 buttonLabel="閉じる"
                 onAction={function() { setActiveReceiptView(null); }}
               />
