@@ -1184,9 +1184,12 @@ function doBattle(game, fireId, answer) {
     message: '影の奥から、焦げた紙片が落ちた。\n答えではない。\nでも、問いの材料だった。',
   });
   ns.lastVisualEvent = ve;
+  var placedFootprint = !!(answer && answer.trim());
   var actionResult = makeActionResult({
     title: '影と向き合った',
-    traces: ['焦げた紙片が、森に残った。'],
+    traces: placedFootprint
+      ? ['問いの足跡を置きました。', '火が、少しだけ奥を見せました。']
+      : ['焦げた紙片が、森に残った。'],
   });
   appendLightkeeperResult(actionResult, lkResult);
   if (fire.status === 'found') {
@@ -2796,6 +2799,30 @@ var JOURNEY_LAYERS = [
 
 // ── 受領証カード ────────────────────────────────────────────────────────────
 
+// 問いの足跡。影と向き合った時に置いた言葉（fire.answers）は「答え」ではない。
+// 森で火に触れて残った足跡。文字列でも {text, at} でも受け、最新 limit 件を返す。
+function getQuestionFootprints(fire, limit) {
+  limit = limit || 3;
+  return (fire.answers || [])
+    .map(function(a) { return typeof a === 'string' ? { text: a } : a; })
+    .filter(function(a) { return a && a.text && a.text.trim(); })
+    .slice(-limit);
+}
+
+// 問いの足跡の共通表示ブロック。呼び名は必ず「問いの足跡」。
+function QuestionFootprints({ fire, limit, variant }) {
+  var fps = getQuestionFootprints(fire, limit || 3);
+  if (!fps.length) return null;
+  return (
+    <div className={'footprints' + (variant ? ' footprints-' + variant : '')}>
+      <p className="footprints-label">問いの足跡</p>
+      {fps.map(function(fp, i) {
+        return <p key={i} className="footprints-line">「{fp.text.trim()}」</p>;
+      })}
+    </div>
+  );
+}
+
 function ReceiptCard({ fire, buttonLabel, onAction }) {
   var receipt = fire.receipt;
   var issuedDate = receipt ? new Date(receipt.issuedAt) : new Date(fire.receivedAt || fire.updatedAt);
@@ -2892,6 +2919,9 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
         </div>
       )}
 
+      {/* 問いの足跡 — 影と向き合って置いた言葉。答えではなく、触れた跡。 */}
+      <QuestionFootprints fire={fire} limit={3} variant="receipt" />
+
       <div className="receipt-meta">
         <span className="receipt-meta-item">持ち帰った者：トイマン</span>
         <span className="receipt-meta-item">記録した者：コタエ</span>
@@ -2987,6 +3017,9 @@ function ReturnLampCard({ fire, onClose }) {
           })}
         </div>
       )}
+
+      {/* 問いの足跡 — 返した後も、向き合った言葉は消えなかった。最新3件。 */}
+      <QuestionFootprints fire={fire} limit={3} variant="lamp" />
 
       {/* 返し方 */}
       {lamp.label && (
@@ -4012,6 +4045,9 @@ function homeRecentTraces(fire, game) {
       if (ht && ht.traceText) traces.unshift(ht.traceText);
     });
   }
+  // 問いの足跡を最新1件だけ混ぜる（向き合って置いた言葉。answers の死蔵を防ぐ）。
+  var fps = getQuestionFootprints(fire, 1);
+  if (fps.length) traces.unshift('問いの足跡「' + fps[0].text.trim() + '」');
   // 場所でキャラと分けた痕跡を前に出す（最も新しく、意味の濃い一行）。
   if (fire.placeTrace && fire.placeTrace.traceText) traces.unshift(fire.placeTrace.traceText);
   if (fire.status === 'returned') traces.unshift('心へ返した灯');
@@ -5218,6 +5254,8 @@ function FinalReturnScene({ fire, onReturn, onHold }) {
                 );
               })()}
             </div>
+            {/* 問いの足跡 — 署名する前に、この火へ置いてきた言葉を見返す。 */}
+            <QuestionFootprints fire={fire} limit={3} variant="final" />
             <div className="intro-btn-row">
               <button className="intro-btn-fire place-btn" onClick={function() { setPhase('sign'); }} disabled={leaving}>
                 署名へ進む

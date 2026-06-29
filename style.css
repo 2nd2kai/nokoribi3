@@ -5328,6 +5328,15 @@ html,body{
 .today-opened-place{color:#9a86c0;font-size:12px;line-height:1.8;margin:0 0 14px;font-style:italic}
 .today-memory{color:#7d8aa5;font-size:12px;line-height:1.8;margin:0 0 14px}
 
+/* 問いの足跡 — 影と向き合って置いた言葉（答えではない） */
+.footprints{margin:10px 0;padding:10px 12px;border-radius:8px;background:#0b0d16;border:1px solid #1c2030}
+.footprints-label{font-size:10px;letter-spacing:.1em;color:#5a6478;margin:0 0 6px}
+.footprints-line{color:#aeb4c4;font-size:13px;line-height:1.8;margin:2px 0}
+.footprints-receipt{background:#0a0c14;border-color:#1e2230}
+.footprints-final{background:#0d0f1a;border-color:#2a2340}
+.footprints-lamp{background:#0b0d16;border-color:#1e1c2e}
+.footprints-lamp .footprints-label{color:#6a5d8a}
+
 /* 再会の一言 — キャラが前回の痕跡を覚えている */
 .reunion-line{margin:0 auto 18px;max-width:340px;padding:12px 14px;border-radius:10px;background:rgba(20,18,30,.6);border:1px solid #262234;text-align:left}
 .reunion-who{display:block;font-size:11px;letter-spacing:.12em;margin:0 0 6px}
