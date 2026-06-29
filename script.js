@@ -2703,52 +2703,39 @@ function FireCard({ fire, onSelect, selected }) {
     receiving: '#7c3aed', received: '#34d399', held: '#60a5fa', returned: '#9ca3af',
   };
   var st = fire.status;
+  var locColor = statusColor[st] || '#6b7280';
 
   return (
     <div
       onClick={function() { onSelect(fire.id); }}
-      style={{
-        background: selected ? '#1e1a2c' : '#151820',
-        border: '1px solid ' + (selected ? '#7c3aed' : '#2e3348'),
-        borderRadius: 10, padding: '14px 16px', marginBottom: 10,
-        cursor: 'pointer',
-      }}
+      className={'fire-card' + (selected ? ' fire-card-on' : '')}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <span style={{ color: '#e2e4ee', fontSize: 14, flex: 1, marginRight: 8 }}>
-          {fireTitle(fire)}
-        </span>
-        <span style={{
-          fontSize: 11, padding: '2px 8px', borderRadius: 10,
-          background: (statusColor[st] || '#6b7280') + '22',
-          color: statusColor[st] || '#6b7280',
-          whiteSpace: 'nowrap',
-        }}>
-          {/* 現在地ラベル（場所訪問済みなら涙の泉等、未訪問は status ベース） */}
+      <div className="fire-card-head">
+        <span className="fire-card-name">{fireTitle(fire)}</span>
+        {/* 現在地ラベル（場所訪問済みなら涙の泉等、未訪問は status ベース） */}
+        <span className="fire-card-loc" style={{ background: locColor + '22', color: locColor }}>
           {fireLocation(fire) || statusLabel[st] || st}
         </span>
       </div>
       {fire.status === 'searching' && (
-        <div style={{ marginTop: 6 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
-            <span style={{ color: '#6b7280', fontSize: 10 }}>問いの深度</span>
-            <span style={{ color: '#a78bfa', fontSize: 10 }}>{fire.questionProgress || 0}%</span>
+        <div className="fire-card-prog">
+          <div className="fire-card-prog-row">
+            <span className="fire-card-prog-k">問いの深度</span>
+            <span className="fire-card-prog-v fcq">{fire.questionProgress || 0}%</span>
           </div>
           <ProgressBar value={fire.questionProgress || 0} color="linear-gradient(90deg, #7c3aed, #a78bfa)" />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1, marginTop: 4 }}>
-            <span style={{ color: '#6b7280', fontSize: 10 }}>火の安定</span>
-            <span style={{ color: '#34d399', fontSize: 10 }}>{fire.gardenProgress || 0}%</span>
+          <div className="fire-card-prog-row fire-card-prog-row2">
+            <span className="fire-card-prog-k">火の安定</span>
+            <span className="fire-card-prog-v fcs">{fire.gardenProgress || 0}%</span>
           </div>
           <ProgressBar value={fire.gardenProgress || 0} color="linear-gradient(90deg, #064e3b, #34d399)" />
         </div>
       )}
       {fire.status === 'found' && (
-        <p style={{ color: '#a78bfa', fontSize: 12, margin: '8px 0 0', lineHeight: 1.5 }}>
-          ✦ 問いが待っています
-        </p>
+        <p className="fire-card-found">✦ 問いが待っています</p>
       )}
       {fire.writeState && (
-        <p style={{ color: '#6b7280', fontSize: 11, margin: '6px 0 0' }}>{fire.writeState}</p>
+        <p className="fire-card-writestate">{fire.writeState}</p>
       )}
     </div>
   );
@@ -4322,7 +4309,8 @@ function fireReexploreStarted(fire) {
   return ((rc.meaning || 0) + (rc.value || 0) + (rc.satisfaction || 0)) > 0;
 }
 
-// 火の現在地。ステータスを「居場所」として見せる。
+// 【封印・現在は未使用】旧・火の現在地（status ベース）。Turn27 の fireLocation に置換。
+// openedPlace 訪問判定を持たない旧版。将来の参照のため残置。
 function fireCurrentPlace(fire) {
   switch (fire.status) {
     case 'searching': return '未受領の森';
@@ -4405,7 +4393,7 @@ function fireRecentLine(fire) {
   return null;
 }
 
-// 最近の痕跡（最大3）。守られた痕跡＋会い直した痕跡＋場所で分けた痕跡＋返却灯。
+// 【封印・現在は未使用】Turn28A で Home から外した。キャラ記憶は「再会時」に効かせる方針。
 // ホームに出す「キャラが覚えている」一言を1件だけ選ぶ（最も新しく更新された記憶）。
 var MEMORY_NAMES = { kana: 'かな', auditor: '審査官', utsuro: 'うつろ' };
 function latestCharacterMemoryLine(game) {
@@ -4424,6 +4412,7 @@ function latestCharacterMemoryLine(game) {
   return (MEMORY_NAMES[best.key] || best.key) + 'は、前に分けた「' + ess + '」を覚えている。';
 }
 
+// 【封印・現在は未使用】Turn28A で today-card をスリム化し外した。痕跡は庭カード／記録塔で見る。
 function homeRecentTraces(fire, game) {
   var traces = getStabilityTraces(fire.gardenProgress || 0).slice();
   // 余熱に会い直した痕跡（heatTraces）を前に出す。新しい本筋。
@@ -4491,22 +4480,17 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction, onSe
   var nextActions = currentFire ? homeNextActions(currentFire) : [];
 
   return (
-    <div style={{ padding: '0 16px 80px' }}>
-      <div style={{ padding: '20px 0 12px', textAlign: 'center', position: 'relative' }}>
-        <h1 style={{ color: '#f97316', fontSize: 20, margin: '0 0 4px', letterSpacing: 1 }}>
-          残り火の箱庭
-        </h1>
-        <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>Nokoribi no Hakoniwa</p>
+    <div className="home-wrap">
+      <div className="home-header">
+        <h1 className="home-title">残り火の箱庭</h1>
+        <p className="home-subtitle">Nokoribi no Hakoniwa</p>
       </div>
 
       {totalFires === 0 && !showForm && (
         <div>
           <ToymanVoice text="まだ、消えていない" />
-          <div style={{
-            background: '#111318', border: '1px solid #1e2230',
-            borderRadius: 10, padding: '16px', margin: '12px 0 16px',
-          }}>
-            <p style={{ color: '#9ca3af', fontSize: 13, lineHeight: 1.8, margin: 0 }}>
+          <div className="home-intro-box">
+            <p className="home-intro-text">
               ここは、言葉にまつわる痛みを置いていける場所。<br />
               あなたが作った言葉、届かなかった言葉、消えてしまいそうな言葉を、<br />
               残り火として灯すことができます。
@@ -4566,7 +4550,7 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction, onSe
                   <span className="gf-meta-row"><span className="gf-k">場所</span>{fireLocation(f)}</span>
                   <span className="gf-meta-row"><span className="gf-k">そば</span>{fireCompanion(f)}</span>
                 </div>
-                {recent && <p className="gf-recent">最近：{recent}</p>}
+                <p className="gf-recent">最近：{recent || 'まだ、火のそばは静かです。'}</p>
                 {act && (
                   <button className="gf-action" onClick={function(e) { e.stopPropagation(); onNextAction(act.go, f.id); }}>
                     {act.label}
@@ -4580,15 +4564,12 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction, onSe
 
       {/* 灯守り初登場 — 灯貨の意味をここで伝える */}
       {!showForm && game.tinyfolk && game.tinyfolk.lightkeeper && totalFires === 1 && (
-        <div style={{
-          background: '#0a0e0c', border: '1px solid #14532d',
-          borderRadius: 8, padding: '12px 14px', margin: '8px 0',
-        }}>
-          <p style={{ color: '#4b6a54', fontSize: 12, lineHeight: 1.8, margin: '0 0 8px' }}>
+        <div className="home-keeper-box">
+          <p className="home-keeper-line">
             火のそばに、小さな影が動いた。<br />
             灯守りが、石をひとつ置いた。
           </p>
-          <p style={{ color: '#3e5a48', fontSize: 12, lineHeight: 1.8, margin: 0 }}>
+          <p className="home-keeper-line home-keeper-sub">
             灯守り：<br />
             こぼれた灯りです。捨てないでください。<br />
             これは灯貨。買うためのものではありません。<br />
@@ -4598,11 +4579,8 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction, onSe
       )}
 
       {showForm ? (
-        <div style={{
-          background: '#111318', border: '1px solid #2e3348',
-          borderRadius: 12, padding: '18px 16px', margin: '12px 0',
-        }}>
-          <h3 style={{ color: '#f97316', fontSize: 15, margin: '0 0 14px' }}>火に言葉を置く</h3>
+        <div className="home-form-box">
+          <h3 className="home-form-title">火に言葉を置く</h3>
           <FireInputForm
             onSubmit={handleLightFire}
             onCancel={function() { setShowForm(false); }}
@@ -4611,32 +4589,18 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction, onSe
       ) : (
         <button
           onClick={function() { setShowForm(true); }}
-          className={currentFire ? 'home-light-secondary' : ''}
-          style={currentFire ? null : {
-            width: '100%', padding: '14px', borderRadius: 10,
-            background: '#7c1d0a', border: '1px solid #c2410c',
-            color: '#fed7aa', fontSize: 15, cursor: 'pointer',
-            fontFamily: 'inherit', marginTop: 8, letterSpacing: 0.5,
-          }}
+          className={currentFire ? 'home-light-secondary' : 'home-light-primary'}
         >
           {currentFire ? '＋ 別の火に言葉を置く' : '+ 火に言葉を置く'}
         </button>
       )}
 
       {!showForm && (
-        <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center' }}>
-          <button onClick={onGoShelf} style={{
-            flex: 1, padding: '11px 0', borderRadius: 8,
-            background: '#151820', border: '1px solid #2e3348',
-            color: '#d1d5db', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-          }}>
+        <div className="home-nav">
+          <button className="home-nav-btn" onClick={onGoShelf}>
             📚 残り火の棚 {game.fires.length > 0 ? '(' + game.fires.length + ')' : ''}
           </button>
-          <button onClick={onGoGarden} style={{
-            flex: 1, padding: '11px 0', borderRadius: 8,
-            background: '#151820', border: '1px solid #2e3348',
-            color: '#d1d5db', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-          }}>
+          <button className="home-nav-btn" onClick={onGoGarden}>
             🌿 箱庭
           </button>
         </div>
@@ -4644,9 +4608,7 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction, onSe
 
       {/* 灯貨は補助表示へ下げる（主役にしない） */}
       {!showForm && game.toka > 0 && (
-        <p style={{ color: '#3e4656', fontSize: 11, textAlign: 'center', margin: '14px 0 0' }}>
-          灯貨 {game.toka}
-        </p>
+        <p className="home-toka">灯貨 {game.toka}</p>
       )}
     </div>
   );

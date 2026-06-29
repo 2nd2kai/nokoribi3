@@ -5495,3 +5495,39 @@ html,body{
 .gf-recent{font-size:11px;line-height:1.7;color:#6b7280;margin:0 0 8px;overflow-wrap:anywhere}
 .gf-action{min-height:40px;padding:8px 14px;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;background:rgba(62,42,92,.16);border:1px solid #4c2d7a;color:#c4b5fd}
 .gf-action:hover{background:rgba(76,29,149,.24)}
+
+/* ── Turn 28B: Home / Shelf / FireCard の CSS 整理（見た目は据え置き、style→class） ── */
+.home-wrap{padding:0 16px 80px}
+.home-header{padding:20px 0 12px;text-align:center;position:relative}
+.home-title{color:#f97316;font-size:20px;margin:0 0 4px;letter-spacing:1px}
+.home-subtitle{color:#6b7280;font-size:11px;margin:0}
+.home-intro-box{background:#111318;border:1px solid #1e2230;border-radius:10px;padding:16px;margin:12px 0 16px}
+.home-intro-text{color:#9ca3af;font-size:13px;line-height:1.8;margin:0}
+.home-keeper-box{background:#0a0e0c;border:1px solid #14532d;border-radius:8px;padding:12px 14px;margin:8px 0}
+.home-keeper-line{color:#4b6a54;font-size:12px;line-height:1.8;margin:0 0 8px}
+.home-keeper-sub{color:#3e5a48;margin:0}
+.home-form-box{background:#111318;border:1px solid #2e3348;border-radius:12px;padding:18px 16px;margin:12px 0}
+.home-form-title{color:#f97316;font-size:15px;margin:0 0 14px}
+.home-light-primary{width:100%;min-height:48px;padding:14px;border-radius:10px;background:#7c1d0a;border:1px solid #c2410c;color:#fed7aa;font-size:15px;cursor:pointer;font-family:inherit;margin-top:8px;letter-spacing:.5px}
+.home-light-primary:hover{background:#8f240d}
+.home-nav{display:flex;gap:10px;margin-top:12px;align-items:center}
+.home-nav-btn{flex:1;min-height:44px;padding:11px 0;border-radius:8px;background:#151820;border:1px solid #2e3348;color:#d1d5db;font-size:13px;cursor:pointer;font-family:inherit}
+.home-nav-btn:hover{border-color:#3a4156}
+.home-toka{color:#3e4656;font-size:11px;text-align:center;margin:14px 0 0}
+
+/* FireCard（残り火の棚） */
+.fire-card{background:#151820;border:1px solid #2e3348;border-radius:10px;padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:border-color .15s}
+.fire-card:hover{border-color:#3a4156}
+.fire-card-on{background:#1e1a2c;border-color:#7c3aed}
+.fire-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.fire-card-name{color:#e2e4ee;font-size:14px;flex:1;overflow-wrap:anywhere}
+.fire-card-loc{font-size:11px;padding:2px 8px;border-radius:10px;white-space:nowrap;flex-shrink:0}
+.fire-card-prog{margin-top:6px}
+.fire-card-prog-row{display:flex;justify-content:space-between;margin-bottom:1px}
+.fire-card-prog-row2{margin-top:4px}
+.fire-card-prog-k{color:#6b7280;font-size:10px}
+.fire-card-prog-v{font-size:10px}
+.fire-card-prog-v.fcq{color:#a78bfa}
+.fire-card-prog-v.fcs{color:#34d399}
+.fire-card-found{color:#a78bfa;font-size:12px;margin:8px 0 0;line-height:1.5}
+.fire-card-writestate{color:#6b7280;font-size:11px;margin:6px 0 0}
