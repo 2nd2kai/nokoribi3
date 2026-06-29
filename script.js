@@ -361,6 +361,7 @@ function initGame() {
     seenEncounters: [],
     worldNotes: [],
     relationshipNotes: [],
+    careLogs: [],
     activeEncounter: null,
     workerTasks: {
       lightkeeper: { id: 'lightkeeper', label: '灯守り', work: '守る', progress: 0, duration: 100, trace: 'small_stone', isUnlocked: true },
@@ -546,6 +547,7 @@ function normalizeGame(g) {
   if (!Array.isArray(g.seenEncounters)) g.seenEncounters = [];
   if (!Array.isArray(g.worldNotes)) g.worldNotes = [];
   if (!Array.isArray(g.relationshipNotes)) g.relationshipNotes = [];
+  if (!Array.isArray(g.careLogs)) g.careLogs = [];
   if (!('activeEncounter' in g)) g.activeEncounter = null;
   if (!g.toka) g.toka = 0;
   g.fires = (Array.isArray(g.fires) ? g.fires : []).map(normalizeFire);
@@ -1160,8 +1162,8 @@ function doBattle(game, fireId, answer) {
   addLog(fire, pick(BATTLE_LOGS));
   addGardenItem(ns, 'burnt_paper');
   var lkResult = advanceLightkeeper(ns, 5);
-  // 紙集めの小人解放条件（素材数ではなく、森に残った紙片の痕跡の積み重ねで判定）
-  if (!ns.tinyfolk.paperCollector && (ns.gardenItemCounts && ns.gardenItemCounts.burnt_paper >= 3)) {
+  // 紙集めの小人は「数を貯めた報酬」ではなく、紙片の痕跡が初めて森に残った時に姿を見せる。
+  if (!ns.tinyfolk.paperCollector && ns.gardenItems && ns.gardenItems.includes('burnt_paper')) {
     ns.tinyfolk.paperCollector = true;
   }
   if (fire.questionProgress >= 100) {
@@ -1224,36 +1226,114 @@ function tickProgress(game) {
   return { changed: true, game: ns };
 }
 
+// 小人は素材を集める係ではない。プレイヤーが向き合えない時間に、
+// 火のそばに残った痕跡を世話している箱庭の住人。火の居場所ごとに、世話の仕方が変わる。
+var CARE_DEFS = {
+  forest: {
+    place: '未受領の森', actor: '灯守り',
+    care: '灯守りが、火のそばに小さな石を置いていました。',
+    note: ['問いは、まだ見つかっていません。', 'でも、火は消えていません。'],
+    trace: 'small_stone',
+  },
+  tears: {
+    place: '涙の泉', actor: '水汲みの小人',
+    care: '水汲みの小人が、泉の水を少し汲んでいました。',
+    note: ['痛みはまだ答えになっていません。', 'でも、冷ます場所はあります。'],
+    trace: 'water_drop',
+  },
+  black_tags: {
+    place: '黒札置き場', actor: '札分けの小人',
+    care: '札分けの小人が、黒札を入れる箱を整えていました。',
+    note: ['判決はまだ外れていません。', 'でも、分ける場所はできています。'],
+    trace: null,
+  },
+  back_shelf: {
+    place: '棚の奥', actor: '余白番',
+    care: '余白番が、空いている棚を掃いていました。',
+    note: ['何もない場所にも、置く準備ができています。'],
+    trace: null,
+  },
+  returned: {
+    place: '記録塔の奥', actor: '灯守り',
+    care: '灯守りが、返却灯のそばに座っていました。',
+    note: ['火は消えていません。', '心へ返されたまま、灯っています。'],
+    trace: null,
+  },
+};
+
+// 火の居場所から、いま世話している小人と世話の文を選ぶ。
+function careDefForFire(fire) {
+  if (!fire) return CARE_DEFS.forest;
+  if (fire.status === 'returned') return CARE_DEFS.returned;
+  if (fire.status === 'received' && fire.openedPlace && CARE_DEFS[fire.openedPlace.id]) {
+    return CARE_DEFS[fire.openedPlace.id];
+  }
+  return CARE_DEFS.forest;
+}
+
+var CARE_LOG_CAP = 20;
+
+// 世話の記録を残す。報酬ではなく「居なかった間も、誰かが火のそばに居た」証拠。
+function addCareLog(ns, entry) {
+  if (!Array.isArray(ns.careLogs)) ns.careLogs = [];
+  ns.careLogs = [{
+    fireId: entry.fireId || null,
+    actor: entry.actor || '',
+    place: entry.place || '',
+    text: entry.text || '',
+    createdAt: Date.now(),
+  }].concat(ns.careLogs).slice(0, CARE_LOG_CAP);
+}
+
+// 留守中に世話する対象の火を一つ選ぶ（最も手当てが要る状態を優先、無ければ返却済みでも可）。
+function pickCareFire(fires) {
+  if (!fires || !fires.length) return null;
+  var by = function(s) { return fires.find(function(f) { return f.status === s; }); };
+  return by('searching') || by('found') || by('receiving')
+    || fires.find(function(f) { return f.status === 'received' && !isAllSettled(f); })
+    || by('received') || by('lit')
+    || fires.find(function(f) { return f.status === 'returned'; })
+    || fires[0];
+}
+
 // 留守のあいだ。前回の滞在から十分に時間が空いて戻ってきた時、
 // 「問いは進んでいないが、火は世話されていた」を見せる。箱庭放置ゲームの核。
-// 放置で進めてよいのは安定と痕跡だけ。問い・灯貨・余熱・受領・返却は決して進めない。
+// 放置で進めてよいのは安定と痕跡だけ。問い・灯貨・余熱・素材・受領・返却は決して進めない。
 function computeAwayReturn(game, skip) {
   var ns = cloneS(game);
   var report = null;
   if (!skip) {
     var lastSeen = ns.lastSeenAt ? new Date(ns.lastSeenAt).getTime() : 0;
     var elapsedMin = lastSeen ? (Date.now() - lastSeen) / 60000 : 0;
-    // 世話する対象（進行中の火）がある時だけ出す。
-    var fire = ns.fires.find(function(f) { return f.status === 'searching'; });
+    // 世話する対象（火）があれば、その居場所に応じた世話を見せる。
+    var fire = pickCareFire(ns.fires);
     if (lastSeen && elapsedMin >= 30 && fire) {
-      var tier, lines, bump;
-      if (elapsedMin < 180) {            // 30分〜3時間
-        tier = 'short'; bump = 3;
-        lines = ['灯守りが、火のそばに小さな石を置いていました。'];
-      } else if (elapsedMin < 1440) {    // 3時間〜1日
-        tier = 'mid'; bump = 5;
-        lines = ['灯守りが、小さな石を置いていました。', '記録見習いが、紙片の端を整えていました。'];
-      } else {                            // 1日以上
-        tier = 'long'; bump = 8;
-        lines = ['留守のあいだ、火は消えていませんでした。', '小人たちが、そばにいたようです。'];
+      var tier, bump;
+      if (elapsedMin < 180) { tier = 'short'; bump = 3; }
+      else if (elapsedMin < 1440) { tier = 'mid'; bump = 5; }
+      else { tier = 'long'; bump = 8; }
+
+      var def = careDefForFire(fire);
+
+      // 安定だけ少し落ち着く（上限 STABILITY_ENOUGH）。返却済みの火はもう進めない。
+      if (fire.status !== 'returned') {
+        fire.gardenProgress = Math.min(STABILITY_ENOUGH, (fire.gardenProgress || 0) + bump);
+        fire.updatedAt = nowISO();
       }
-      // 安定だけ少し落ち着く（上限 STABILITY_ENOUGH。放置だけでは満たし切らない＝役割を残す）。
-      fire.gardenProgress = Math.min(STABILITY_ENOUGH, (fire.gardenProgress || 0) + bump);
-      // 守られた痕跡を残す（報酬ではなく、世話されていた証拠）。素材は増やさない。
-      addGardenItem(ns, 'small_stone');
-      fire.updatedAt = nowISO();
+      // 世話の痕跡を残す（素材は増やさない）。痕跡が定義された世話だけ箱庭に置く。
+      if (def.trace) addGardenItem(ns, def.trace);
+
+      // 世話ログを残す。
+      addCareLog(ns, { fireId: fire.id, actor: def.actor, place: def.place, text: def.care });
+
       ns.lastAwayShownAt = nowISO();
-      report = { tier: tier, lines: lines };
+      report = {
+        tier: tier,
+        place: def.place,
+        actor: def.actor,
+        care: def.care,
+        note: def.note,
+      };
     }
   }
   ns.lastSeenAt = nowISO(); // 常に「今この瞬間に居る」を記録する
@@ -1364,8 +1444,8 @@ function restToday(game, fireId) {
   addGardenItem(ns, 'rest_chair');
   addGardenItem(ns, 'water_drop');
   var lkResult = advanceLightkeeper(ns, 15);
-  // 水汲みの小人解放条件
-  if (!ns.tinyfolk.waterCarrier && fire.restCount >= 3) {
+  // 水汲みの小人は回数稼ぎの報酬ではなく、水滴の痕跡が初めて置かれた時に姿を見せる。
+  if (!ns.tinyfolk.waterCarrier && ns.gardenItems && ns.gardenItems.includes('water_drop')) {
     ns.tinyfolk.waterCarrier = true;
   }
   // 涙の泉解放条件
@@ -3852,15 +3932,23 @@ function fireCompanionLine(fire) {
 }
 
 // 最近の痕跡（最大3）。守られた痕跡＋会い直した痕跡＋場所で分けた痕跡＋返却灯。
-function homeRecentTraces(fire) {
+function homeRecentTraces(fire, game) {
   var traces = getStabilityTraces(fire.gardenProgress || 0).slice();
-  var rc = fire.reexploreCounts || {};
-  if ((rc.value || 0) > 0)        traces.unshift('本文から離した黒札');
-  if ((rc.meaning || 0) > 0)      traces.unshift('塔へ流れた意味の光');
-  if ((rc.satisfaction || 0) > 0) traces.unshift('灰から拾った種');
+  // 余熱に会い直した痕跡（heatTraces）を前に出す。新しい本筋。
+  if (fire.heatTraces && fire.heatTraces.length) {
+    fire.heatTraces.slice(-2).forEach(function(ht) {
+      if (ht && ht.traceText) traces.unshift(ht.traceText);
+    });
+  }
   // 場所でキャラと分けた痕跡を前に出す（最も新しく、意味の濃い一行）。
   if (fire.placeTrace && fire.placeTrace.traceText) traces.unshift(fire.placeTrace.traceText);
   if (fire.status === 'returned') traces.unshift('心へ返した灯');
+  // 小人の世話ログを最新1〜3件、混ぜる。向き合えなかった間も誰かが火のそばに居た証拠。
+  if (game && Array.isArray(game.careLogs)) {
+    var mine = game.careLogs.filter(function(c) { return c.fireId === fire.id; }).slice(0, 3);
+    // 世話文は痕跡の先頭に置く（戻ってきて最初に目に入る一行）。
+    mine.reverse().forEach(function(c) { traces.unshift(c.text); });
+  }
   return traces.slice(0, 3);
 }
 
@@ -3899,7 +3987,7 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
 
   var place = currentFire ? fireCurrentPlace(currentFire) : '';
   var companion = currentFire ? fireCompanionLine(currentFire) : null;
-  var traces = currentFire ? homeRecentTraces(currentFire) : [];
+  var traces = currentFire ? homeRecentTraces(currentFire, game) : [];
   var nextActions = currentFire ? homeNextActions(currentFire) : [];
   var stage = currentFire ? stabilityStage(currentFire.gardenProgress || 0) : '';
 
@@ -4162,14 +4250,20 @@ function DevBar({ game, onReset, onForceFound, onAddBattle, onReplayIntro }) {
 // 留守のあいだ。戻ってきた時、最初に出る。報酬回収ではなく、世話されていた証拠。
 function AwayReport({ report, onClose }) {
   useOverlayKeys({ onEscape: onClose, onEnter: onClose });
+  // 旧形式（report.lines）にも後方互換で対応する。
+  var legacyLines = report.lines || null;
+  var note = report.note || ['問いは、まだ見つかっていません。', 'でも、火は消えていません。'];
   return (
     <div className="away-ov" role="dialog" onClick={onClose}>
       <div className="away-card" onClick={function(e) { e.stopPropagation(); }}>
         <p className="away-label">留守のあいだ</p>
-        {report.lines.map(function(l, i) {
-          return <p key={i} className="away-line">{l}</p>;
-        })}
-        <p className="away-note">問いは、まだ見つかっていません。<br />でも、火は消えていません。</p>
+        {report.place && <p className="away-place">{report.place}</p>}
+        {legacyLines
+          ? legacyLines.map(function(l, i) { return <p key={i} className="away-line">{l}</p>; })
+          : <p className="away-line">{report.care}</p>}
+        <div className="away-note">
+          {note.map(function(n, i) { return <p key={i} className="away-note-line">{n}</p>; })}
+        </div>
         <button className="away-btn" onClick={onClose}>ただいま</button>
       </div>
     </div>

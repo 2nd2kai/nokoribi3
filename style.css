@@ -5297,9 +5297,11 @@ html,body{
   background:#0a0e0c;border:1px solid #1f3a2e;border-radius:16px;
   padding:26px 22px;box-shadow:0 24px 64px -20px rgba(0,0,0,.8);text-align:center;
 }
-.away-label{color:#5b8a72;font-size:11px;letter-spacing:.2em;margin:0 0 18px}
+.away-label{color:#5b8a72;font-size:11px;letter-spacing:.2em;margin:0 0 14px}
+.away-place{color:#8fb3a0;font-size:13px;letter-spacing:.1em;margin:0 0 10px}
 .away-line{color:#aeb9c4;font-size:14px;line-height:2;margin:0}
-.away-note{color:#6b8a78;font-size:13px;line-height:1.9;margin:18px 0 22px;font-style:italic}
+.away-note{margin:18px 0 22px}
+.away-note-line{color:#6b8a78;font-size:13px;line-height:1.9;margin:0;font-style:italic}
 .away-btn{
   width:100%;padding:13px 0;border-radius:12px;
   background:#13241b;border:1px solid #2a4a38;color:#bbf7d0;
