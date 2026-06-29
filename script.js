@@ -2482,14 +2482,22 @@ function ShadowPanel({ fire, onAnswer, onWatch, onSkip }) {
   );
 }
 
+// 初回入力の素朴な問い。「意味・価値・納得」という分析ラベルは前面に出さない。
+// 選んだ言葉は、受領後に現れる余熱（意味の影／価値の黒札／納得の灰）の分布へ静かに対応する。
+// metrics は高いほど落ち着いている＝余熱が低い。低くすると対応する余熱が強く残る。
+var FIRE_WISH_CHOICES = [
+  { key: 'understood', label: '分かってほしかった',          metrics: { meaning: 20, value: 60, satisfaction: 58 } },
+  { key: 'response',   label: '反応がほしかった',            metrics: { meaning: 22, value: 55, satisfaction: 58 } },
+  { key: 'meaning',    label: '意味になってほしかった',       metrics: { meaning: 15, value: 58, satisfaction: 58 } },
+  { key: 'value',      label: '価値を疑っている',            metrics: { meaning: 55, value: 15, satisfaction: 58 } },
+  { key: 'nothing',    label: '何にもならなかった気がする',   metrics: { meaning: 55, value: 58, satisfaction: 15 } },
+  { key: 'unknown',    label: 'まだ分からない',              metrics: { meaning: 45, value: 45, satisfaction: 45 } },
+];
+
 function FireInputForm({ onSubmit, onCancel }) {
   var [kindle, setKindle] = _useState('');
   var [pain, setPain] = _useState('');
-  var [writeState, setWriteState] = _useState('');
-  var [feeling, setFeeling] = _useState('');
-  var [meaning, setMeaning] = _useState(50);
-  var [value, setValue] = _useState(50);
-  var [satisfaction, setSatisfaction] = _useState(50);
+  var [wish, setWish] = _useState('');   // 素朴な選択（FIRE_WISH_CHOICES の key）
   var [crisisHold, setCrisisHold] = _useState(false);
   var [step, setStep] = _useState(0);
   // 保留室から「それでも」進む時に実行する保留中の動作 { run, label }
@@ -2511,7 +2519,12 @@ function FireInputForm({ onSubmit, onCancel }) {
   }
 
   function doLight() {
-    onSubmit(kindle, pain, writeState, feeling, { meaning: meaning, value: value, satisfaction: satisfaction });
+    // 選んだ素朴な言葉から、受領後に現れる余熱の分布（metrics）を静かに導く。
+    // ここでは「意味・価値・納得」という分析ラベルは一切表に出さない。
+    var choice = FIRE_WISH_CHOICES.filter(function(c) { return c.key === wish; })[0];
+    var met = (choice && choice.metrics) || { meaning: 45, value: 45, satisfaction: 45 };
+    var wishLabel = choice ? choice.label : '';
+    onSubmit(kindle, pain, '', wishLabel, met);
   }
 
   function handleSubmit() {
@@ -2597,92 +2610,33 @@ function FireInputForm({ onSubmit, onCancel }) {
 
       {step === 1 && (
         <div>
-          <label style={{ color: '#9ca3af', fontSize: 12, display: 'block', marginBottom: 8 }}>
-            その言葉との関係は？
-          </label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-            {WRITE_STATES.map(function(ws) {
+          <p style={{ color: '#9ca3af', fontSize: 12, marginBottom: 4, lineHeight: 1.7 }}>
+            その言葉に、近いのはどれ？
+          </p>
+          <p style={{ color: '#6b7280', fontSize: 11, marginBottom: 12, lineHeight: 1.7 }}>
+            選ばなくてもいい。決められないときは「まだ分からない」を。
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+            {FIRE_WISH_CHOICES.map(function(c) {
+              var on = wish === c.key;
               return (
-                <button key={ws} onClick={function() { setWriteState(ws); }} style={{
-                  padding: '7px 12px', borderRadius: 20, fontSize: 13,
-                  background: writeState === ws ? '#7c3aed' : '#1a1e2c',
-                  border: '1px solid ' + (writeState === ws ? '#7c3aed' : '#2e3348'),
-                  color: writeState === ws ? '#ede9fe' : '#9ca3af',
-                  cursor: 'pointer', fontFamily: 'inherit',
-                }}>{ws}</button>
-              );
-            })}
-          </div>
-          <label style={{ color: '#9ca3af', fontSize: 12, display: 'block', marginBottom: 8 }}>
-            今感じていることに近いのは？
-          </label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-            {FEELINGS.map(function(f) {
-              return (
-                <button key={f} onClick={function() { setFeeling(f); }} style={{
-                  padding: '7px 12px', borderRadius: 20, fontSize: 13,
-                  background: feeling === f ? '#0e7490' : '#1a1e2c',
-                  border: '1px solid ' + (feeling === f ? '#0e7490' : '#2e3348'),
-                  color: feeling === f ? '#cffafe' : '#9ca3af',
-                  cursor: 'pointer', fontFamily: 'inherit',
-                }}>{f}</button>
+                <button key={c.key} onClick={function() { setWish(c.key); }} style={{
+                  textAlign: 'left', padding: '11px 14px', borderRadius: 10, fontSize: 14,
+                  background: on ? '#3a2417' : '#1a1e2c',
+                  border: '1px solid ' + (on ? '#c2410c' : '#2e3348'),
+                  color: on ? '#fed7aa' : '#cbd5e1',
+                  cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1.5,
+                }}>{c.label}</button>
               );
             })}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button data-testid="fire-next" onClick={handleNext} style={{
-              flex: 1, padding: '11px 0', borderRadius: 8,
-              background: '#c2410c', border: 'none', color: '#fff',
-              fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-            }}>次へ</button>
-            <button onClick={function() { setStep(0); }} style={{
-              padding: '11px 16px', borderRadius: 8,
-              background: 'transparent', border: '1px solid #2e3348',
-              color: '#6b7280', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-            }}>戻る</button>
-          </div>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div>
-          <p style={{ color: '#9ca3af', fontSize: 12, marginBottom: 14, lineHeight: 1.6 }}>
-            その言葉について、今どんな感触がある？
-          </p>
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ color: '#d1d5db', fontSize: 13 }}>意味があった</span>
-              <span style={{ color: '#f97316', fontSize: 13 }}>{meaning}</span>
-            </div>
-            <input type="range" min={0} max={100} value={meaning}
-              onChange={function(e) { setMeaning(Number(e.target.value)); }}
-              style={{ width: '100%', accentColor: '#f97316' }} />
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ color: '#d1d5db', fontSize: 13 }}>価値があった</span>
-              <span style={{ color: '#f97316', fontSize: 13 }}>{value}</span>
-            </div>
-            <input type="range" min={0} max={100} value={value}
-              onChange={function(e) { setValue(Number(e.target.value)); }}
-              style={{ width: '100%', accentColor: '#f97316' }} />
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ color: '#d1d5db', fontSize: 13 }}>納得があった</span>
-              <span style={{ color: '#f97316', fontSize: 13 }}>{satisfaction}</span>
-            </div>
-            <input type="range" min={0} max={100} value={satisfaction}
-              onChange={function(e) { setSatisfaction(Number(e.target.value)); }}
-              style={{ width: '100%', accentColor: '#f97316' }} />
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             <button data-testid="place-fire-submit" onClick={handleSubmit} style={{
               flex: 1, padding: '12px 0', borderRadius: 8,
               background: '#c2410c', border: 'none', color: '#fff',
               fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700,
             }}>この火に言葉を置く</button>
-            <button onClick={function() { setStep(1); }} style={{
+            <button onClick={function() { setStep(0); }} style={{
               padding: '12px 16px', borderRadius: 8,
               background: 'transparent', border: '1px solid #2e3348',
               color: '#6b7280', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
@@ -3585,7 +3539,8 @@ var KOTAE_SCRIPTS = {
       'ノコリビ、受領しました。',
       'これは答えではありません。\n問いの欠片です。',
       '記録塔に保存します。\nただし、火の奥には、まだ余熱が残っています。',
-      '意味の影。\n価値の黒札。\n納得の灰。',
+      '残っているもの。\n意味の影。価値の黒札。納得の灰。',
+      'これは診断ではありません。\nまだ受け取られていない、というだけのことです。',
       'この火は、まだ全部を受け取られたわけではありません。',
       '次に進めます。\nどこから迎えに行くか、選んでください。',
     ],
@@ -4375,6 +4330,14 @@ function fireCompanion(fire) {
     if (id === 'tears' || id === 'spring') return 'かな';
     if (id === 'black_tags') return '審査官';
     if (id === 'back_shelf' || id === 'shelf') return 'うつろ';
+  }
+  // 場所は開いたが、まだその主に出会っていない時はキャラ名を先に出さない。
+  // 場所の気配だけを示す（場所→役割→名前 の順を崩さないため）。
+  if (fire.openedPlace) {
+    var pid = fire.openedPlace.id;
+    if (pid === 'tears' || pid === 'spring') return '水音';
+    if (pid === 'black_tags') return '札箱';
+    if (pid === 'back_shelf' || pid === 'shelf') return '空いた棚';
   }
   if (fire.receipt) return 'コタエ';
   return 'トイマン';
