@@ -51,9 +51,13 @@ const CHECKPOINTS = [
     // intro: つづき×N → 火を見る
     for (let i = 0; i < 14; i++) { if (await tapText(/火を見る/, 400)) break; await tapText(/つづき/, 250); }
 
-    // 2. 火を置く
+    // 2. 火を置く（step0: 入力 → step1: wish 選択 → 提出）
+    // wish を選ばずに提出すると wishUnknown=true になり場所解放が保留される（Turn 30A-3）。
+    // E2E では具体的な選択をして場所を確定させる。
     await tid('fire-input').first().fill('届かなかった手紙。読んでほしかった。');
-    for (let i = 0; i < 6; i++) { if (await tap('place-fire-submit', 700)) break; await tap('fire-next', 350); }
+    await tap('fire-next', 400);                       // step0 → step1（wish 選択肢が出る）
+    await tapText(/分かってほしかった/, 300);            // wish: 分かってほしかった
+    await tap('place-fire-submit', 700);
     await page.waitForTimeout(700);
     let g = await G();
     if (!(g && g.fires.length > 0)) throw new Error('fire not created');

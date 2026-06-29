@@ -461,6 +461,7 @@ function normalizeFire(f) {
   if (f.heatTraces === undefined) f.heatTraces = [];
   if (!Array.isArray(f.characterResponses)) f.characterResponses = [];
   if (f.wishUnknown === undefined) f.wishUnknown = false;
+  if (f.placePending === undefined) f.placePending = false;
   if (!Array.isArray(f.questionRevisions)) f.questionRevisions = [];
   if (!Array.isArray(f.careLogs)) f.careLogs = [];
   if (f.returnLamp === undefined) f.returnLamp = null;
@@ -1022,6 +1023,21 @@ function revisitHeat(game, fireId, heatType, touchMode, selected) {
   if (heatType === 'value' && afterStage === '静かな痕跡' && beforeStage !== '静かな痕跡') {
     if (hasSeenPlaceEncounter(ns, 'black_tags')) {
       ns = triggerEncounter(ns, 'auditor_first_value', { fireId: fireId });
+    }
+  }
+
+  // placePending（wishUnknown 火で場所が保留中）: 余熱が一方向に傾いたら、場所が自然に現れる。
+  // 傾きの閾値: 最大値 − 最小値 > 10（tie-break に任せず、明確な差が生じるまで待つ）。
+  if (fire.placePending) {
+    var pendHeat = computeRemainingHeat(fire);
+    var maxH = Math.max(pendHeat.pain, pendHeat.judgment, pendHeat.emptiness);
+    var minH = Math.min(pendHeat.pain, pendHeat.judgment, pendHeat.emptiness);
+    if (maxH - minH > 10) {
+      var pendPlace = chooseOpenedPlace(pendHeat);
+      fire.openedPlace = pendPlace;
+      fire.placePending = false;
+      if (!Array.isArray(ns.unlockedPlaces)) ns.unlockedPlaces = [];
+      if (ns.unlockedPlaces.indexOf(pendPlace.id) === -1) ns.unlockedPlaces.push(pendPlace.id);
     }
   }
 
@@ -1739,6 +1755,14 @@ function computeRemainingHeat(fire) {
   return { pain: clamp(pain), judgment: judgment, emptiness: emptiness };
 }
 
+// 受領の旅でスライダーをほぼ動かさなかった判定（±3 以内 = 実質初期値のまま）。
+// wishUnknown 火はスライダーが 45/45/45 から始まるため、この条件で保留を判断する。
+function isJourneyUnmoved(metrics) {
+  return Math.abs((metrics.meaning      || 45) - 45) <= 3
+      && Math.abs((metrics.value        || 45) - 45) <= 3
+      && Math.abs((metrics.satisfaction || 45) - 45) <= 3;
+}
+
 // 最も強い余熱に対応する場所を一つだけ選ぶ。
 // 同点は、裁く場所(黒札)より先に痛み・余白の場所を選ぶ（黒札に偏らせない）。
 function chooseOpenedPlace(heat) {
@@ -2119,11 +2143,11 @@ function completeReceiptJourney(game, fireId, journeyData) {
     },
   };
 
-  // 受領証の裏に地図が現れる。火に残った余熱を測り、対応する場所を一つだけ開く。
-  // wishUnknown の火は、初回入力で感触を選ばなかった。
-  // 受領の旅でプレイヤーが調整したメトリクス（currentMetrics）を余熱の基準として使う。
-  // 「分からない」のまま旅を終えても tie-break で一箇所に決まるが、
-  // コタエは「まだ一つに分けません」と伝え、進み方を急がせない。
+  // 受領証の裏に地図が現れる。火に残った余熱を測り、対応する場所を開く。
+  //
+  // wishUnknown（初回入力で「まだ分からない」/未選択）の火は、
+  // 受領の旅のスライダー（currentMetrics）を余熱の基準にする。
+  // これにより「旅で自分の感触を動かす → 場所が見えてくる」流れになる。
   if (fire.wishUnknown) {
     fire.unreceived = {
       meaning: Math.max(0, 100 - currentMetrics.meaning),
@@ -2132,11 +2156,18 @@ function completeReceiptJourney(game, fireId, journeyData) {
     };
   }
   var heat = computeRemainingHeat(fire);
-  var place = chooseOpenedPlace(heat);
   fire.receipt.remainingHeat = heat;
-  fire.openedPlace = place;
-  if (!Array.isArray(ns.unlockedPlaces)) ns.unlockedPlaces = [];
-  if (ns.unlockedPlaces.indexOf(place.id) === -1) ns.unlockedPlaces.push(place.id);
+
+  // wishUnknown かつ旅でスライダーをほぼ動かさなかった → 場所の解放を保留する。
+  // 余熱に会い直す中で one axis が傾けば、revisitHeat が自然に場所を開く。
+  if (fire.wishUnknown && isJourneyUnmoved(currentMetrics)) {
+    fire.placePending = true;
+  } else {
+    var place = chooseOpenedPlace(heat);
+    fire.openedPlace = place;
+    if (!Array.isArray(ns.unlockedPlaces)) ns.unlockedPlaces = [];
+    if (ns.unlockedPlaces.indexOf(place.id) === -1) ns.unlockedPlaces.push(place.id);
+  }
   fire.updatedAt = nowISO();
 
   // 受領証が発行される——この火が丁寧に扱われたあと、世界に余光がひとつこぼれる。
@@ -3235,6 +3266,22 @@ function ReceiptCard({ fire, buttonLabel, onAction }) {
       </div>
 
       {/* 受領証の裏の地図 — 終わりではなく、次の扉。 */}
+      {/* placePending: 「まだ分からない」で受領した火。場所は余熱探索の中で自然に開く。 */}
+      {fire.placePending && (
+        <div className="receipt-place" style={{ marginTop: 14 }}>
+          <div className="receipt-place-voices">
+            <p className="receipt-place-voice">
+              <span className="receipt-place-who kotae">コタエ</span>
+              この火は、まだ記録塔に置きます。<br />
+              余熱に会い直す中で、どこへ向かうか分かってきます。
+            </p>
+            <p className="receipt-place-voice">
+              <span className="receipt-place-who toyman">トイマン</span>
+              急がない。
+            </p>
+          </div>
+        </div>
+      )}
       {fire.openedPlace && (
         <div className="receipt-place">
           <p className="receipt-place-map">{fire.openedPlace.map}</p>
