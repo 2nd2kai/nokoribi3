@@ -5487,6 +5487,7 @@ html,body{
 .gf-card{background:#111318;border:1px solid #232838;border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .15s,background .15s}
 .gf-card:hover{border-color:#2e3550}
 .gf-card-on{background:#15131f;border-color:#4c3a7a}
+.gf-now{color:#c4b5fd;font-size:10px;letter-spacing:.12em;margin:0 0 4px}
 .gf-name{color:#e2e4ee;font-size:13px;margin:0 0 6px;overflow-wrap:anywhere}
 .gf-meta{display:flex;gap:16px;margin:0 0 6px;flex-wrap:wrap}
 .gf-meta-row{font-size:12px;color:#9aa3b5}

@@ -363,6 +363,7 @@ function initGame() {
     relationshipNotes: [],
     careLogs: [],
     characterMemory: {},
+    selectedFireId: null,
     activeEncounter: null,
     workerTasks: {
       lightkeeper: { id: 'lightkeeper', label: '灯守り', work: '守る', progress: 0, duration: 100, trace: 'small_stone', isUnlocked: true },
@@ -552,6 +553,7 @@ function normalizeGame(g) {
   if (!Array.isArray(g.worldNotes)) g.worldNotes = [];
   if (!Array.isArray(g.relationshipNotes)) g.relationshipNotes = [];
   if (!Array.isArray(g.careLogs)) g.careLogs = [];
+  if (!('selectedFireId' in g)) g.selectedFireId = null;
   if (!g.characterMemory || typeof g.characterMemory !== 'object') g.characterMemory = {};
   if (!('activeEncounter' in g)) g.activeEncounter = null;
   if (!g.toka) g.toka = 0;
@@ -4468,12 +4470,11 @@ function homeNextActions(fire) {
   }
 }
 
-function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
+function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction, onSelectFire }) {
   var [showForm, setShowForm] = _useState(false);
-  var [selectedFireId, setSelectedFireId] = _useState(null);
   var totalFires = game.fires.length;
-  // 選んだ火を主役に。未選択なら従来の pickCurrentFire（fallback として残す）。
-  var currentFire = game.fires.find(function(f) { return f.id === selectedFireId; })
+  // 選択火（game に保存）を主役に。不正・破損なら pickCurrentFire に戻す（迷子札を作らない）。
+  var currentFire = game.fires.find(function(f) { return f.id === game.selectedFireId; })
     || pickCurrentFire(game.fires);
   // 庭の火たち（最大5本）。手当ての必要度順で、複数の現在地として見せる。
   var gardenFires = pickCareFires(game, 5);
@@ -4484,12 +4485,10 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
     setShowForm(false);
   }
 
-  var place = currentFire ? fireCurrentPlace(currentFire) : '';
-  var companion = currentFire ? fireCompanionLine(currentFire) : null;
-  var traces = currentFire ? homeRecentTraces(currentFire, game) : [];
-  var memoryLine = latestCharacterMemoryLine(game);
+  // today-card は「選択中の火に、今できる一手」だけ。詳細は庭カード／記録塔へ逃がす。
+  var place = currentFire ? fireLocation(currentFire) : '';
+  var companion = currentFire ? fireCompanion(currentFire) : '';
   var nextActions = currentFire ? homeNextActions(currentFire) : [];
-  var stage = currentFire ? stabilityStage(currentFire.gardenProgress || 0) : '';
 
   return (
     <div style={{ padding: '0 16px 80px' }}>
@@ -4516,82 +4515,23 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
         </div>
       )}
 
-      {/* 今日の箱庭（返却済み）— なかったことにせず、返却灯として見せる */}
-      {currentFire && !showForm && currentFire.status === 'returned' && currentFire.returnLamp && (
-        <div className="today-card today-card-returned">
-          <p className="today-label">今日の箱庭</p>
-          <p className="today-fire-kindle">「{fireTitle(currentFire)}」</p>
-          <p className="today-returned-lead">
-            この火は、心へ返されました。<br />
-            記録塔の奥に、小さな灯りが残っています。
-          </p>
-          {currentFire.returnLamp.label && (
-            <p className="today-returned-lamp">返却灯：「{currentFire.returnLamp.label}」</p>
-          )}
-          <div className="today-voice">
-            <span className="today-voice-who">トイマン</span>
-            <p className="today-voice-text">帰った。</p>
-          </div>
-          <div className="today-voice">
-            <span className="today-voice-who">コタエ</span>
-            <p className="today-voice-text">消失ではありません。返却です。</p>
-          </div>
-          <div className="today-actions">
-            <button className="today-action-btn" onClick={function() { onNextAction('garden', currentFire.id); }}>
-              箱庭を見る
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 今日の箱庭 — ホームを「現在地の窓」にする */}
-      {currentFire && !showForm && !(currentFire.status === 'returned' && currentFire.returnLamp) && (
+      {/* 今日の箱庭 — 選択中の火に「今できる一手」だけを見る玄関カード。
+          名前・いまいる場所・そばの相手・次にできること のみ。痕跡や記録の詳細は出さない。 */}
+      {currentFire && !showForm && (
         <div className="today-card">
-          <p className="today-label">今日の箱庭</p>
-
-          <p className="today-fire-label">いま向き合う火</p>
+          <p className="today-label">いま見ている火</p>
           <p className="today-fire-kindle">「{fireTitle(currentFire)}」</p>
 
           <div className="today-meta">
             <div className="today-meta-row">
-              <span className="today-meta-k">現在地</span>
+              <span className="today-meta-k">いまいる場所</span>
               <span className="today-meta-v">{place}</span>
             </div>
             <div className="today-meta-row">
-              <span className="today-meta-k">そばにいる子</span>
-              <span className="today-meta-v">{companion.who}</span>
-            </div>
-            <div className="today-meta-row">
-              <span className="today-meta-k">火の状態</span>
-              <span className="today-meta-v">{stage}</span>
+              <span className="today-meta-k">そばにいる相手</span>
+              <span className="today-meta-v">{companion}</span>
             </div>
           </div>
-
-          {traces.length > 0 && (
-            <div className="today-traces">
-              <p className="today-traces-label">最近の痕跡</p>
-              {traces.map(function(t, i) {
-                return <p key={i} className="today-trace">・{t}</p>;
-              })}
-            </div>
-          )}
-
-          <div className="today-voice">
-            <span className="today-voice-who">{companion.who}</span>
-            <p className="today-voice-text">{companion.text}</p>
-          </div>
-
-          {/* 受領証の裏に開いた道。まだ会いに行っていない間だけ気配を出す。 */}
-          {currentFire.status === 'received' && currentFire.openedPlace && !currentFire.openedPlace.firstEncounterSeen && (
-            <p className="today-opened-place">
-              受領証の裏に、{currentFire.openedPlace.name}への道が開いている。
-            </p>
-          )}
-
-          {/* キャラが覚えている一言（1件だけ。出しすぎない）。 */}
-          {memoryLine && (
-            <p className="today-memory">{memoryLine}</p>
-          )}
 
           {nextActions.length > 0 && (
             <div className="today-actions">
@@ -4619,7 +4559,8 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
             var sel = f.id === currentFire.id;
             return (
               <div key={f.id} className={'gf-card' + (sel ? ' gf-card-on' : '')}
-                onClick={function() { setSelectedFireId(f.id); }}>
+                onClick={function() { onSelectFire(f.id); }}>
+                {sel && <p className="gf-now">いま見ている火</p>}
                 <p className="gf-name">「{fireTitle(f)}」</p>
                 <div className="gf-meta">
                   <span className="gf-meta-row"><span className="gf-k">場所</span>{fireLocation(f)}</span>
@@ -6106,6 +6047,16 @@ function App() {
     if (result.ok) setGame(result.game);
   }, []);
 
+  // 選択中の火を game に保存（リロードでも維持）。状態は変えない（レイアウトの選択のみ）。
+  var handleSelectFire = _useCallback(function(fireId) {
+    setGame(function(prev) {
+      if (prev.selectedFireId === fireId) return prev;
+      var ns = cloneS(prev);
+      ns.selectedFireId = fireId;
+      return ns;
+    });
+  }, []);
+
   var handleWatchFire = _useCallback(function(fireId) {
     var result = watchFire(gameRef.current, fireId);
     if (result.ok) {
@@ -6299,6 +6250,7 @@ function App() {
         <HomeView
           game={game}
           onLightFire={handleLightFire}
+          onSelectFire={handleSelectFire}
           onGoShelf={function() { setScreen('shelf'); }}
           onGoGarden={function() { setScreen('garden'); }}
           onNextAction={function(go, fireId) {
