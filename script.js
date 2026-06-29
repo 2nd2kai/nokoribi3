@@ -1256,41 +1256,75 @@ function tickProgress(game) {
 var CARE_DEFS = {
   forest: {
     place: '未受領の森', actor: '灯守り',
-    care: '灯守りが、火のそばに小さな石を置いていました。',
+    cares: [
+      '灯守りが、火のそばに小さな石を置いていました。',
+      '灯守りが、火が消えないように風をよけていました。',
+      '灯守りが、火のそばの石を並べ直していました。',
+      '灯守りが、ただ火のそばに座っていました。',
+    ],
     note: ['問いは、まだ見つかっていません。', 'でも、火は消えていません。'],
     trace: 'small_stone',
   },
   tears: {
     place: '涙の泉', actor: '水汲みの小人',
-    care: '水汲みの小人が、泉の水を少し汲んでいました。',
+    cares: [
+      '水汲みの小人が、泉の水を少し汲んでいました。',
+      '水汲みの小人が、火のそばに水を置いていました。',
+      '水汲みの小人が、泉の水面をそっと整えていました。',
+    ],
     note: ['痛みはまだ答えになっていません。', 'でも、冷ます場所はあります。'],
     trace: 'water_drop',
   },
   black_tags: {
     place: '黒札置き場', actor: '札分けの小人',
-    care: '札分けの小人が、黒札を入れる箱を整えていました。',
+    cares: [
+      '札分けの小人が、黒札を入れる箱を整えていました。',
+      '札分けの小人が、黒札を一枚ずつ数えていました。',
+      '札分けの小人が、本文と札を分ける線を引き直していました。',
+    ],
     note: ['判決はまだ外れていません。', 'でも、分ける場所はできています。'],
     trace: null,
   },
   back_shelf: {
     place: '棚の奥', actor: '余白番',
-    care: '余白番が、空いている棚を掃いていました。',
+    cares: [
+      '余白番が、空いている棚を掃いていました。',
+      '余白番が、棚のほこりをそっと払っていました。',
+      '余白番が、何も置かれていない場所を見守っていました。',
+    ],
     note: ['何もない場所にも、置く準備ができています。'],
     trace: null,
   },
   returned: {
     place: '記録塔の奥', actor: '灯守り',
-    care: '灯守りが、返却灯のそばに座っていました。',
+    cares: [
+      '灯守りが、返却灯のそばに座っていました。',
+      '灯守りが、返却灯の油をそっと足していました。',
+      '灯守りが、返却灯の灯りを見守っていました。',
+    ],
     note: ['火は消えていません。', '心へ返されたまま、灯っています。'],
     trace: null,
   },
   received_unvisited: {
     place: '記録塔', actor: 'コタエ',
-    care: 'コタエが、受領証の角を整えていました。',
+    cares: [
+      'コタエが、受領証の角を整えていました。',
+      'コタエが、受領証の裏の地図をそっと撫でていました。',
+      'コタエが、開かれるのを待つ地図を見ていました。',
+    ],
     note: ['地図は、まだ開かれるのを待っています。'],
     trace: null,
   },
 };
+
+// 直近の世話文（lastText）と違う候補を優先して、毎回同じ文にならないようにする。
+function pickCareText(def, lastText) {
+  var list = def.cares || (def.care ? [def.care] : ['']);
+  if (list.length <= 1) return list[0] || '';
+  var pool = list.filter(function(t) { return t !== lastText; });
+  if (!pool.length) pool = list;
+  return pool[Math.floor(rnd() * pool.length)];
+}
 
 // 火の居場所から、いま世話している小人と世話の文を選ぶ。
 function careDefForFire(fire) {
@@ -1327,6 +1361,11 @@ function addCareLog(ns, fire, entry) {
 
 // 留守中に世話する火を最大 limit 本選ぶ（手当てが要る順）。庭全体を見る。
 // 対象: searching/found/receiving/received/lit/held/returned。draft等の壊れた火は除く。
+// 返却済みの火が活動中の火に押し出され続けないよう、返却火が居れば最後の1枠を巡回で確保する
+// （世話が最も古い返却火＝最近かまわれていない1本を入れる）。
+function lastCareAt(f) {
+  return (f.careLogs && f.careLogs.length) ? new Date(f.careLogs[0].createdAt).getTime() : 0;
+}
 function pickCareFires(game, limit) {
   limit = limit || 3;
   var fires = (game && game.fires) || [];
@@ -1334,7 +1373,6 @@ function pickCareFires(game, limit) {
   var valid = fires.filter(function(f) {
     return f && f.id && CARE_STATUSES.indexOf(f.status) !== -1;
   });
-  // 手当ての必要度で並べる（探索系→未settledの受領→受領→返却の順）。
   function rank(f) {
     if (f.status === 'searching' || f.status === 'found' || f.status === 'receiving') return 0;
     if (f.status === 'received' && !isAllSettled(f)) return 1;
@@ -1342,8 +1380,23 @@ function pickCareFires(game, limit) {
     if (f.status === 'returned') return 3;
     return 4;
   }
-  valid.sort(function(a, b) { return rank(a) - rank(b); });
-  return valid.slice(0, limit);
+  var active = valid.filter(function(f) { return f.status !== 'returned'; });
+  var returned = valid.filter(function(f) { return f.status === 'returned'; });
+  active.sort(function(a, b) { return rank(a) - rank(b); });
+  // 返却火は「最近かまわれていない順」（lastCareAt が古い＝小さい順）で巡回。
+  returned.sort(function(a, b) { return lastCareAt(a) - lastCareAt(b); });
+
+  if (!returned.length) return active.slice(0, limit);
+  if (!active.length) return returned.slice(0, limit);
+  // 活動火が枠を埋め切る場合は、最後の1枠を巡回中の返却火に譲る（押し出され続けない）。
+  var activeTake = active.slice(0, Math.max(1, limit - 1));
+  var result = activeTake.concat([returned[0]]);
+  // まだ枠が余れば、残りを活動火→返却火で埋める。
+  if (result.length < limit) {
+    active.slice(activeTake.length).forEach(function(f) { if (result.length < limit) result.push(f); });
+    returned.slice(1).forEach(function(f) { if (result.length < limit) result.push(f); });
+  }
+  return result.slice(0, limit);
 }
 
 // 後方互換: 1本だけ欲しい既存呼び出し向け。
@@ -1377,9 +1430,11 @@ function computeAwayReturn(game, skip) {
         }
         // 痕跡が定義された世話だけ箱庭に置く（素材は増やさない）。
         if (def.trace) addGardenItem(ns, def.trace);
-        // 火ごと＋庭全体の世話ログ。
-        addCareLog(ns, fire, { actor: def.actor, place: def.place, text: def.care });
-        cares.push({ place: def.place, actor: def.actor, care: def.care });
+        // 直近と同じ文が連続しにくいよう、その火の最後の世話文と違う候補を優先。
+        var lastText = (fire.careLogs && fire.careLogs.length) ? fire.careLogs[0].text : null;
+        var careText = pickCareText(def, lastText);
+        addCareLog(ns, fire, { actor: def.actor, place: def.place, text: careText });
+        cares.push({ place: def.place, actor: def.actor, care: careText });
       });
 
       ns.lastAwayShownAt = nowISO();
@@ -4648,9 +4703,17 @@ function AwayReport({ report, onClose }) {
     (report.lines ? report.lines.map(function(l) { return { care: l }; }) :
      (report.care ? [{ care: report.care }] : []));
   var count = report.count || cares.length;
-  var lead = count > 1
-    ? ('庭では、' + count + 'つの火のそばに小さな痕跡が残っていました。')
-    : '火のそばに、小さな痕跡が残っていました。';
+  // 留守の長さで導入文の濃さを変える（短い→件数を言う、長い→積もった気配を言う）。
+  var lead;
+  if (report.tier === 'long') {
+    lead = '庭のあちこちに、世話の跡が残っていました。';
+  } else if (report.tier === 'mid') {
+    lead = '庭では、いくつかの痕跡が、火のそばに積もっていました。';
+  } else {
+    lead = count > 1
+      ? ('庭では、' + count + 'つの火のそばに小さな痕跡が残っていました。')
+      : '火のそばに、小さな痕跡が残っていました。';
+  }
   var trapRef = useFocusTrap();
   return (
     <div className="away-ov" role="dialog" aria-modal="true" aria-labelledby="away-title" onClick={onClose}>
