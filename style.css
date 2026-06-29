@@ -5480,3 +5480,17 @@ html,body{
 .qhist-label{font-size:10px;letter-spacing:.1em;color:#5a6478;margin:0 0 6px}
 .qhist-line{font-size:12px;line-height:1.7;color:#aeb4c4;margin:3px 0;overflow-wrap:anywhere}
 .qhist-k{display:inline-block;font-size:10px;letter-spacing:.06em;color:#5a6478;margin-right:8px}
+
+/* ── Turn 27: 庭の火たち（複数火の現在地カード）──────────────────────────────── */
+.garden-fires{margin:14px 0 8px}
+.garden-fires-label{color:#5a6478;font-size:10px;letter-spacing:.16em;margin:0 0 10px}
+.gf-card{background:#111318;border:1px solid #232838;border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .15s,background .15s}
+.gf-card:hover{border-color:#2e3550}
+.gf-card-on{background:#15131f;border-color:#4c3a7a}
+.gf-name{color:#e2e4ee;font-size:13px;margin:0 0 6px;overflow-wrap:anywhere}
+.gf-meta{display:flex;gap:16px;margin:0 0 6px;flex-wrap:wrap}
+.gf-meta-row{font-size:12px;color:#9aa3b5}
+.gf-k{display:inline-block;font-size:10px;letter-spacing:.06em;color:#4a5470;margin-right:6px}
+.gf-recent{font-size:11px;line-height:1.7;color:#6b7280;margin:0 0 8px;overflow-wrap:anywhere}
+.gf-action{min-height:40px;padding:8px 14px;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;background:rgba(62,42,92,.16);border:1px solid #4c2d7a;color:#c4b5fd}
+.gf-action:hover{background:rgba(76,29,149,.24)}

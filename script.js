@@ -2722,7 +2722,8 @@ function FireCard({ fire, onSelect, selected }) {
           color: statusColor[st] || '#6b7280',
           whiteSpace: 'nowrap',
         }}>
-          {statusLabel[st] || st}
+          {/* 現在地ラベル（場所訪問済みなら涙の泉等、未訪問は status ベース） */}
+          {fireLocation(fire) || statusLabel[st] || st}
         </span>
       </div>
       {fire.status === 'searching' && (
@@ -4350,6 +4351,58 @@ function fireCompanionLine(fire) {
   }
 }
 
+// 火の現在地・そばの住人・次の一手。複数火を「タスク」ではなく「箱庭の中の現在地」として見せる。
+// 表示名は必ず世界内の場所（未受領の森／記録塔／涙の泉…）で、タスク管理語は使わない。
+function fireLocation(fire) {
+  if (!fire) return 'はじまりの部屋';
+  if (fire.status === 'returned') return '返却灯';
+  if (fire.status === 'held') return '保留室';
+  // 場所を実際に訪れた（初回出会い済み）なら、その場所を現在地にする。
+  if (fire.openedPlace && fire.openedPlace.firstEncounterSeen) {
+    var id = fire.openedPlace.id;
+    if (id === 'tears' || id === 'spring') return '涙の泉';
+    if (id === 'black_tags') return '黒札置き場';
+    if (id === 'back_shelf' || id === 'shelf') return '棚の奥';
+  }
+  if (fire.status === 'searching') return '未受領の森';
+  if (fire.status === 'found') return '森の奥';
+  if (fire.status === 'receiving') return '記録塔への道';
+  if (fire.receipt) return '記録塔';
+  if (fire.status === 'lit') return '焚き口';
+  return 'はじまりの部屋';
+}
+
+function fireCompanion(fire) {
+  if (!fire) return 'トイマン';
+  if (fire.status === 'returned') return '灯守り';
+  if (fire.status === 'held') return 'コタエ';
+  if (fire.openedPlace && fire.openedPlace.firstEncounterSeen) {
+    var id = fire.openedPlace.id;
+    if (id === 'tears' || id === 'spring') return 'かな';
+    if (id === 'black_tags') return '審査官';
+    if (id === 'back_shelf' || id === 'shelf') return 'うつろ';
+  }
+  if (fire.receipt) return 'コタエ';
+  return 'トイマン';
+}
+
+// その火に対する次の一手（1つ）。返却火は返却灯へ、それ以外は homeNextActions の先頭。
+function nextFireAction(fire) {
+  if (!fire) return null;
+  if (fire.status === 'returned') return { label: '返却灯を見る', go: 'returnlamp' };
+  if (fire.status === 'held') return { label: '保留室を見る', go: 'garden' };
+  var acts = homeNextActions(fire);
+  return (acts && acts.length) ? acts[0] : null;
+}
+
+// その火の最近の一行（世話ログがあればそれ、無ければ場で分けた痕跡）。
+function fireRecentLine(fire) {
+  if (fire.careLogs && fire.careLogs.length && fire.careLogs[0].text) return fire.careLogs[0].text;
+  if (fire.placeTrace && fire.placeTrace.traceText) return fire.placeTrace.traceText;
+  if (fire.status === 'returned') return '心へ返されたまま、灯っています。';
+  return null;
+}
+
 // 最近の痕跡（最大3）。守られた痕跡＋会い直した痕跡＋場所で分けた痕跡＋返却灯。
 // ホームに出す「キャラが覚えている」一言を1件だけ選ぶ（最も新しく更新された記憶）。
 var MEMORY_NAMES = { kana: 'かな', auditor: '審査官', utsuro: 'うつろ' };
@@ -4417,8 +4470,13 @@ function homeNextActions(fire) {
 
 function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
   var [showForm, setShowForm] = _useState(false);
+  var [selectedFireId, setSelectedFireId] = _useState(null);
   var totalFires = game.fires.length;
-  var currentFire = pickCurrentFire(game.fires);
+  // 選んだ火を主役に。未選択なら従来の pickCurrentFire（fallback として残す）。
+  var currentFire = game.fires.find(function(f) { return f.id === selectedFireId; })
+    || pickCurrentFire(game.fires);
+  // 庭の火たち（最大5本）。手当ての必要度順で、複数の現在地として見せる。
+  var gardenFires = pickCareFires(game, 5);
 
   function handleLightFire(kindle, pain, writeState, feeling, metrics) {
     // 灯した後は App 側の「預ける場面」へ遷移する。ここでフォームを閉じるだけ。
@@ -4548,6 +4606,34 @@ function HomeView({ game, onLightFire, onGoShelf, onGoGarden, onNextAction }) {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 庭の火たち — 複数の火を、それぞれの現在地として見せる（タスクではない）。 */}
+      {!showForm && totalFires > 1 && (
+        <div className="garden-fires">
+          <p className="garden-fires-label">庭の火たち</p>
+          {gardenFires.map(function(f) {
+            var act = nextFireAction(f);
+            var recent = fireRecentLine(f);
+            var sel = f.id === currentFire.id;
+            return (
+              <div key={f.id} className={'gf-card' + (sel ? ' gf-card-on' : '')}
+                onClick={function() { setSelectedFireId(f.id); }}>
+                <p className="gf-name">「{fireTitle(f)}」</p>
+                <div className="gf-meta">
+                  <span className="gf-meta-row"><span className="gf-k">場所</span>{fireLocation(f)}</span>
+                  <span className="gf-meta-row"><span className="gf-k">そば</span>{fireCompanion(f)}</span>
+                </div>
+                {recent && <p className="gf-recent">最近：{recent}</p>}
+                {act && (
+                  <button className="gf-action" onClick={function(e) { e.stopPropagation(); onNextAction(act.go, f.id); }}>
+                    {act.label}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -6221,6 +6307,7 @@ function App() {
             else if (go === 'unreceived') { setActiveUnreceivedFireId(fireId); setScreen('garden'); }
             else if (go === 'deliver') { handleDeliverToTower(fireId); }
             else if (go === 'encounter') { setPlaceEncounter({ fireId: fireId }); }
+            else if (go === 'returnlamp') { setActiveReturnLamp(fireId); }
           }}
         />
       )}
